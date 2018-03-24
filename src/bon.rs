@@ -29,9 +29,9 @@
 // 如果是通用对象、数组、map，后面会有一个动态长度的整数，表示元素的数量。
 
 // 容器，由于有总大小的描述，从而可以只对感兴趣的部分作反序列化
+// TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
 
-
-use data_view::{DataView, V8};
+use data_view::DataView;
 use std::ops::{Range};
 
 pub trait BinCode{
@@ -48,7 +48,7 @@ pub type WriteNext<T> = fn (&mut BinBuffer,  &T);
  */
 pub struct BinBuffer {
 	// u8数组
-	bytes: V8,
+	bytes: Vec<u8>,
 	// 头部指针
 	head: usize,
 	// 尾部指针
@@ -57,7 +57,7 @@ pub struct BinBuffer {
 
 impl BinBuffer{
 
-	pub fn with_bytes(buf: V8, head:Option<usize>, tail: Option<usize>) -> BinBuffer {
+	pub fn with_bytes(buf: Vec<u8>, head:Option<usize>, tail: Option<usize>) -> BinBuffer {
 		let h  = match head {
 			Some(v) => {assert!(v <= buf.len(), "invalid head"); v},
 			None => 0
@@ -76,7 +76,7 @@ impl BinBuffer{
 
 	pub fn new(size: usize) -> BinBuffer {
 		BinBuffer{
-			bytes: V8::with_capacity(size),
+			bytes: Vec::with_capacity(size),
 			head: 0,
 			tail: 0,
 		}

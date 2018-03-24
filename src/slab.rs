@@ -12,15 +12,14 @@ use std::mem::size_of;
 use std::usize::MAX;
 use std::marker::PhantomData;
 //use std::marker::Copy;
-use std::boxed::Box;
 
 /**
  * 默认4兆为1个块
  */
 pub const LIMIT_MEM_SIZE: usize = 0x400000;
 
-pub trait Alloc<T:Copy + Clone> {
-	fn new(limit_size: usize) -> Self;
+pub trait Slab<T:Copy + Clone> {
+	fn new(init_block_size: usize, max_block_size: usize) -> Self;
 	fn capity(&self) -> usize;
 	fn count(&self) -> usize;
 	fn get(&self, usize) -> &T;
@@ -30,10 +29,10 @@ pub trait Alloc<T:Copy + Clone> {
 	fn collect(&mut self);
 }
 
-pub struct ASyncAlloc<T:Copy + Clone> {
-	root: Arc<NAlloc<T>>,
+pub struct ASlab<T:Copy + Clone> {
+	root: Arc<NSlab<T>>,
 }
-pub struct NAlloc<T:Copy + Clone> {
+pub struct NSlab<T:Copy + Clone> {
 	size: usize,
 	limit: usize,
 	item_size: usize,
@@ -45,14 +44,14 @@ pub struct NAlloc<T:Copy + Clone> {
 	//_marker: PhantomData<T>,
 }
 
-impl<T:Copy + Clone> Alloc<T> for NAlloc<T> {
-	fn new(limit_size: usize) -> Self {
+impl<T:Copy + Clone> Slab<T> for NSlab<T> {
+	fn new(init_block_size: usize, max_block_size: usize) -> Self {
 		let c = size_of::<T>();
-		NAlloc {
+		NSlab {
 			size: c,
-			limit: limit_size,
-			item_size: limit_size / c,
-			split_size: find_one(limit_size / c) << 1,
+			limit: max_block_size,
+			item_size: max_block_size / c,
+			split_size: find_one(max_block_size / c) << 1,
 			capity: 0,
 			count: 0,
 			used: Vec::with_capacity(6),

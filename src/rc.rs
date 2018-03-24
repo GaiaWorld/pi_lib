@@ -3,7 +3,44 @@
  */
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::rc::Rc;
+use std::sync::Arc;
+use std::ops::Deref;
 
+pub trait New<T> {
+	fn new(T) -> Self;
+}
+
+pub struct Ref<T>(Rc<T>);
+pub struct ARef<T>(Arc<T>);
+
+impl<T> Deref for Ref<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
+		&self.0
+	}
+}
+
+impl<T> New<T> for Ref<T> {
+	fn new(t:T) -> Self{
+		Ref(Rc::new(t))
+	}
+}
+
+impl<T> Deref for ARef<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
+		&self.0
+	}
+}
+
+impl<T> New<T> for ARef<T> {
+	fn new(t:T) -> Self{
+		ARef(Arc::new(t))
+	}
+}
 
 pub trait Counter {
 	fn new(usize) -> Self;

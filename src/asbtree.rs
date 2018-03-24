@@ -6,15 +6,13 @@
 
 use std::option::Option;
 use std::cmp::{Ord, Ordering};
-use std::rc::Rc;
 //use std::ops::{Generator, GeneratorState};
-// use std::sync::Arc;
-//use std::fmt::{Debug};
+use std::sync::Arc;
 
 use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap};
 
 
-pub type Tree<K, V> = Option<Rc<Node<K, V>>>;
+pub type Tree<K, V> = Option<Arc<Node<K, V>>>;
 
 pub struct Node<K, V> {
 	size: usize,
@@ -25,15 +23,15 @@ pub struct Node<K, V> {
 
 // pub type Root<K, V> = Option<Node<K, V>>;
 // pub enum Node<K, V> {
-//     One(Rc<Entry<K, V>>),
-//     Two(Rc<(Entry<K, V>, Entry<K, V>)>),
-//     Three(Rc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>)>),
-//     Five(Rc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>, Entry<K, V>, Node<K, V>)>),
+//     One(Arc<Entry<K, V>>),
+//     Two(Arc<(Entry<K, V>, Entry<K, V>)>),
+//     Three(Arc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>)>),
+//     Five(Arc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>, Entry<K, V>, Node<K, V>)>),
 // }
 // pub enum Node<K, V> {
 //     Null,
-//     Two(Rc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>)>),
-//     Three(Rc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>, Entry<K, V>, Node<K, V>)>),
+//     Two(Arc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>)>),
+//     Three(Arc<(usize, Node<K, V>, Entry<K, V>, Node<K, V>, Entry<K, V>, Node<K, V>)>),
 // }
 
 impl<K: Ord+Clone, V: Clone> Node<K, V> {
@@ -59,7 +57,7 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			Some(ref x) => (*x).size,
 			_ => 0,
 		};
-		Self::new(size, Some(Rc::new(Self::new(lsize + rsize + 1, left.clone(), e, right.left.clone()))), right.entry.clone(), right.right.clone())
+		Self::new(size, Some(Arc::new(Self::new(lsize + rsize + 1, left.clone(), e, right.left.clone()))), right.entry.clone(), right.right.clone())
 	}
 	// 节点右旋
 	//#[inline]
@@ -72,7 +70,7 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			Some(ref x) => (*x).size,
 			_ => 0,
 		};
-		Self::new(size, left.left.clone(), left.entry.clone(), Some(Rc::new(Self::new(lsize + rsize + 1, left.right.clone(), e, right.clone()))))
+		Self::new(size, left.left.clone(), left.entry.clone(), Some(Arc::new(Self::new(lsize + rsize + 1, left.right.clone(), e, right.clone()))))
 	}
 
 	//Maintain操作，Maintain(T)用于修复以T为根的 SBT。调用Maintain(T)的前提条件是T的子树都已经是SBT。
@@ -84,12 +82,12 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 				match left {
 					&Some(ref y) => {
 						match (*y).left {
-							Some(ref z) if (*z).size > (*x).size => return Some(Rc::new(Self::right_ratote(size, &*y, e, right))),
+							Some(ref z) if (*z).size > (*x).size => return Some(Arc::new(Self::right_ratote(size, &*y, e, right))),
 							_ => (),
 						};
 						match (*y).right {
 							Some(ref z) if (*z).size > (*x).size => {
-								return Some(Rc::new(Self::right_ratote(size, &Self::left_ratote((*y).size, &(*y).left, (*y).entry.clone(), &*z), e, right)))
+								return Some(Arc::new(Self::right_ratote(size, &Self::left_ratote((*y).size, &(*y).left, (*y).entry.clone(), &*z), e, right)))
 							},
 							_ => (),
 						}
@@ -99,12 +97,12 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			},
 			_ => {
 				match left {
-					&Some(ref x) if (*x).size > 1 => return Some(Rc::new(Self::right_ratote(size, &(*x), e, &None))),
+					&Some(ref x) if (*x).size > 1 => return Some(Arc::new(Self::right_ratote(size, &(*x), e, &None))),
 					_ => (),
 				}
 			},
 		};
-		Some(Rc::new(Self::new(size, left.clone(), e, right.clone())))
+		Some(Arc::new(Self::new(size, left.clone(), e, right.clone())))
 	}
 	// 右节点增加大小，Maintain操作
 	//#[inline]
@@ -114,12 +112,12 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 				match right {
 					&Some(ref y) => {
 						match (*y).right {
-							Some(ref z) if (*z).size > (*x).size => return Some(Rc::new(Self::left_ratote(size, left, e, &(*y)))),
+							Some(ref z) if (*z).size > (*x).size => return Some(Arc::new(Self::left_ratote(size, left, e, &(*y)))),
 							_ => (),
 						};
 						match (*y).left {
 							Some(ref z) if (*z).size > (*x).size => {
-								return Some(Rc::new(Self::left_ratote(size, left, e, &Self::right_ratote((*y).size, &*z, (*y).entry.clone(), &(*y).right))))
+								return Some(Arc::new(Self::left_ratote(size, left, e, &Self::right_ratote((*y).size, &*z, (*y).entry.clone(), &(*y).right))))
 							},
 							_ => (),
 						}
@@ -129,12 +127,12 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			},
 			_ => {
 				match right {
-					&Some(ref x) if (*x).size > 1 => return Some(Rc::new(Self::left_ratote(size, &None, e, &(*x)))),
+					&Some(ref x) if (*x).size > 1 => return Some(Arc::new(Self::left_ratote(size, &None, e, &(*x)))),
 					_ => (),
 				}
 			},
 		};
-		Some(Rc::new(Self::new(size, left.clone(), e, right.clone())))
+		Some(Arc::new(Self::new(size, left.clone(), e, right.clone())))
 	}
 	// 节点删除操作，选Size大的子树旋转，旋转到叶子节点，然后删除
 	fn delete(size: usize, left: &Tree<K, V>, right: &Tree<K, V>) -> Tree<K, V> {
@@ -464,7 +462,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap<K, V> for Tree<K, V> { //
 				},
 				_ => None,
 			},
-			_ => Some(Some(Rc::new(Node::new(1, None, Entry::new(key, value), None)))),
+			_ => Some(Some(Arc::new(Node::new(1, None, Entry::new(key, value), None)))),
 		}
 	}
 	// 递归更新
@@ -472,15 +470,15 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap<K, V> for Tree<K, V> { //
 		match self {
 			&Some(ref node) => match key.cmp(&node.entry.key()) {
 				Ordering::Greater => match node.right.update(key, value, copy) {
-					Some((v, r)) => Some((v, Some(Rc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r))))),
+					Some((v, r)) => Some((v, Some(Arc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r))))),
 					_ => None,
 				},
 				Ordering::Less => match node.left.update(key, value, copy) {
-					Some((v, r)) => Some((v, Some(Rc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone()))))),
+					Some((v, r)) => Some((v, Some(Arc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone()))))),
 					_ => None,
 				},
-				_ if copy => Some((Some(node.entry.value().clone()), Some(Rc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))))),
-				_ => Some((None, Some(Rc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))))),
+				_ if copy => Some((Some(node.entry.value().clone()), Some(Arc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))))),
+				_ => Some((None, Some(Arc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))))),
 			},
 			_ => None,
 		}
@@ -491,16 +489,16 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap<K, V> for Tree<K, V> { //
 			&Some(ref node) => match key.cmp(&node.entry.key()) {
 				Ordering::Greater => match node.right.upsert(key, value, copy) {
 					(None, r) => (None, Node::maintain_right(node.size + 1, &node.left, node.entry.clone(), &r)),
-					(v, r) => (v, Some(Rc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r)))),
+					(v, r) => (v, Some(Arc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r)))),
 				},
 				Ordering::Less => match node.left.upsert(key, value, copy) {
 					(None, r) => (None, Node::maintain_left(node.size + 1, &r, node.entry.clone(), &node.right)),
-					(v, r) => (v, Some(Rc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone())))),
+					(v, r) => (v, Some(Arc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone())))),
 				},
-				_ if copy => (Some(Some(node.entry.value().clone())), Some(Rc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
-				_ => (Some(None), Some(Rc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
+				_ if copy => (Some(Some(node.entry.value().clone())), Some(Arc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
+				_ => (Some(None), Some(Arc::new(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
 			},
-			_ => (None, Some(Rc::new(Node::new(1, None, Entry::new(key, value), None)))),
+			_ => (None, Some(Arc::new(Node::new(1, None, Entry::new(key, value), None)))),
 		}
 	}
 
@@ -556,24 +554,24 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap<K, V> for Tree<K, V> { //
 			&Some(ref node) => match key.cmp(&node.entry.key()) {
 				Ordering::Greater => match node.right.action(key, func) {
 					Some((ActionResultType::Insert, r)) => Some((ActionResultType::Insert, Node::maintain_right(node.size + 1, &node.left, node.entry.clone(), &r))),
-					Some((ActionResultType::Update, r)) => Some((ActionResultType::Update, Some(Rc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r))))),
+					Some((ActionResultType::Update, r)) => Some((ActionResultType::Update, Some(Arc::new(Node::new(node.size, node.left.clone(), node.entry.clone(), r))))),
 					Some((ActionResultType::Delete, r)) => Some((ActionResultType::Delete, Node::maintain_left(node.size - 1, &node.left, node.entry.clone(), &r))),
 					_ => None,
 				},
 				Ordering::Less => match node.left.action(key, func) {
 					Some((ActionResultType::Insert, r)) => Some((ActionResultType::Insert, Node::maintain_left(node.size + 1, &r, node.entry.clone(), &node.right))),
-					Some((ActionResultType::Update, r)) => Some((ActionResultType::Update, Some(Rc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone()))))),
+					Some((ActionResultType::Update, r)) => Some((ActionResultType::Update, Some(Arc::new(Node::new(node.size, r, node.entry.clone(), node.right.clone()))))),
 					Some((ActionResultType::Delete, r)) => Some((ActionResultType::Delete, Node::maintain_right(node.size - 1, &r, node.entry.clone(), &node.right))),
 					_ => None,
 				},
 				_ => match func(Some(node.entry.value())) {
-					ActionResult::Upsert(r) => Some((ActionResultType::Update, Some(Rc::new(Node::new(node.size, node.left.clone(), Entry::new(key.clone(), r), node.right.clone()))))),
+					ActionResult::Upsert(r) => Some((ActionResultType::Update, Some(Arc::new(Node::new(node.size, node.left.clone(), Entry::new(key.clone(), r), node.right.clone()))))),
 					ActionResult::Delete => Some((ActionResultType::Delete, Node::delete(node.size - 1, &node.left, &node.right))),
 					_ => None,
 				},
 			},
 			_ => match func(None) {
-				ActionResult::Upsert(r) => Some((ActionResultType::Insert, Some(Rc::new(Node::new(1, None, Entry::new(key.clone(), r), None))))),
+				ActionResult::Upsert(r) => Some((ActionResultType::Insert, Some(Arc::new(Node::new(1, None, Entry::new(key.clone(), r), None))))),
 				_ => None,
 			},
 		}

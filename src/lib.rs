@@ -4,7 +4,7 @@
 #![feature(pointer_methods)]
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]
 
-pub mod alloc;
+pub mod slab;
 pub mod rc;
 pub mod ordmap;
 pub mod sbtree;
