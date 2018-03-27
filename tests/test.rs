@@ -1,11 +1,12 @@
 // 当且仅当测试套件运行时，才条件编译 `test` 模块。
 #[cfg(test)]
-extern crate set;
+extern crate pi_lib;
 
-use set::ordmap::Entry;
-use set::ordmap::OrdMap;
-use set::ordmap::ImOrdMap;
-use set::sbtree::Tree;
+use pi_lib::ordmap::Entry;
+use pi_lib::ordmap::OrdMap;
+use pi_lib::ordmap::ImOrdMap;
+use pi_lib::sbtree::Tree;
+
 
 
 // 需要一个辅助函数
@@ -21,7 +22,7 @@ fn show(t: &OrdMap<usize, usize, Tree<usize, usize>>) -> Vec<usize> {
 fn sb_test() {
 	let tree:Tree<usize, usize> = Tree::new();
 	let mut t = OrdMap::new(tree);
-	let mut tt = t.clone();
+	t = t.clone();
 	assert!(t.is_empty());
 	assert!(t.insert(1, 10));
 	assert!(t.insert(2, 20));
@@ -60,10 +61,15 @@ fn sb_test() {
 	assert!(*(t.index(4).unwrap()).key() == 40);
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40]);
 	assert!(t.insert(90, 90));
+	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 90, 90]);
 	assert!(t.insert(80, 80));
+	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 80, 80, 90, 90]);
 	assert!(t.insert(70, 70));
+	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40,  70, 70, 80, 80, 90, 90]);
 	assert!(t.insert(60, 60));
+	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 60, 60,  70, 70, 80, 80, 90, 90]);
 	assert!(t.insert(50, 50));
+	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 50, 50, 60, 60,  70, 70, 80, 80, 90, 90]);
 	assert!(t.delete(&70, true).unwrap().unwrap() == 70);
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 50, 50, 60, 60, 80, 80, 90, 90]);
 	assert!(t.insert(70, 71));

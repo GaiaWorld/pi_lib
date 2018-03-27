@@ -54,7 +54,8 @@ pub trait ImOrdMap<K, V> {
 	fn is_empty(&self) -> bool;
 	fn size(&self) -> usize;
 	fn has(&self, &K) -> bool;
-	fn get(&self, &K) -> Option<&V>;
+	fn get(&self, key: &K) -> Option<&V>;
+	//fn get(&self, &K) -> Option<&V>;
 	fn min(&self) -> Option<&Entry<K, V>>;
 	fn max(&self) -> Option<&Entry<K, V>>;
 	fn rank(&self, &K) -> isize;

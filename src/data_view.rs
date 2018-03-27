@@ -1,18 +1,8 @@
 
 use std::vec::Vec;
-use std::ops::{Deref, Range, DerefMut};
+use std::ops::Range;
 use std::mem::transmute;
-pub struct V8(Vec<u8>);
 
-impl V8 {
-	pub fn with_capacity(capacity: usize) -> V8{
-		V8(Vec::with_capacity(capacity))
-	}
-
-	pub fn new() -> V8{
-		V8(Vec::new())
-	}
-}
 
 pub trait DataView {
 	fn set_lu8(&mut self, u8, usize);
@@ -99,21 +89,7 @@ pub trait DataView {
 	fn move_part(&mut self, Range<usize>, usize);
 }
 
-impl Deref for V8 {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Vec<u8> {
-        &self.0
-    }
-}
-
-impl DerefMut for V8 {
-	fn deref_mut(&mut self) -> &mut Vec<u8>{
-		&mut self.0
-	}
-}
-
-impl DataView for V8 {
+impl DataView for Vec<u8> {
 	fn set_lu8(&mut self, v: u8, offset: usize){
 		unsafe { 
 			let l = self.len();
