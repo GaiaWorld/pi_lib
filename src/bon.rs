@@ -35,8 +35,8 @@ use data_view::{DataView, V8};
 use std::ops::{Range};
 
 pub trait BinCode{
-	fn bin_encode(bb: &BinBuffer, next: Fn(usize));
-	fn bin_decode(bb: &BinBuffer, next: Fn(usize));
+	fn bin_encode(bb: &BinBuffer, next: fn(usize));
+	fn bin_decode(bb: &BinBuffer, next: fn(usize));
 }
 
 pub type ReadNext<T> = fn (&BinBuffer, u32) -> T;
@@ -217,7 +217,7 @@ impl BinBuffer{
 			self.bytes.set_lu8( t + 67, self.tail);
 			self.bytes.set_lu32(  length as u32, self.tail + 1);
 			self.tail += 5;
-		} else if length <= 0xffffffffffff {
+		} else if length as u64 <= 0xffffffffffff {
 			self.try_extend_capity(7 + length);
 			self.bytes.set_lu8( t + 68, self.tail);
 			self.bytes.set_lu16((length & 0xffff) as u16, self.tail + 1);
@@ -229,12 +229,12 @@ impl BinBuffer{
 			self.bytes.set_lu64(t as u64, self.tail + 1);
 			self.tail += 9;
 		}
-		let a = self.bytes.capacity();
+		//let a = self.bytes.capacity();
 		self.bytes.set(arr, self.tail);
 		self.tail += length;
-		let arrlen = arr.len();
-		let byteslen = self.bytes.len();
-		let a = 0;
+		//let arrlen = arr.len();
+		//let byteslen = self.bytes.len();
+		//let a = 0;
 	}
 
 	//容器有数组，map，枚举，struct
@@ -244,7 +244,7 @@ impl BinBuffer{
 		let capacity = self.bytes.capacity();
 		// 根据预估大小，预留出足够的空间来写入容器的总大小
 		let estimated_size = match estimated_size{Some(v) => v, None => 0xffff};
-		let mut limit_size;
+		let mut limit_size: u64;
 		
 		if estimated_size <= 64 {
 			self.try_extend_capity(5 + estimated_size);
@@ -262,7 +262,7 @@ impl BinBuffer{
 			self.try_extend_capity(10 + estimated_size);
 			len_bytes = 5;
 			limit_size = 0xffffffff;
-		} else if estimated_size <= 0xffffffffffff {
+		} else if estimated_size as u64 <= 0xffffffffffff {
 			self.try_extend_capity(12 + estimated_size);
 			len_bytes = 7;
 			limit_size = 0xffffffffffff;
@@ -273,7 +273,7 @@ impl BinBuffer{
 		}
 		t = t + 5 + len_bytes;//容器长度字节数的分类为1字节， 容器类型为4字节, 容器长度字节数位len_bytes
 		write_next(self, o);
-		let len = self.bytes.len() - t;
+		let len = (self.bytes.len() - t) as u64;
 		// 判断实际写入的大小超出预期的大小，需要移动数据
 		if limit_size < len && len > 64{
 			let mut len_bytes1: usize = 0;
@@ -286,10 +286,10 @@ impl BinBuffer{
 			} else if len <= 0xffffffff {
 				len_bytes1 = 5;
 				limit_size = 0xffffffff;
-			} else if len <= 0xffffffffffff {
+			} else if len <= 0xffffffffffff as u64 {
 				len_bytes1 = 7;
 				limit_size = 0xffffffffffff;
-			} else if len <= 0xffffffffffffffff{
+			} else if len <= 0xfffffffffffffffe + 1{
 				len_bytes1 = 9;
 				limit_size = 0xffffffffffffffff;
 			}
@@ -504,23 +504,23 @@ impl BinBuffer{
 		}else{
 			match t {
 				245 => {
-					len = self.bytes.get_lu8(self.head) as usize;
+					//len = self.bytes.get_lu8(self.head) as usize;
 					self.head += 5;
 				},
 				246 => {
-					len = self.bytes.get_lu16(self.head) as usize;
+					//len = self.bytes.get_lu16(self.head) as usize;
 					self.head += 6;
 				},
 				247 => {
-					len = self.bytes.get_lu32(self.head) as usize;
+					//len = self.bytes.get_lu32(self.head) as usize;
 					self.head += 8;
 				},
 				248 => {
-					len = self.bytes.get_lu16(self.head) as usize + (self.bytes.get_lu32(self.head + 2) * 0x10000) as usize;
+					//len = self.bytes.get_lu16(self.head) as usize + (self.bytes.get_lu32(self.head + 2) * 0x10000) as usize;
 					self.head += 10;
 				},
 				249 => {
-					len = self.bytes.get_lu64(self.head) as usize;
+					//len = self.bytes.get_lu64(self.head) as usize;
 					self.head += 12;
 				},
 				_ => {
@@ -831,14 +831,6 @@ impl AsFrom<i64> for i64{
 		t
 	}
 }
-
-
-
-
-
-
-
-
 
 #[test]
 fn test_u8() {
