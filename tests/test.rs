@@ -4,8 +4,7 @@ extern crate pi_lib;
 
 use pi_lib::ordmap::Entry;
 use pi_lib::ordmap::OrdMap;
-use pi_lib::ordmap::ImOrdMap;
-use pi_lib::sbtree::Tree;
+use pi_lib::sbtree::{new, Tree, TreeMap};
 
 
 
@@ -20,8 +19,7 @@ fn show(t: &OrdMap<usize, usize, Tree<usize, usize>>) -> Vec<usize> {
 }
 #[test]
 fn sb_test() {
-	let tree:Tree<usize, usize> = Tree::new();
-	let mut t = OrdMap::new(tree);
+	let mut t:TreeMap<usize, usize> = new();
 	t = t.clone();
 	assert!(t.is_empty());
 	assert!(t.insert(1, 10));
