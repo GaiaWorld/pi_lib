@@ -1,0 +1,287 @@
+/**
+ * 写时复制的sbtree，支持单线程或多线程安全
+ */
+
+use std::option::Option;
+use std::cmp::Ord;
+use std::rc::Rc;
+use std::sync::Arc;
+
+
+pub struct Entry<K: Ord+Clone, V> {
+	key: K,
+	value: V,
+}
+pub trait SBTree<K: Ord+Clone, V> {
+	fn empty(&self) -> bool;
+	fn size(&self) -> usize;
+	fn has(&self, key: K) -> bool;
+	fn insert(&mut self, K, V) -> bool;
+}
+pub struct ASBTree<K: Ord+Clone, V> {
+	root: Option<ARef<K, V>>,
+}
+pub struct NSBTree<K: Ord+Clone, V> {
+	root: Option<Ref<K, V>>,
+}
+
+impl<K: Ord+Clone, V> ASBTree<K, V> {
+	//#[inline]
+	/**
+	 * 判空
+	 */
+	fn empty(&self) -> bool {
+		match &self.root {
+		  &None => true,
+		  _ => false,
+	  }
+	}
+	/**
+	 * 获取指定树的大小
+	 */
+	fn size(&self) -> usize {
+		match &self.root {
+		  &Some(ref x) => {
+			  x.get().size
+		  },
+		  &None => 0,
+	  }
+	}
+	/**
+	 * 检查指定的Key在树中是否存在
+	 */
+	fn has(&mut self, key: K) -> bool {
+		match &mut self.root {
+		  &mut Some(ref mut x) => {
+			  //let arc = x.value.clone();
+			  x.get().has(key)
+		  },
+		  &mut None => false,
+	  }
+	}
+	/**
+	 * 检查指定的Key在树中是否存在
+	 */
+	fn insert(&mut self, key: K, value: V) -> bool {
+		match &mut self.root {
+		  &mut Some(ref mut x) => {
+			  
+			//   match x.get().insert(key, value) {
+
+			//   }
+			  true
+		  },
+		  &mut None => {
+			  //self.root = ARef::new()
+			  true
+		  }
+	  }
+	}
+	// 节点左旋
+	fn left_ratote (key: K, value: V, size: usize, left: T, right: Self) -> Self {
+		let lsize = left ? left.size : 0;
+		const rsize = right.left ? right.left.size : 0;
+		Self::new(right.key.clone(), right.value, size, Self::new(key, value, lsize + rsize + 1, left, right.left), right.right);
+	}
+
+	// 节点右旋
+	fn right_ratote (key: K, value: V, size: number, left: Node<K, V>, right: Node<K, V>) => {
+		const lsize = left.right ? left.right.size : 0;
+		const rsize = right ? right.size : 0;
+		return Self::new(left.key, left.value, size, left.left, new Node(key, value, lsize + rsize + 1, left.right, right));
+	}
+
+}
+impl<K: Ord+Clone, V> SBTree<K, V> {
+	//#[inline]
+	//fn has
+}
+//====================================
+struct Node<T, K: Ord+Clone, V> 
+	where T: GetRef<T, K, V> {
+	entry: Entry<K, V>,
+	size: usize,
+	left: Option<T>,
+	right: Option<T>,
+}
+
+impl<T, K: Ord+Clone, V>  Node<T, K, V> where T: GetRef<T, K, V> {
+    fn new(k: K, v: V, s: usize, l: Option<T>, r: Option<T>) -> Self {
+		Node {
+			entry: Entry {
+				key: k,
+				value: v,
+			},
+			size: s,
+			left: l,
+			right: r,
+		}
+	}
+
+	fn has(&self, key: K) -> bool {
+		let mut node = self;
+		loop {
+			if self.entry.key > key {
+				match node.right {
+					Some(ref x) => node = x.get(),
+					None => break,
+				}
+			} else if node.entry.key < key {
+				match node.left {
+					Some(ref x) => node = x.get(),
+					None => break,
+				}
+			} else {
+				return true;
+			}
+		}
+		return false;
+	}
+	fn insert(&self, key: K, value: V) -> Option<T> {
+		if self.entry.key > key {
+			match self.right {
+				Some(ref x) => x.get().insert(key, value),
+				None => Option::Some(GetRef::new(Self::new(key, value, 1, None, None))),
+			}
+		} else if self.entry.key < key {
+			match self.left {
+				Some(ref x) => x.get().insert(key, value),
+				None => Option::Some(GetRef::new(Self::new(key, value, 1, None, None))),
+			}
+		} else {
+			Option::None
+		}
+	}
+	
+}
+
+//====================================
+trait GetRef<T, K: Ord+Clone, V> where T: GetRef<T, K, V> {
+    fn new(Node<T, K, V>) -> T;
+    fn get(&self) -> &Node<T, K, V>;
+}
+
+struct ARef<K: Ord+Clone, V> {
+	value: Arc<Box<Node<ARef<K, V>, K, V>>>,
+}
+
+struct Ref<K: Ord+Clone, V> {
+	value: Rc<Box<Node<Ref<K, V>, K, V>>>,
+}
+
+impl<K: Ord+Clone, V> GetRef<ARef<K, V>, K, V> for ARef<K, V> {
+    fn new(node: Node<ARef<K, V>, K, V>) -> Self {
+		ARef {
+			value: Arc::new(Box::new(node))
+		}
+	}
+	#[inline]
+    fn get(&self) -> &Node<ARef<K, V>, K, V> {
+		&**(self.value)
+	}
+}
+impl<K: Ord+Clone, V> GetRef<Ref<K, V>, K, V> for Ref<K, V> {
+    fn new(node: Node<Ref<K, V>, K, V>) -> Self {
+		Ref {
+			value: Rc::new(Box::new(node))
+		}
+	}
+	#[inline]
+	fn get(&self) -> &Node<Ref<K, V>, K, V> {
+		&**(self.value)
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// pub trait RefCounter {
+// 	fn new() -> Self;
+// 	fn incr(&mut self);
+// 	fn decr(&mut self);
+// 	fn count(&mut self) -> usize;
+// }
+// struct AtomCounter {
+// 	count: AtomicUsize,
+// }
+
+// struct Counter {
+// 	count: usize,
+// }
+
+// impl RefCounter for AtomCounter {
+// 	fn new() -> Self {
+// 		AtomCounter { count: AtomicUsize::new(1)}
+// 	}
+// 	fn incr(&mut self){}
+// 	fn decr(&mut self){}
+// 	fn count(&mut self) -> usize {0}
+// }
+
+
+// impl RefCounter for Counter {
+// 	fn new() -> Self {
+// 		Counter { count: 0}
+// 	}
+// 	fn incr(&mut self){}
+// 	fn decr(&mut self){}
+// 	fn count(&mut self) -> usize {0}
+// }
+
+
+// impl<C: RefCounter, K: Ord+Clone, V> Tree<C, K, V> {
+//   pub fn new(k : K, v: V) -> Tree<C, K, V> {
+// 	  Tree {
+//         entry: Entry{
+// 			key: k,
+// 			value: v,
+// 		},
+// 		size: 1,
+// 		count: C::new(),
+// 		left:Leaf::None,
+// 		right:Leaf::None,
+//     }
+//   }
+//   fn create(k : K, v: V, &mut left: Leaf<C, K, V>, &mut right: Leaf<C, K, V>) -> Tree<C, K, V> {
+// 	let lsize =  match &mut left {
+// 		  &mut Leaf::Node(ref mut x) =>{
+// 			  (**x).count.incr();
+// 			   (**x).size
+// 			},
+// 		  &mut Leaf::None => 0,
+// 	  };
+// 	let rsize =  match &mut right {
+// 		  &mut Leaf::Node(ref mut x) => {
+// 			  (**x).count.incr();
+// 			  (**x).size
+// 		  },
+// 		  &mut Leaf::None => 0,
+// 	  };
+
+//     Tree {
+//         entry: Entry{
+// 			key: k,
+// 			value: v,
+// 		},
+// 		size: lsize + rsize + 1,
+// 		count: C::new(),
+// 		left:left,
+// 		right:right,
+//     }
+//   }
+
+
+
+
+
+

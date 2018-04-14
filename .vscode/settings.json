@@ -1,2 +1,16 @@
 {
+    "editor.wordWrap": "on",
+	"editor.renderWhitespace": "boundary",
+     "editor.insertSpaces": false,
+    "editor.detectIndentation": false,
+	 "typescript.tsdk": "../../pi_build/node_modules/typescript/lib",
+    "files.associations": {
+        "*.rsd": "rust",
+        "*.tpl": "html",
+        "*.tpf": "js",
+        "*.depend": "js",
+        "*.wjs": "js",
+        "*.wcss": "css",
+        "*.rcss": "css"
+    }
 }
