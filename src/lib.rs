@@ -13,3 +13,5 @@ pub mod asbtree;
 pub mod sbtree;
 pub mod bon;
 pub mod data_view;
+pub mod str;
+pub mod sinfo;
