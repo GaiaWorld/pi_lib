@@ -34,19 +34,16 @@
 use data_view::DataView;
 use std::ops::{Range};
 
-pub trait BinCode{
-	fn bin_encode(bb: &BinBuffer, next: fn(usize));
-	fn bin_decode(bb: &BinBuffer, next: fn(usize));
+pub trait BonCode{
+	fn bon_encode(bb: &BonBuffer, next: fn(&mut BonBuffer,  &Self));
+	fn bon_decode(bb: &BonBuffer, next: fn(&BonBuffer,  &u32) -> Self);
 }
-
-pub type ReadNext<T> = fn (&BinBuffer, u32) -> T;
-pub type WriteNext<T> = fn (&mut BinBuffer,  &T);
 
 /**
  * @description 二进制数据缓存
  * @example
  */
-pub struct BinBuffer {
+pub struct BonBuffer {
 	// u8数组
 	bytes: Vec<u8>,
 	// 头部指针
@@ -55,9 +52,9 @@ pub struct BinBuffer {
 	tail:usize,
 }
 
-impl BinBuffer{
+impl BonBuffer{
 
-	pub fn with_bytes(buf: Vec<u8>, head:Option<usize>, tail: Option<usize>) -> BinBuffer {
+	pub fn with_bytes(buf: Vec<u8>, head:Option<usize>, tail: Option<usize>) -> BonBuffer {
 		let h  = match head {
 			Some(v) => {assert!(v <= buf.len(), "invalid head"); v},
 			None => 0
@@ -67,16 +64,24 @@ impl BinBuffer{
 			Some(v) => {assert!(v > h, "invalid tail"); v},
 			None => 0
 		};
-		BinBuffer{
+		BonBuffer{
 			bytes: buf,
 			head: h,
 			tail: t,
 		}
 	}
 
-	pub fn new(size: usize) -> BinBuffer {
-		BinBuffer{
+	pub fn with_capacity(size: usize) -> BonBuffer {
+		BonBuffer{
 			bytes: Vec::with_capacity(size),
+			head: 0,
+			tail: 0,
+		}
+	}
+
+	pub fn new() -> BonBuffer {
+		BonBuffer{
+			bytes: Vec::new(),
 			head: 0,
 			tail: 0,
 		}
@@ -238,7 +243,7 @@ impl BinBuffer{
 	}
 
 	//容器有数组，map，枚举，struct
-	pub fn write_container<T: BinCode>(&mut self, o: &T, write_next: WriteNext<T>, estimated_size: Option<usize>) {
+	pub fn write_container<T: BonCode>(&mut self, o: &T, write_next: fn(&mut BonBuffer,  &T), estimated_size: Option<usize>) {
 		let mut t = self.bytes.len();
 		let len_bytes: usize;//描述容器长度的值的字节数
 		let capacity = self.bytes.capacity();
@@ -494,7 +499,7 @@ impl BinBuffer{
 		String::from_utf8(dst).expect("u8array transformation string exception")
 	}
 
-	pub fn read_container<T>(&mut self, read_next: ReadNext<T>) -> T {
+	pub fn read_container<T: BonCode>(&mut self, read_next: fn(&BonBuffer,  &u32) -> T) -> T {
 		let t = self.bytes.get_lu8(self.head);
 		self.head += 1;
 		let len: usize;
@@ -528,7 +533,7 @@ impl BinBuffer{
 				}
 			}
 		}
-		let tt = self.bytes.get_lu32(self.head - 4);
+		let tt = &self.bytes.get_lu32(self.head - 4);
 		read_next(self, tt)
 	}
 
@@ -834,7 +839,7 @@ impl AsFrom<i64> for i64{
 
 #[test]
 fn test_u8() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_u8(5);
     buf.write_u8(50);
     assert_eq!(buf.read_u8(), 5);
@@ -843,7 +848,7 @@ fn test_u8() {
 
 #[test]
 fn test_u16() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_u16(18);
 	buf.write_u16(50);
     buf.write_u16(65534);
@@ -854,7 +859,7 @@ fn test_u16() {
 
 #[test]
 fn test_u32() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_u32(18);
 	buf.write_u32(50);
     buf.write_u32(65534);
@@ -867,7 +872,7 @@ fn test_u32() {
 
 #[test]
 fn test_u64() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_u64(18);
 	buf.write_u64(50);
     buf.write_u64(65534);
@@ -882,7 +887,7 @@ fn test_u64() {
 
 #[test]
 fn test_i8() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_i8(15);
 	buf.write_i8(-11);
 	buf.write_u64(50);
@@ -893,7 +898,7 @@ fn test_i8() {
 
 #[test]
 fn test_i16() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_i16(15);
 	buf.write_i16(-11);
 	buf.write_i16(50);
@@ -908,7 +913,7 @@ fn test_i16() {
 
 #[test]
 fn test_i32() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_i32(15);
 	buf.write_i32(-11);
 	buf.write_i32(50);
@@ -927,7 +932,7 @@ fn test_i32() {
 
 #[test]
 fn test_i64() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_i64(15);
 	buf.write_i64(-11);
 	buf.write_i64(50);
@@ -950,7 +955,7 @@ fn test_i64() {
 
 #[test]
 fn test_f32() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_f32(1.0);
 	buf.write_f32(0.0);
 	buf.write_f32(5.0);
@@ -963,7 +968,7 @@ fn test_f32() {
 
 #[test]
 fn test_f64() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_f64(1.0);
 	buf.write_f64(0.0);
 	buf.write_f64(5.0);
@@ -976,14 +981,14 @@ fn test_f64() {
 
 #[test]
 fn test_utf8() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
     buf.write_utf8("123byufgeruy");
     assert_eq!(buf.read_utf8(), "123byufgeruy");
 }
 
 #[test]
 fn test_bin() {
-    let mut buf = BinBuffer::new(10);
+    let mut buf = BonBuffer::new();
 	let arr = [5; 10];
     buf.write_bin(&arr,0..10);
     assert_eq!(buf.read_bin(), arr);
