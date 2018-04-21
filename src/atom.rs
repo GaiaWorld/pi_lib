@@ -6,6 +6,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 //use std::marker::Copy;
 use core::convert::From;
+use std::hash::{Hash, Hasher};
 
 // https://amanieu.github.io/parking_lot/parking_lot/struct.RwLock.html
 // 高性能的支持升级的读写锁
@@ -13,6 +14,7 @@ use core::convert::From;
 
 
 // 原子字符串
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct Atom(Arc<(String, u64)>);
 
 impl Deref for Atom {
@@ -27,27 +29,32 @@ impl Atom {
 	fn contain(s: Option<&String>, h: u64) -> Option<usize> {
 		return None
 	}
-	fn hash(&self) -> u64 {
+	fn get_hash(&self) -> u64 {
 		(*self.0).1
 	}
 }
 
-// 可能实现比较大小、hash等方法
+// impl Hash for Atom {
+// 	#[inline]
+// 	fn hash<H: Hasher>(&self, state: &mut H) {
+// 		(*self.0).1.hash(state)
+// 	}
+// }
 
 // 为静态编译的完美hash的字符串准备的常量数组
 // const NB_BUCKETS: usize = 1 << 12;  // 4096
 // const BUCKET_MASK: u64 = (1 << 12) - 1;
 
 // struct StringCache {
-//     buckets: [Option<Box<StringCacheEntry>>; NB_BUCKETS],
+//     buckets: [Option<Box<(String, u64)>>; NB_BUCKETS],
 // }
 
 // lazy_static! {
 //     static ref STRING_CACHE: Mutex<StringCache> = Mutex::new(StringCache::new());
 // }
 
-// 为动态的原子字符串准备的hashmap
-// static map : RwLock<HashMap<u64, CowList<(Weak<(String, u64)>>> = HashMap::new();
+// 为动态的原子字符串准备的fnv hashmap 及可升级的rwlock(如果使用CowList, 就可以不需要，改成先读1次，然后再写1次)
+// static map : RwLock<HashMap<u64, (version, CowList<(Weak<(String, u64))>>> = HashMap::new();
 
 
 

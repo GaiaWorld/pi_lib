@@ -50,20 +50,18 @@ impl<K: Clone, V: Clone> Clone for Entry<K, V> {
 
 pub trait ImOrdMap<K, V> {
 	fn new() -> Self;
-	//fn clone(&self) -> Self;
 	//fn from_order(Vec<Entry<K, V>>) -> Self;
 	fn is_empty(&self) -> bool;
 	fn size(&self) -> usize;
 	fn has(&self, &K) -> bool;
 	fn get(&self, key: &K) -> Option<&V>;
-	//fn get(&self, &K) -> Option<&V>;
 	fn min(&self) -> Option<&Entry<K, V>>;
 	fn max(&self) -> Option<&Entry<K, V>>;
 	fn rank(&self, &K) -> isize;
 	fn index(&self, usize) -> Option<&Entry<K, V>>;
-	// fn keys(&self, Option<&K>) -> Generator;
-	//fn values(&self, Option<&K>) -> gen;
-	//fn entrys(&self, Option<&K>) -> gen;
+	// fn keys(&self, key: Option<&K>, descending: bool) -> Generator;
+	//fn values(&self, key: Option<&K>, descending: bool) -> gen;
+	//fn entrys(&self, key: Option<&K>, descending: bool) -> gen;
 	fn select<F>(&self, Option<&K>, &mut F) where F: FnMut(&Entry<K, V>);
 
 	fn insert(&self, K, V) -> Option<Self> where Self: Sized;
@@ -178,7 +176,7 @@ impl<K: Clone, V: Clone, T> OrdMap<K, V, T> where T: ImOrdMap<K, V> {
 	//fn values(&self, Option<&K>, descending: bool) -> gen;
 	//fn entrys(&self, Option<&K>, descending: bool) -> gen;
 	/**
-	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始
+	 * 选择器方法，从指定键开始进行选择，TODO 升序或降序，如果不指定键，则从最小键开始
 	 */
 	pub fn select<F>(&self, key: Option<&K>, func: &mut F) where F: FnMut(&Entry<K, V>) {
 		self.root.select(key, func)
