@@ -2,6 +2,7 @@
  * 全局的线程安全的原子字符串池，为了移植问题，可能需要将实现部分移到其他库
  */
 
+use std::cmp::Ord;
 use std::ops::Deref;
 use std::sync::Arc;
 //use std::marker::Copy;
@@ -14,7 +15,7 @@ use std::hash::{Hash, Hasher};
 
 
 // 原子字符串
-#[derive(Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Atom(Arc<(String, u64)>);
 
 impl Deref for Atom {
