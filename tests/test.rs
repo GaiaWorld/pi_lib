@@ -4,9 +4,17 @@ extern crate pi_lib;
 
 use pi_lib::ordmap::Entry;
 use pi_lib::ordmap::{OrdMap, ImOrdMap};
-use pi_lib::sbtree::Tree;
+use pi_lib::sbtree::{Tree, new};
+use pi_lib::atom::Atom;
 
 
+#[test]
+fn atom() {
+	let a = Atom::from("aaa");
+	let b = Atom::from(String::from("aaa"));
+	assert!(*a == String::from("aaa"));
+	assert!(*a == *b);
+}
 
 // 需要一个辅助函数
 fn show(t: &OrdMap<Tree<usize, usize>>) -> Vec<usize> {
@@ -19,7 +27,7 @@ fn show(t: &OrdMap<Tree<usize, usize>>) -> Vec<usize> {
 }
 #[test]
 fn sb_test() {
-	let xt:Tree<usize, usize> = Tree::new();
+	let xt:Tree<usize, usize> = new();
 	let mut t= OrdMap::new(xt);
 	t = t.clone();
 	assert!(t.is_empty());

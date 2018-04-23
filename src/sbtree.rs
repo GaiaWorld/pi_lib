@@ -2,17 +2,23 @@
  * 写时复制的sbtree，支持单线程或多线程安全
  */
 
+#[macro_export]
+macro_rules! custom_ref { ($x:ident) => (
+
 use std::option::Option;
 use std::cmp::{Ord, Ordering};
 use std::rc::Rc;
 use std::ops::{Generator, GeneratorState};
-// use std::sync::Arc;
+use std::sync::Arc;
 //use std::fmt::{Debug};
 use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap};
 
 
-
-pub type Tree<K, V> = Option<Rc<Node<K, V>>>;
+#[inline]
+pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
+	Some($x::new(n))
+}
+pub type Tree<K, V> = Option<$x<Node<K, V>>>;
 
 pub struct Node<K: Clone, V: Clone> {
 	size: usize,
@@ -581,7 +587,9 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 
 }
 
-#[inline]
-pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
-	Some(Rc::new(n))
+)}
+
+custom_ref!(Rc);
+pub fn new<K: Clone+Ord, V: Clone>() -> Tree<K, V> {
+	None
 }

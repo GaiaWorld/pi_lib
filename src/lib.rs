@@ -12,8 +12,9 @@ extern crate core;
 pub mod slab;
 pub mod rc;
 pub mod ordmap;
-pub mod asbtree;
+#[macro_use]
 pub mod sbtree;
+pub mod asbtree;
 pub mod bon;
 pub mod data_view;
 pub mod atom;
