@@ -1,5 +1,3 @@
-// #![feature(generators, generator_trait)]
-
 /**
  * 写时复制的sbtree，支持单线程或多线程安全
  */
@@ -10,20 +8,12 @@ use std::cmp::{Ord, Ordering};
 //use std::ops::{Generator, GeneratorState};
 use std::sync::Arc;
 //use std::fmt::{Debug};
-use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap, OrdMap};
+use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap};
 
 
-pub type TreeMap<K, V> = OrdMap<Tree<K, V>>;
-pub fn new<K: Ord+Clone, V: Clone>() -> TreeMap<K, V> {
-	let tree:Tree<K, V> = Tree::new();
-	OrdMap::new(tree)
-}
 
 pub type Tree<K, V> = Option<Arc<Node<K, V>>>;
-#[inline]
-pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
-	Some(Arc::new(n))
-}
+
 pub struct Node<K: Clone, V: Clone> {
 	size: usize,
 	left: Tree<K, V>,
@@ -589,4 +579,9 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 		}
 	}
 
+}
+
+#[inline]
+pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
+	Some(Arc::new(n))
 }
