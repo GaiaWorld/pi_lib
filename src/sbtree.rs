@@ -11,7 +11,7 @@ use std::ops::{Generator, GeneratorState};
 use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap, OrdMap};
 
 
-pub type TreeMap<K, V> = OrdMap<K, V, Tree<K, V>>;
+pub type TreeMap<K, V> = OrdMap<Tree<K, V>>;
 pub fn new<K: Ord+Clone, V: Clone>() -> TreeMap<K, V> {
 	let tree:Tree<K, V> = Tree::new();
 	OrdMap::new(tree)
@@ -19,10 +19,10 @@ pub fn new<K: Ord+Clone, V: Clone>() -> TreeMap<K, V> {
 
 pub type Tree<K, V> = Option<Rc<Node<K, V>>>;
 #[inline]
-pub fn new_tree<K, V>(n: Node<K, V>) -> Tree<K, V> {
+pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
 	Some(Rc::new(n))
 }
-pub struct Node<K, V> {
+pub struct Node<K: Clone, V: Clone> {
 	size: usize,
 	left: Tree<K, V>,
 	entry: Entry<K, V>,
@@ -241,7 +241,9 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 // 	fn fmt(&self, f: &mut Formatter) -> Result;
 // }
 
-impl<K: Ord+Clone, V: Clone> ImOrdMap<K, V> for Tree<K, V> { // 
+impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { // 
+	type Key = K;
+	type Val = V;
 	/**
 	 * 新建
 	 */

@@ -7,13 +7,23 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::ops::Deref;
 
-pub trait New<T> {
-	fn new(T) -> Self;
+pub trait New {
+	type Target;
+	fn new(Self::Target) -> Self;
 }
 
+#[derive(Clone)]
 pub struct Ref<T>(Rc<T>);
+#[derive(Clone)]
 pub struct ARef<T>(Arc<T>);
 
+impl<T> New for Ref<T> {
+	type Target = T;
+
+	fn new(t:T) -> Self{
+		Ref(Rc::new(t))
+	}
+}
 impl<T> Deref for Ref<T> {
 	type Target = T;
 
@@ -22,12 +32,13 @@ impl<T> Deref for Ref<T> {
 	}
 }
 
-impl<T> New<T> for Ref<T> {
+impl<T> New for ARef<T> {
+	type Target = T;
+
 	fn new(t:T) -> Self{
-		Ref(Rc::new(t))
+		ARef(Arc::new(t))
 	}
 }
-
 impl<T> Deref for ARef<T> {
 	type Target = T;
 
@@ -36,11 +47,6 @@ impl<T> Deref for ARef<T> {
 	}
 }
 
-impl<T> New<T> for ARef<T> {
-	fn new(t:T) -> Self{
-		ARef(Arc::new(t))
-	}
-}
 
 pub trait Counter {
 	fn new(usize) -> Self;

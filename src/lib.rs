@@ -4,6 +4,7 @@
 #![feature(pointer_methods)]
 #![feature(core_intrinsics)]
 #![feature(generators, generator_trait)]
+#![feature(associated_type_defaults)]
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]
 
 extern crate core;
