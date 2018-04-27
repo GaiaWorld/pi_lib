@@ -35,8 +35,8 @@ use data_view::DataView;
 use std::ops::{Range};
 
 pub trait BonCode{
-	fn bon_encode(bb: &BonBuffer, next: fn(&mut BonBuffer,  &Self));
-	fn bon_decode(bb: &BonBuffer, next: fn(&BonBuffer,  &u32) -> Self);
+	fn bon_encode(&self, bb: &mut BonBuffer, next: fn(&mut BonBuffer,  &Self));
+	fn bon_decode(bb: &mut BonBuffer, next: fn(&BonBuffer,  &u32) -> Self) -> Self;
 }
 
 /**

@@ -54,7 +54,7 @@ impl Atom {
 //     static ref STRING_CACHE: Mutex<StringCache> = Mutex::new(StringCache::new());
 // }
 
-// 为动态的原子字符串准备的fnv hashmap 及可升级的rwlock(如果使用CowList, 就可以不需要，改成先读1次，然后再写1次)
+// 为动态的原子字符串准备的fnv hashmap 及可升级的rwlock(如果使用CowList, 就可以不需要可升级的rwlock，改成先读1次，然后再写1次)
 // static map : RwLock<HashMap<u64, (version, CowList<(Weak<(String, u64))>>> = HashMap::new();
 
 

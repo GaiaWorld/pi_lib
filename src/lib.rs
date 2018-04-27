@@ -1,5 +1,8 @@
 
 #![crate_type = "rlib"]
+#![feature(i128_type)]
+#![feature(integer_atomics)]
+#![feature(duration_extras)]
 #![feature(custom_derive,asm,box_syntax,box_patterns)]
 #![feature(pointer_methods)]
 #![feature(core_intrinsics)]
@@ -20,3 +23,5 @@ pub mod data_view;
 pub mod atom;
 pub mod sinfo;
 pub mod util;
+pub mod guid;
+pub mod time;

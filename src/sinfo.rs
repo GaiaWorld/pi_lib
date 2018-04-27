@@ -1,34 +1,44 @@
 /**
- * 全局的线程安全的常量字符串池
+ * 结构体信息
  */
 
 use std::vec::Vec;
 use std::collections::HashMap;
 
 use atom::Atom;
+use bon::{BonCode, BonBuffer};
 
 // 枚举结构体字段的所有类型
 pub enum EnumType {
+	Void,
 	Bool,
 	U8,
 	U16,
 	U32,
 	U64,
 	U128,
+	U256,
 	Usize,
 	I8,
 	I16,
 	I32,
 	I64,
 	I128,
+	I256,
 	Isize,
 	F32,
 	F64,
+	BigI,
 	Str,
+	Bin,
+	UTC,
 	Vec,
+	Map,
+	Tuple(Atom),
 	Struct(Atom),
 	Enum(Atom),
 	Func(Atom),
+	Ref(Atom),
 }
 
 pub struct StructInfo {
@@ -42,4 +52,30 @@ pub struct FieldInfo {
 	pub name: Atom,
 	pub ftype: EnumType,
 	pub annotates: Option<HashMap<Atom, Atom>>,
+}
+impl StructInfo {
+	pub fn new(name:Atom, name_hash:u32) -> Self {
+		StructInfo {
+			name:name,
+			name_hash: 0,
+			annotates: None,
+			fields: Vec::new(),
+		}
+	}
+}
+
+impl BonCode for StructInfo {
+
+	fn bon_encode(&self, bb: &mut BonBuffer, _: fn(&mut BonBuffer, &Self)) {
+
+	}
+	fn bon_decode(bb: &mut BonBuffer, _: fn(&BonBuffer,  &u32) -> Self) -> Self {
+		StructInfo {
+			name:Atom::from(""),
+			name_hash: 0,
+			annotates: None,
+			fields: Vec::new(),
+		}
+	}
+
 }

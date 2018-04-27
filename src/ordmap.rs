@@ -101,7 +101,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		return r
 	}
 	/**
-	 * 判空
+	 * 取根节点
 	 */
 	pub fn root(&self) -> &T {
 		&self.root
