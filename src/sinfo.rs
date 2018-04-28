@@ -57,7 +57,7 @@ impl StructInfo {
 	pub fn new(name:Atom, name_hash:u32) -> Self {
 		StructInfo {
 			name:name,
-			name_hash: 0,
+			name_hash: name_hash,
 			annotates: None,
 			fields: Vec::new(),
 		}

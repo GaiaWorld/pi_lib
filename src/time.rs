@@ -14,13 +14,12 @@ end
 Now 200s
  */
 
-use std::time::{Duration, Instant};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use std::sync::{Once, ONCE_INIT};
 
 static INIT: Once = ONCE_INIT;
 
-static mut start: Option<Instant> = None;
+static mut START: Option<Instant> = None;
 
 pub fn now_nanos() -> u64 {
 	let d = get().elapsed();
@@ -38,8 +37,8 @@ pub fn now_millis() -> u64 {
 fn get() -> Instant {
 	unsafe {
 		INIT.call_once(|| {
-			start = Some(Instant::now());
+			START = Some(Instant::now());
 		});
-		start.unwrap()
+		START.unwrap()
 	}
 }
