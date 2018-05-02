@@ -44,22 +44,28 @@ pub enum EnumType {
 pub struct StructInfo {
 	pub name: Atom,
 	pub name_hash: u32,
-	pub annotates: Option<HashMap<Atom, Atom>>,
+	pub notes: Option<HashMap<Atom, Atom>>,
 	pub fields: Vec<FieldInfo>,
 }
 
 pub struct FieldInfo {
 	pub name: Atom,
 	pub ftype: EnumType,
-	pub annotates: Option<HashMap<Atom, Atom>>,
+	pub notes: Option<HashMap<Atom, Atom>>,
 }
 impl StructInfo {
 	pub fn new(name:Atom, name_hash:u32) -> Self {
 		StructInfo {
 			name:name,
 			name_hash: name_hash,
-			annotates: None,
+			notes: None,
 			fields: Vec::new(),
+		}
+	}
+	pub fn get_note(&self, key: &Atom) -> Option<&Atom> {
+		match self.notes {
+			Some(ref map) => map.get(key),
+			_ => None
 		}
 	}
 }
@@ -73,7 +79,7 @@ impl BonCode for StructInfo {
 		StructInfo {
 			name:Atom::from(""),
 			name_hash: 0,
-			annotates: None,
+			notes: None,
 			fields: Vec::new(),
 		}
 	}
