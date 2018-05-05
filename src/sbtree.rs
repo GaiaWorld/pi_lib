@@ -442,9 +442,9 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 		}
 	}
 	/**
-	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始
+	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始, TODO descending还未实现
 	 */
-	fn select<F>(&self, key: Option<&K>, func: &mut F) where F: FnMut(&Entry<K, V>) {
+	fn select<F>(&self, key: Option<&K>, descending: bool, func: &mut F) where F: FnMut(&Entry<K, V>) {
 		match self {
 			&Some(ref node) => {
 				match key {
