@@ -4,7 +4,6 @@
  * 基于COW的有序表，根据具体的实现支持单线程或多线程安全
  */
 
-use std::marker::PhantomData;
 use std::intrinsics;
 //use std::ops::{Generator, GeneratorState};
 
