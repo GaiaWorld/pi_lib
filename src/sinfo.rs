@@ -122,7 +122,7 @@ impl Decode for EnumType{
 pub struct StructInfo {
 	pub name: Atom,
 	pub name_hash: u32,
-	pub annotates: Option<HashMap<Atom, Atom>>,
+	pub notes: Option<HashMap<Atom, Atom>>,
 	pub fields: Vec<FieldInfo>,
 }
 
@@ -131,8 +131,14 @@ impl StructInfo {
 		StructInfo {
 			name:name,
 			name_hash: name_hash,
-			annotates: None,
+			notes: None,
 			fields: Vec::new(),
+		}
+	}
+	pub fn get_note(&self, key: &Atom) -> Option<&Atom> {
+		match self.notes {
+			Some(ref map) => map.get(key),
+			_ => None
 		}
 	}
 }
@@ -149,7 +155,7 @@ impl Decode for StructInfo{
 		StructInfo{
 			name: Atom::decode(bb),
 			name_hash: u32::decode(bb),
-			annotates: Option::decode(bb),
+			notes: Option::decode(bb),
 			fields: Vec::decode(bb),
 		}
 	}
@@ -158,14 +164,23 @@ impl Decode for StructInfo{
 pub struct FieldInfo {
 	pub name: Atom,
 	pub ftype: EnumType,
-	pub annotates: Option<HashMap<Atom, Atom>>,
+	pub notes: Option<HashMap<Atom, Atom>>,
 }
 
+
+impl FieldInfo{
+	pub fn get_note(&self, key: &Atom) -> Option<&Atom> {
+		match self.notes {
+			Some(ref map) => map.get(key),
+			_ => None
+		}
+	}
+}
 impl Encode for FieldInfo{
 	fn encode(&self, bb: &mut BonBuffer){
 		self.name.encode(bb);
 		self.ftype.encode(bb);
-		self.annotates.encode(bb);
+		self.notes.encode(bb);
 	}
 }
 
@@ -174,7 +189,7 @@ impl Decode for FieldInfo{
 		FieldInfo{
 			name: Atom::decode(bb),
 			ftype: EnumType::decode(bb),
-			annotates: Option::decode(bb),
+			notes: Option::decode(bb),
 		}
 	}
 }
