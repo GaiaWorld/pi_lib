@@ -58,7 +58,7 @@ pub trait ImOrdMap {
 	// fn Self::Keys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> Generator;
 	//fn Self::Values(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
 	//fn entrys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
-	fn select<F>(&self, Option<&Self::Key>, &mut F) where F: FnMut(&Entry<Self::Key, Self::Val>);
+	fn select<F>(&self, Option<&Self::Key>, descending: bool, &mut F) where F: FnMut(&Entry<Self::Key, Self::Val>);
 
 	fn insert(&self, Self::Key, Self::Val) -> Option<Self> where Self: Sized;
 	fn update(&self, Self::Key, Self::Val, bool) -> Option<(Option<Self::Val>, Self)> where Self: Sized;
@@ -68,7 +68,7 @@ pub trait ImOrdMap {
 	fn pop_min(&self, bool) -> Option<(Option<Entry<Self::Key, Self::Val>>, Self)> where Self: Sized;
 	fn pop_max(&self, bool) -> Option<(Option<Entry<Self::Key, Self::Val>>, Self)> where Self: Sized;
 	fn action<F>(&self, &Self::Key, &mut F) -> Option<(ActionResultType, Self)> where F: FnMut(Option<&Self::Val>) -> ActionResult<Self::Val>, Self: Sized;
-	// fn map(&self, Fn) -> (usize, Self);
+	// fn map(&self, Fn) -> Self;
 
 }
 
@@ -163,8 +163,8 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 	/**
 	 * 选择器方法，从指定键开始进行选择，TODO 升序或降序，如果不指定键，则从最小键开始
 	 */
-	pub fn select<F>(&self, key: Option<&T::Key>, func: &mut F) where F: FnMut(&Entry<T::Key, T::Val>) {
-		self.root.select(key, func)
+	pub fn select<F>(&self, key: Option<&T::Key>, descending: bool, func: &mut F) where F: FnMut(&Entry<T::Key, T::Val>) {
+		self.root.select(key, descending, func)
 	}
 	/**
 	 *  插入一个新的键值对(不允许插入存在的key)
