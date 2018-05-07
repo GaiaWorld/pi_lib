@@ -33,10 +33,40 @@
 
 use data_view::DataView;
 use std::ops::{Range};
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::sync::Arc;
+use atom::Atom;
+use std::marker::Sized;
 
-pub trait BonCode{
-	fn bon_encode(&self, bb: &mut BonBuffer, next: fn(&mut BonBuffer,  &Self));
-	fn bon_decode(bb: &mut BonBuffer, next: fn(&BonBuffer,  &u32) -> Self) -> Self;
+pub enum EnumValue {
+	Void,
+	Bool(bool),
+	U8(u8),
+	U16(u16),
+	U32(u32),
+	U64(u64),
+	I8(i8),
+	I16(i16),
+	I32(i32),
+	I64(i64),
+	F32(f32),
+	F64(f64),
+	Str(String),
+	Bin(Vec<u8>),
+	Arr(Arc<Vec<EnumValue>>),
+	Map(HashMap<Arc<EnumValue>, Arc<EnumValue>>),
+	Struct(Arc<StructValue>),
+}
+
+pub struct StructValue {
+	pub hash: u32,
+	pub fields: Vec<FieldValue>
+}
+
+pub struct FieldValue {
+	pub name: Atom,
+	pub fvalue: EnumValue,
 }
 
 /**
@@ -123,7 +153,6 @@ impl BonBuffer{
 	pub fn write_i64(&mut self, v: i64){
 		self.write_int64(v);
 	}
-
 	pub fn write_nil(&mut self) {
 		self.bytes.set_bu8(0, self.tail);
 		self.tail += 1;
@@ -199,7 +228,7 @@ impl BonBuffer{
 	}
 
 	// 写二进制数据
-	fn write_data(&mut self, arr: &[u8], t: u8) {
+	pub fn write_data(&mut self, arr: &[u8], t: u8) {
 		let length = arr.len();
 		if length <= 64 {
 			self.try_extend_capity(1 + length);
@@ -243,7 +272,7 @@ impl BonBuffer{
 	}
 
 	//容器有数组，map，枚举，struct
-	pub fn write_container<T: BonCode>(&mut self, o: &T, write_next: fn(&mut BonBuffer,  &T), estimated_size: Option<usize>) {
+	pub fn write_container<T, F>(&mut self, o: &T, write_next: F, estimated_size: Option<usize>) where F: Fn(&mut BonBuffer, &T) {
 		let mut t = self.bytes.len();
 		let len_bytes: usize;//描述容器长度的值的字节数
 		let capacity = self.bytes.capacity();
@@ -499,7 +528,7 @@ impl BonBuffer{
 		String::from_utf8(dst).expect("u8array transformation string exception")
 	}
 
-	pub fn read_container<T: BonCode>(&mut self, read_next: fn(&BonBuffer,  &u32) -> T) -> T {
+	pub fn read_container<T, F>(&mut self, read_next: F) -> T where F: FnOnce(&mut BonBuffer, &u32) -> T{
 		let t = self.bytes.get_lu8(self.head);
 		self.head += 1;
 		let len: usize;
@@ -536,6 +565,108 @@ impl BonBuffer{
 		let tt = &self.bytes.get_lu32(self.head - 4);
 		read_next(self, tt)
 	}
+
+	pub fn is_nil(&mut self) -> bool{
+		let first = self.bytes.get_lu8(self.head);
+		if first == 0{
+			self.head += 1;
+			true
+		}else{
+			false
+		}
+	}
+
+	pub fn read(&mut self) -> EnumValue{
+		let first = self.bytes.get_lu8(self.head);
+		self.head += 1;
+		match first{
+			0 => {EnumValue::Void},
+			1 => {EnumValue::Bool(true)},
+			2 => {EnumValue::Bool(false)},
+			3 => {EnumValue::F32(0.0)},
+			4 => {EnumValue::F32(1.0)},
+			5 => {panic!("16 bit floating-point number temporarily unsupported");},
+			6 => {
+				self.head += 4;
+				EnumValue::F32(self.bytes.get_lf32(self.head - 4))
+			},
+			7 => {
+				self.head += 8;
+				EnumValue::F64(self.bytes.get_lf64(self.head - 8))
+			},
+			8 => {panic!("128 bit floating-point number temporarily unsupported");},
+			9 => {EnumValue::I8(-1)},
+			10..30 => {EnumValue::U8(first - 10)},
+			30 => {
+				self.head += 1;
+				EnumValue::U8(self.bytes.get_lu8(self.head - 1))
+			},
+			31 => {
+				self.head += 2;
+				EnumValue::U16(self.bytes.get_lu16(self.head - 2))
+			},
+			32 => {
+				self.head += 4;
+				EnumValue::U32(self.bytes.get_lu32(self.head - 4))
+			},
+			33 => {
+				self.head += 6;
+				EnumValue::U64(self.bytes.get_lu16(self.head - 6) as u64 + ((self.bytes.get_lu32(self.head - 4) as u64) << 16))
+			},
+			34 => {
+				self.head += 8;
+				EnumValue::U64(self.bytes.get_lu64(self.head - 8) as u64)
+			},
+			35 => {
+				self.head += 1;
+				EnumValue::I16(-(self.bytes.get_lu8(self.head - 1) as i16))
+			},
+			36 => {
+				self.head += 2;
+				EnumValue::I32(-(self.bytes.get_lu16(self.head - 2) as i32))
+			},
+			37 => {
+				self.head += 4;
+				EnumValue::I64(-(self.bytes.get_lu32(self.head - 4) as i64))
+			},
+			38 => {
+				self.head += 6;
+				EnumValue::I64(-(self.bytes.get_lu16(self.head - 6) as i64) - ((self.bytes.get_lu32(self.head - 4) as i64) << 16))
+			}
+			39 => {
+				self.head += 8;
+				EnumValue::I64(-(self.bytes.get_lu64(self.head - 4) as i64))//类型39，能表达i65，但此处限制最大i64，溢出会损失精度
+			},
+			40..110 => {
+				EnumValue::Bin(self.read_bin())
+			},
+			110..180 => {
+				EnumValue::Str(self.read_utf8())
+			}
+			_ => {
+				panic!("待实现");
+			}
+		}
+	}
+
+	// 0=null
+// 1=true
+// 2=false
+// 3=浮点数0.0，4=浮点数1.0，5=16位浮点数，6=32位浮点数，7=64位浮点数，8=128位浮点数;
+// 9~29= -1~19
+// 30=8位正整数，31=16位正整数，32=32位正整数，33=48位正整数，34=64位正整数
+// 35=8位负整数，36=16位负整数，37=32位负整数，38=48位负整数，39=64位负整数
+
+// 40-104=0-64长度的二进制数据，
+// 105=8位长度的二进制数据，106=16位长度的二进制数据，107=32位长度的二进制数据，108=48位长度的二进制数据，109=64位长度的二进制数据
+
+// 110-174=0-64长度的UTF8字符串，
+// 175=8位长度的UTF8字符串，176=16位长度的UTF8字符串，177=32位长度的UTF8字符串，178=48位长度的UTF8字符串，179=64位长度的UTF8字符串
+
+// 180-244=0-64长度的容器，包括对象、数组和map、枚举
+// 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器，249=64位长度的容器
+// 之后的一个4字节的整数表示类型。
+
 
 
 	fn read_integer<T: AsFrom<u32> + AsFrom<u64> + AsFrom<i32> + AsFrom<i64>>(&mut self) -> T {
@@ -834,6 +965,218 @@ impl AsFrom<i32> for i64{
 impl AsFrom<i64> for i64{
 	fn from(t: i64) -> i64 {
 		t
+	}
+}
+
+pub trait Encode: Sized{
+	fn encode(&self, bb: &mut BonBuffer);
+}
+
+pub trait Decode: Sized{
+	fn decode(bb: &mut BonBuffer) -> Self;
+}
+
+impl Encode for u8{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_u8(self.clone());
+	}
+}
+
+impl Decode for u8{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_u8()
+	}
+}
+
+impl Encode for u16{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_u16(self.clone());
+	}
+}
+
+impl Decode for u16{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_u16()
+	}
+}
+
+impl Encode for u32{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_u32(self.clone());
+	}
+}
+
+impl Decode for u32{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_u32()
+	}
+}
+
+impl Encode for u64{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_u64(self.clone());
+	}
+}
+
+impl Decode for u64{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_u64()
+	}
+}
+
+impl Encode for i8{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_i8(self.clone());
+	}
+}
+
+impl Decode for i8{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_i8()
+	}
+}
+
+impl Encode for i16{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_i16(self.clone());
+	}
+}
+
+impl Decode for i16{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_i16()
+	}
+}
+
+impl Encode for i32{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_i32(self.clone())
+	}
+}
+
+impl Decode for i32{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_i32()
+	}
+}
+
+impl Encode for i64{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_i64(self.clone());
+	}
+}
+
+impl Decode for i64{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_i64()
+	}
+}
+
+impl Encode for bool{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_bool(self.clone());
+	}
+}
+
+impl Decode for bool{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_bool()
+	}
+}
+
+impl Encode for usize{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_u64(self.clone() as u64);
+	}
+}
+
+impl Decode for usize{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_u64() as usize
+	}
+}
+
+impl Encode for isize{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_i64(self.clone() as i64);
+	}
+}
+
+impl Decode for isize{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_i64() as isize
+	}
+}
+
+impl Encode for String{
+	fn encode(&self, bb: &mut BonBuffer){
+		bb.write_utf8(self);
+	}
+}
+
+impl Decode for String{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		bb.read_utf8()
+	}
+}
+
+impl<K: Encode + Eq + Hash, V: Encode> Encode for HashMap<K, V>{
+	fn encode(&self, bb: &mut BonBuffer){
+		//self.typeid().encode(bb);
+		self.len().encode(bb);
+		for (k, v) in self.iter(){
+			k.encode(bb);
+			v.encode(bb);
+		}
+	}
+}
+
+impl<K: Decode + Eq + Hash, V: Decode> Decode for HashMap<K, V>{
+	fn decode(bb: &mut BonBuffer) -> Self{
+		let mut map = HashMap::new();
+		let count = usize::decode(bb);
+		for _ in 0..count{
+			map.insert(K::decode(bb), V::decode(bb));
+		}
+		map
+	}
+}
+
+impl<T: Encode> Encode for Vec<T>{
+	fn encode(&self, bb: &mut BonBuffer){
+		self.len().encode(bb);
+		for v in self.iter(){
+			v.encode(bb);
+		}
+	}
+}
+
+impl<T: Decode> Decode for Vec<T> {
+	fn decode(bb: &mut BonBuffer) -> Vec<T>{
+		let count = usize::decode(bb);
+		let mut vec = Vec::new();
+		for _ in 0..count{
+			vec.push(T::decode(bb));
+		}
+		vec
+	}
+}
+
+impl<T: Encode> Encode for Option<T>{
+	fn encode(&self, bb: &mut BonBuffer){
+		match self{
+			&Some(ref v) => {v.encode(bb);}
+			&None => {bb.write_nil();}
+		}
+	}
+}
+
+impl<T: Decode> Decode for Option<T> {
+	fn decode(bb: &mut BonBuffer) -> Option<T>{
+		match bb.is_nil(){
+			true => None,
+			false => Some(T::decode(bb)),
+		}
 	}
 }
 

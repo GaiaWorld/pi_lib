@@ -1,15 +1,14 @@
 /**
  * 写时复制的sbtree，支持单线程或多线程安全
  */
-
+use std::rc::Rc;
 #[macro_export]
 macro_rules! custom_ref { ($x:ident) => (
 
 use std::option::Option;
 use std::cmp::{Ord, Ordering};
-use std::rc::Rc;
-use std::ops::{Generator, GeneratorState};
-use std::sync::Arc;
+//use std::ops::{Generator, GeneratorState};
+
 //use std::fmt::{Debug};
 use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap};
 
@@ -174,7 +173,7 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			_ => ()
 		};
 	}
-	fn select_key<F>(&self, key: &K, func: &mut F) where F: FnMut(&Entry<K, V>) {
+	fn select_key<F>(&self, _key: &K, _func: &mut F) where F: FnMut(&Entry<K, V>) {
 
 	}
 	// 递归删除最小的键值对
@@ -444,7 +443,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	/**
 	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始, TODO descending还未实现
 	 */
-	fn select<F>(&self, key: Option<&K>, descending: bool, func: &mut F) where F: FnMut(&Entry<K, V>) {
+	fn select<F>(&self, key: Option<&K>, _descending: bool, func: &mut F) where F: FnMut(&Entry<K, V>) {
 		match self {
 			&Some(ref node) => {
 				match key {
