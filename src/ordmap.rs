@@ -87,16 +87,16 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		}
 	}
 	/**
-	 * 判断是否被修改
+	 * 判断指针是否相等
 	 */
-	pub fn is_modify(&self, old: &Self) -> bool {
-		unsafe { intrinsics::atomic_load_relaxed(&(&self.root as *const T as usize)) != intrinsics::atomic_load_relaxed(&(&old.root as *const T as usize)) }
+	pub fn ptr_eq(&self, old: &Self) -> bool {
+		unsafe { intrinsics::atomic_load_relaxed(&self.root as *const T as *const usize) == intrinsics::atomic_load_relaxed(&old.root as *const T as *const usize) }
 	}
 	/**
-	 * 比较并交换
+	 * 比较并交换，要求old new都必须保证当前线程有最新的值
 	 */
-	pub fn cxchg(&mut self, old: &mut Self, new: &mut Self) -> bool {
-		let (_, r) = unsafe { intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), &old.root as *const T as usize, &new.root as *const T as usize) };
+	pub fn cxchg(&mut self, old: &Self, new: &mut Self) -> bool {
+		let (_, r) = unsafe { intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(&old.root as *const T as *const usize), *(&new.root as *const T as *const usize)) };
 		return r
 	}
 	/**
@@ -266,7 +266,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.insert(key.clone(), value.clone()) {
-				Some(root) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some(root) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return true,
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -281,7 +281,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.update(key.clone(), value.clone(), copy) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -296,7 +296,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			let (r, root) = old.upsert(key.clone(), value.clone(), copy);
-			unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+			unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 				(_, true) => return r,
 				(val, _) => old = &*(val as *const T),
 			}}
@@ -309,7 +309,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.delete(key, copy) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -324,7 +324,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.remove(i, copy) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -339,7 +339,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.pop_min(copy) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -354,7 +354,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.pop_max(copy) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},
@@ -369,7 +369,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 		let mut old = &self.root;
 		loop {
 			match old.action(key, func) {
-				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&mut (&self.root as *const T as usize), old as *const T as usize, &root as *const T as usize) {
+				Some((r, root)) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => return Some(r),
 					(val, _) => old = &*(val as *const T),
 				}},

@@ -7,10 +7,12 @@
 #![feature(core_intrinsics)]
 #![feature(generators, generator_trait)]
 #![feature(associated_type_defaults)]
-#![feature(trait_alias)]
 #![feature(exclusive_range_pattern)]
-#![feature(nll)]
 #![feature(box_into_raw_non_null)]
+#![feature(trait_alias)]
+#![feature(i128_type)]
+#![feature(nll)]
+
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]
 
 extern crate core;
