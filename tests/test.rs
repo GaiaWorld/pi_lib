@@ -21,7 +21,7 @@ fn show(t: &OrdMap<Tree<usize, usize>>) -> Vec<usize> {
 	let mut v = Vec::new();
 	{
 		let mut f = |e:&Entry<usize, usize>| {v.push(e.key().clone()); v.push(e.value().clone())};
-		t.select(None, &mut f);
+		t.select(None, false, &mut f);
 	}
 	v
 }
@@ -89,8 +89,8 @@ fn sb_test() {
 	assert!(show(&t) == vec![2,21, 3, 31, 50, 50, 60, 60,  70, 71, 80, 80]);
 }
 
-#[test]
-#[should_panic]
-fn failing_test() {
-	assert!(1i32 == 2i32);
-}
+// #[test]
+// #[should_panic]
+// fn failing_test() {
+// 	assert!(1i32 == 2i32);
+// }
