@@ -6,6 +6,7 @@
 #![feature(pointer_methods)]
 #![feature(core_intrinsics)]
 #![feature(generators, generator_trait)]
+#![feature(conservative_impl_trait)]
 #![feature(associated_type_defaults)]
 #![feature(exclusive_range_pattern)]
 #![feature(box_into_raw_non_null)]
