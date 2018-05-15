@@ -117,6 +117,14 @@ impl BonBuffer{
 		}
 	}
 
+	pub fn get_byte(&self) -> &Vec<u8> {
+		&self.bytes
+	}
+
+	pub fn unwrap(self) -> Vec<u8> {
+		self.bytes
+	}
+
 	pub fn clear(&mut self) {
 		self.head = 0;
 		self.tail = 0;

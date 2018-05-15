@@ -144,14 +144,14 @@ impl<T> CowList<T>{
 	pub fn iter(&self) -> Iter<T>{
 		Iter{
 			head: Some(Arc::new(self.clone())),
-			marker: &PhantomData,
+			marker: PhantomData,
 		}
 	}
 }
 
 pub struct Iter<'a, T: 'a> {
     head: Option<Arc<CowList<T>>>,
-	marker: &'a PhantomData<CowList<T>>,
+	marker: PhantomData<&'a CowList<T>>,
     //tail: Node<T>,
 }
 
