@@ -3,7 +3,7 @@
 extern crate pi_lib;
 
 use pi_lib::ordmap::Entry;
-use pi_lib::ordmap::{OrdMap, ImOrdMap};
+use pi_lib::ordmap::{OrdMap};
 use pi_lib::sbtree::{Tree, new};
 use pi_lib::atom::Atom;
 
@@ -32,16 +32,10 @@ fn sb_test() {
 	t = t.clone();
 	assert!(t.is_empty());
 	assert!(t.insert(1, 10));
-	let mut t1 = t.clone();
+	let t1 = t.clone();
 	assert!(t.ptr_eq(&t1));
 
 	assert!(t.insert(2, 20));
-	assert!(t.insert(3, 30));
-	let t2=t.clone();
-	assert!(!t.ptr_eq(&t1));
-	t1.insert(2, 20);
-
-	assert!(t.cxchg(&t2, &mut t1));
 
 	assert!(t.size() == 2);
 	assert!(t.insert(3, 30));
@@ -97,10 +91,4 @@ fn sb_test() {
 	assert!(show(&t) == vec![2,21, 3, 31, 40, 40, 50, 50, 60, 60,  70, 71, 80, 80]);
 	assert!(t.remove(3, true).unwrap().unwrap().key() == &40);
 	assert!(show(&t) == vec![2,21, 3, 31, 50, 50, 60, 60,  70, 71, 80, 80]);
-}
-
-#[test]
-#[should_panic]
-fn failing_test() {
-	assert!(1i32 == 2i32);
 }

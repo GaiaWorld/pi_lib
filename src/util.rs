@@ -28,7 +28,7 @@ impl<T: PartialEq> VecIndex for Vec<T> {
 }
 
 // 将生成器转成迭代器
-pub fn generator_to_iterator<G>(g: G) -> impl Iterator<Item = G::Yield>
+pub fn gen2iter<G>(g: G) -> impl Iterator<Item = G::Yield>
 where
 	G: Generator<Return = ()>
 {
