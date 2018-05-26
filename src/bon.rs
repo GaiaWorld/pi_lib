@@ -38,7 +38,25 @@ use std::hash::Hash;
 use std::sync::Arc;
 use atom::Atom;
 use std::marker::Sized;
-
+pub enum EnumType {
+	Void,
+	Bool,
+	U8,
+	U16,
+	U32,
+	U64,
+	I8,
+	I16,
+	I32,
+	I64,
+	F32,
+	F64,
+	Str(u64),
+	Bin(u64),
+	Arr(u32, u64),
+	Map(u32, u64),
+	Struct(u64),
+}
 pub enum EnumValue {
 	Void,
 	Bool(bool),

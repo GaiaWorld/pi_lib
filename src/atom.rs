@@ -15,7 +15,7 @@ use fnv::FnvHashMap;
 // https://amanieu.github.io/parking_lot/parking_lot/struct.RwLock.html
 // 高性能的支持升级的读写锁
 // 同步原语，可用于运行一次性初始化。用于全局，FFI或相关功能的一次初始化。
-
+// TODO 考虑使用Arc强引用放在表中，这样可以用时间进行缓存管理。某些高频单次的Atom可以得到缓冲。
 // 为动态的原子字符串准备的fnv hashmap 及可升级的rwlock(如果使用CowList, 就可以不需要可升级的rwlock，改成先读1次，然后再写1次)
 lazy_static! {
 	static ref ATOM_MAP: Table = Table(RwLock::new(FnvHashMap::default()));

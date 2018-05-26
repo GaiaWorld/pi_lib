@@ -8,7 +8,9 @@
 			"label": "cargo test",
 			"command": "cargo",
 			"args": [
-				"test"
+				"test",
+				"--",
+				"--nocapture"
 			],
 			"problemMatcher": [
 				"$rustc"
