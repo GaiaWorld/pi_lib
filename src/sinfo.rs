@@ -40,30 +40,30 @@ pub enum EnumType {
 impl Encode for EnumType{
 	fn encode(&self, bb:&mut BonBuffer){
 		match self{
-			&EnumType::Bool => {1.encode(bb);},
-			&EnumType::U8 => {2.encode(bb);},
-			&EnumType::U16 => {3.encode(bb);},
-			&EnumType::U32 => {4.encode(bb);},
-			&EnumType::U64 => {5.encode(bb);},
-			&EnumType::U128 => {6.encode(bb);},
-			&EnumType::U256 => {7.encode(bb);},
-			&EnumType::Usize => {8.encode(bb);},
-			&EnumType::I8 => {9.encode(bb);},
-			&EnumType::I16 => {10.encode(bb);},
-			&EnumType::I32 => {11.encode(bb);},
-			&EnumType::I64 => {12.encode(bb);},
-			&EnumType::I128 => {13.encode(bb);},
-			&EnumType::I256 => {14.encode(bb);},
-			&EnumType::Isize => {15.encode(bb);},
-			&EnumType::F32 => {16.encode(bb);},
-			&EnumType::F64 => {17.encode(bb);},
-			&EnumType::BigI => {18.encode(bb);},
-			&EnumType::Str => {19.encode(bb);},
-			&EnumType::Bin => {20.encode(bb);},
-			&EnumType::UTC => {21.encode(bb);},
-			&EnumType::Arr(ref v) => {22.encode(bb); v.encode(bb);},
-			&EnumType::Map(ref k, ref v) => {23.encode(bb); k.encode(bb); v.encode(bb);},
-			&EnumType::Struct(ref v) => {24.encode(bb); v.encode(bb);},
+			&EnumType::Bool => {0.encode(bb);},
+			&EnumType::U8 => {1.encode(bb);},
+			&EnumType::U16 => {2.encode(bb);},
+			&EnumType::U32 => {3.encode(bb);},
+			&EnumType::U64 => {4.encode(bb);},
+			&EnumType::U128 => {5.encode(bb);},
+			&EnumType::U256 => {6.encode(bb);},
+			&EnumType::Usize => {7.encode(bb);},
+			&EnumType::I8 => {8.encode(bb);},
+			&EnumType::I16 => {9.encode(bb);},
+			&EnumType::I32 => {10.encode(bb);},
+			&EnumType::I64 => {11.encode(bb);},
+			&EnumType::I128 => {12.encode(bb);},
+			&EnumType::I256 => {13.encode(bb);},
+			&EnumType::Isize => {14.encode(bb);},
+			&EnumType::F32 => {15.encode(bb);},
+			&EnumType::F64 => {16.encode(bb);},
+			&EnumType::BigI => {17.encode(bb);},
+			&EnumType::Str => {18.encode(bb);},
+			&EnumType::Bin => {19.encode(bb);},
+			&EnumType::UTC => {20.encode(bb);},
+			&EnumType::Arr(ref v) => {21.encode(bb); v.encode(bb);},
+			&EnumType::Map(ref k, ref v) => {22.encode(bb); k.encode(bb); v.encode(bb);},
+			&EnumType::Struct(ref v) => {23.encode(bb); v.encode(bb);},
 		};
 	}
 }
@@ -72,30 +72,30 @@ impl Decode for EnumType{
 	fn decode(bb:&mut BonBuffer) -> EnumType{
 		let t = u8::decode(bb);
 		match t{
-			1 => {EnumType::Bool},
-			2 => {EnumType::U8},
-			3 => {EnumType::U16},
-			4 => {EnumType::U32},
-			5 => {EnumType::U64},
-			6 => {EnumType::U128},
-			7 => {EnumType::U256},
-			8 => {EnumType::Usize},
-			9 => {EnumType::I8},
-			10 => {EnumType::I16},
-			11 => {EnumType::I32},
-			12 => {EnumType::I64},
-			13 => {EnumType::I128},
-			14 => {EnumType::I256},
-			15 => {EnumType::Isize},
-			16 => {EnumType::F32},
-			17 => {EnumType::F64},
-			18 => {EnumType::BigI},
-			19 => {EnumType::Str},
-			20 => {EnumType::Bin},
-			21 => {EnumType::UTC},
-			22 => {EnumType::Arr(Arc::new(EnumType::decode(bb)))},
-			23 => {EnumType::Map(Arc::new(EnumType::decode(bb)), Arc::new(EnumType::decode(bb)))},
-			24 => {EnumType::Struct(Arc::new(StructInfo::decode(bb)))},
+			0 => {EnumType::Bool},
+			1 => {EnumType::U8},
+			2 => {EnumType::U16},
+			3 => {EnumType::U32},
+			4 => {EnumType::U64},
+			5 => {EnumType::U128},
+			6 => {EnumType::U256},
+			7 => {EnumType::Usize},
+			8 => {EnumType::I8},
+			9 => {EnumType::I16},
+			10 => {EnumType::I32},
+			11 => {EnumType::I64},
+			12 => {EnumType::I128},
+			13 => {EnumType::I256},
+			14 => {EnumType::Isize},
+			15 => {EnumType::F32},
+			16 => {EnumType::F64},
+			17 => {EnumType::BigI},
+			18 => {EnumType::Str},
+			19 => {EnumType::Bin},
+			20 => {EnumType::UTC},
+			21 => {EnumType::Arr(Arc::new(EnumType::decode(bb)))},
+			22 => {EnumType::Map(Arc::new(EnumType::decode(bb)), Arc::new(EnumType::decode(bb)))},
+			23 => {EnumType::Struct(Arc::new(StructInfo::decode(bb)))},
 			_ => {panic!("EnumType is not exist:{}", t);}
 		}
 	}
@@ -127,11 +127,13 @@ pub struct StructInfo {
 }
 
 impl StructInfo {
-	pub fn new(name:Atom, name_hash:u32) -> Self {
+	pub fn new(name:Atom, name_hash:u32, pre: String) -> Self {
+		let mut note = HashMap::new();
+		note.insert(Atom::from("class"), Atom::from(pre));
 		StructInfo {
 			name:name,
 			name_hash: name_hash,
-			notes: None,
+			notes: Some(note),
 			fields: Vec::new(),
 		}
 	}
