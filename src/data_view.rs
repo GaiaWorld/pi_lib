@@ -4,7 +4,49 @@ use std::ops::Range;
 use std::mem::transmute;
 
 
-pub trait DataView {
+pub trait GetView {
+	fn get_lu8(&self, usize) -> u8;
+
+	fn get_lu16(&self, usize) -> u16;
+
+	fn get_lu32(&self, usize) -> u32;
+
+	fn get_lu64(&self, usize) -> u64;
+
+	fn get_li8(&self, usize) -> i8;
+
+	fn get_li16(&self, usize) -> i16;
+
+	fn get_li32(&self, usize) -> i32;
+
+	fn get_li64(&self, usize) -> i64;
+
+	fn get_lf32(&self, usize) -> f32;
+
+	fn get_lf64(&self, usize) -> f64;
+
+	fn get_bu8(&self, usize) -> u8;
+
+	fn get_bu16(&self, usize) -> u16;
+
+	fn get_bu32(&self, usize) -> u32;
+
+	fn get_bu64(&self, usize) -> u64;
+
+	fn get_bi8(&self, usize) -> i8;
+
+	fn get_bi16(&self, usize) -> i16;
+
+	fn get_bi32(&self, usize) -> i32;
+
+	fn get_bi64(&self, usize) -> i64;
+
+	fn get_bf32(&self, usize) -> f32;
+
+	fn get_bf64(&self, usize) -> f64;
+}
+
+pub trait SetView {
 	fn set_lu8(&mut self, u8, usize);
 
 	fn set_lu16(&mut self, u16, usize);
@@ -45,51 +87,94 @@ pub trait DataView {
 
 	fn set_bf64(&mut self, f64, usize);
 
-	fn get_lu8(&mut self, usize) -> u8;
-
-	fn get_lu16(&mut self, usize) -> u16;
-
-	fn get_lu32(&mut self, usize) -> u32;
-
-	fn get_lu64(&mut self, usize) -> u64;
-
-	fn get_li8(&mut self, usize) -> i8;
-
-	fn get_li16(&mut self, usize) -> i16;
-
-	fn get_li32(&mut self, usize) -> i32;
-
-	fn get_li64(&mut self, usize) -> i64;
-
-	fn get_lf32(&mut self, usize) -> f32;
-
-	fn get_lf64(&mut self, usize) -> f64;
-
-	fn get_bu8(&mut self, usize) -> u8;
-
-	fn get_bu16(&mut self, usize) -> u16;
-
-	fn get_bu32(&mut self, usize) -> u32;
-
-	fn get_bu64(&mut self, usize) -> u64;
-
-	fn get_bi8(&mut self, usize) -> i8;
-
-	fn get_bi16(&mut self, usize) -> i16;
-
-	fn get_bi32(&mut self, usize) -> i32;
-
-	fn get_bi64(&mut self, usize) -> i64;
-
-	fn get_bf32(&mut self, usize) -> f32;
-
-	fn get_bf64(&mut self, usize) -> f64;
-
 	fn set(&mut self, &[u8], usize);
+
 	fn move_part(&mut self, Range<usize>, usize);
 }
 
-impl DataView for Vec<u8> {
+impl GetView for [u8] {
+	fn get_lu8(&self, offset: usize) -> u8{
+		unsafe { *(self.as_ptr().wrapping_offset(offset as isize) as *const u8) }
+	}
+
+	fn get_lu16(&self, offset: usize) -> u16{
+		unsafe { u16::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u16)) }
+	}
+
+	fn get_lu32(&self, offset: usize) -> u32{
+		unsafe { u32::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u32)) }
+	}
+
+	fn get_lu64(&self, offset: usize) -> u64{
+		unsafe { u64::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u64)) }
+	}
+
+	fn get_li8(&self, offset: usize) -> i8{
+		unsafe { i8::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const i8)) }
+	}
+
+	fn get_li16(&self, offset: usize) -> i16{
+		unsafe { i16::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const i16)) }
+	}
+
+	fn get_li32(&self, offset: usize) -> i32{
+		unsafe { i32::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const i32)) }
+	}
+
+	fn get_li64(&self, offset: usize) -> i64{
+		unsafe { i64::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const i64)) }
+	}
+
+	fn get_lf32(&self, offset: usize) -> f32{
+		unsafe { transmute::<u32, f32>(u32::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u32))) }
+	}
+
+	fn get_lf64(&self, offset: usize) -> f64{
+		unsafe { transmute::<u64, f64>(u64::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u64)))  }
+	}
+
+	fn get_bu8(&self, offset: usize) -> u8{
+		unsafe { *(self.as_ptr().wrapping_offset(offset as isize) as *const u8) }
+	}
+
+	fn get_bu16(&self, offset: usize) -> u16{
+		unsafe { u16::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const u16)) }
+	}
+
+	fn get_bu32(&self, offset: usize) -> u32{
+		unsafe { u32::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const u32)) }
+	}
+
+	fn get_bu64(&self, offset: usize) -> u64{
+		unsafe { u64::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const u64)) }
+	}
+
+	fn get_bi8(&self, offset: usize) -> i8{
+		unsafe { *(self.as_ptr().wrapping_offset(offset as isize) as *const i8) }
+	}
+
+	fn get_bi16(&self, offset: usize) -> i16{
+		unsafe { i16::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const i16)) }
+	}
+
+	fn get_bi32(&self, offset: usize) -> i32{
+		unsafe { i32::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const i32)) }
+	}
+
+	fn get_bi64(&self, offset: usize) -> i64{
+		unsafe { i64::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const i64)) }
+	}
+
+	fn get_bf32(&self, offset: usize) -> f32{
+		unsafe { transmute::<u32, f32>(u32::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const u32))) }
+	}
+
+	fn get_bf64(&self, offset: usize) -> f64{
+		unsafe { transmute::<u64, f64>(u64::from_be(*(self.as_ptr().wrapping_offset(offset as isize) as *const u64)))  }
+	}
+}
+
+impl SetView for Vec<u8> {
 	fn set_lu8(&mut self, v: u8, offset: usize){
 		unsafe { 
 			let l = self.len();
@@ -248,86 +333,6 @@ impl DataView for Vec<u8> {
 			self.set_len(l + 8);
 			*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u64) = transmute::<f64, u64>(v).to_be()
 		}
-	}
-
-	fn get_lu8(&mut self, offset: usize) -> u8{
-		unsafe { *(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u8) }
-	}
-
-	fn get_lu16(&mut self, offset: usize) -> u16{
-		unsafe { u16::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u16)) }
-	}
-
-	fn get_lu32(&mut self, offset: usize) -> u32{
-		unsafe { u32::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u32)) }
-	}
-
-	fn get_lu64(&mut self, offset: usize) -> u64{
-		unsafe { u64::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u64)) }
-	}
-
-	fn get_li8(&mut self, offset: usize) -> i8{
-		unsafe { i8::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i8)) }
-	}
-
-	fn get_li16(&mut self, offset: usize) -> i16{
-		unsafe { i16::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i16)) }
-	}
-
-	fn get_li32(&mut self, offset: usize) -> i32{
-		unsafe { i32::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i32)) }
-	}
-
-	fn get_li64(&mut self, offset: usize) -> i64{
-		unsafe { i64::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i64)) }
-	}
-
-	fn get_lf32(&mut self, offset: usize) -> f32{
-		unsafe { transmute::<u32, f32>(u32::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u32))) }
-	}
-
-	fn get_lf64(&mut self, offset: usize) -> f64{
-		unsafe { transmute::<u64, f64>(u64::from_le(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u64)))  }
-	}
-
-	fn get_bu8(&mut self, offset: usize) -> u8{
-		unsafe { *(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u8) }
-	}
-
-	fn get_bu16(&mut self, offset: usize) -> u16{
-		unsafe { u16::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u16)) }
-	}
-
-	fn get_bu32(&mut self, offset: usize) -> u32{
-		unsafe { u32::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u32)) }
-	}
-
-	fn get_bu64(&mut self, offset: usize) -> u64{
-		unsafe { u64::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u64)) }
-	}
-
-	fn get_bi8(&mut self, offset: usize) -> i8{
-		unsafe { *(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i8) }
-	}
-
-	fn get_bi16(&mut self, offset: usize) -> i16{
-		unsafe { i16::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i16)) }
-	}
-
-	fn get_bi32(&mut self, offset: usize) -> i32{
-		unsafe { i32::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i32)) }
-	}
-
-	fn get_bi64(&mut self, offset: usize) -> i64{
-		unsafe { i64::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut i64)) }
-	}
-
-	fn get_bf32(&mut self, offset: usize) -> f32{
-		unsafe { transmute::<u32, f32>(u32::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u32))) }
-	}
-
-	fn get_bf64(&mut self, offset: usize) -> f64{
-		unsafe { transmute::<u64, f64>(u64::from_be(*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u64)))  }
 	}
 	
 	fn set(&mut self, data: &[u8], offset: usize) {
