@@ -91,18 +91,18 @@ pub struct FieldValue {
  * @description 二进制数据缓存
  * @example
  */
-pub struct BonBuffer {
+pub struct BonBuffer<'a> {
 	// u8数组
-	bytes: Vec<u8>,
+	bytes: &'a mut Vec<u8>,
 	// 头部指针
 	head: usize,
 	// 尾部指针
 	tail:usize,
 }
 
-impl BonBuffer{
+impl<'a> BonBuffer<'a>{
 
-	pub fn with_bytes(buf: Vec<u8>, head:Option<usize>, tail: Option<usize>) -> BonBuffer {
+	pub fn with_bytes(buf: &mut Vec<u8>, head:Option<usize>, tail: Option<usize>) -> BonBuffer {
 		let h  = match head {
 			Some(v) => {assert!(v <= buf.len(), "invalid head"); v},
 			None => 0
@@ -119,29 +119,29 @@ impl BonBuffer{
 		}
 	}
 
-	pub fn with_capacity(size: usize) -> BonBuffer {
-		BonBuffer{
-			bytes: Vec::with_capacity(size),
-			head: 0,
-			tail: 0,
-		}
-	}
+	// pub fn with_capacity(size: usize) -> BonBuffer {
+	// 	BonBuffer{
+	// 		bytes: Vec::with_capacity(size),
+	// 		head: 0,
+	// 		tail: 0,
+	// 	}
+	// }
 
-	pub fn new() -> BonBuffer {
-		BonBuffer{
-			bytes: Vec::new(),
-			head: 0,
-			tail: 0,
-		}
-	}
+	// pub fn new() -> BonBuffer {
+	// 	BonBuffer{
+	// 		bytes: Vec::new(),
+	// 		head: 0,
+	// 		tail: 0,
+	// 	}
+	// }
 
-	pub fn get_byte(&self) -> &Vec<u8> {
-		&self.bytes
-	}
+	// pub fn get_byte(&self) -> &Vec<u8> {
+	// 	&self.bytes
+	// }
 
-	pub fn unwrap(self) -> Vec<u8> {
-		self.bytes
-	}
+	// pub fn unwrap(self) -> Vec<u8> {
+	// 	self.bytes
+	// }
 
 	pub fn clear(&mut self) {
 		self.head = 0;
@@ -675,26 +675,6 @@ impl BonBuffer{
 		}
 	}
 
-	// 0=null
-// 1=true
-// 2=false
-// 3=浮点数0.0，4=浮点数1.0，5=16位浮点数，6=32位浮点数，7=64位浮点数，8=128位浮点数;
-// 9~29= -1~19
-// 30=8位正整数，31=16位正整数，32=32位正整数，33=48位正整数，34=64位正整数
-// 35=8位负整数，36=16位负整数，37=32位负整数，38=48位负整数，39=64位负整数
-
-// 40-104=0-64长度的二进制数据，
-// 105=8位长度的二进制数据，106=16位长度的二进制数据，107=32位长度的二进制数据，108=48位长度的二进制数据，109=64位长度的二进制数据
-
-// 110-174=0-64长度的UTF8字符串，
-// 175=8位长度的UTF8字符串，176=16位长度的UTF8字符串，177=32位长度的UTF8字符串，178=48位长度的UTF8字符串，179=64位长度的UTF8字符串
-
-// 180-244=0-64长度的容器，包括对象、数组和map、枚举
-// 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器，249=64位长度的容器
-// 之后的一个4字节的整数表示类型。
-
-
-
 	fn read_integer<T: AsFrom<u32> + AsFrom<u64> + AsFrom<i32> + AsFrom<i64>>(&mut self) -> T {
 		let t = self.bytes.get_lu8(self.head);
 		self.head += 1;
@@ -1208,7 +1188,8 @@ impl<T: Decode> Decode for Option<T> {
 
 #[test]
 fn test_u8() {
-    let mut buf = BonBuffer::new();
+	let mut buffer = Vec::new();
+    let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_u8(5);
     buf.write_u8(50);
     assert_eq!(buf.read_u8(), 5);
@@ -1217,7 +1198,8 @@ fn test_u8() {
 
 #[test]
 fn test_u16() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_u16(18);
 	buf.write_u16(50);
     buf.write_u16(65534);
@@ -1228,7 +1210,8 @@ fn test_u16() {
 
 #[test]
 fn test_u32() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_u32(18);
 	buf.write_u32(50);
     buf.write_u32(65534);
@@ -1241,7 +1224,8 @@ fn test_u32() {
 
 #[test]
 fn test_u64() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_u64(18);
 	buf.write_u64(50);
     buf.write_u64(65534);
@@ -1256,7 +1240,8 @@ fn test_u64() {
 
 #[test]
 fn test_i8() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_i8(15);
 	buf.write_i8(-11);
 	buf.write_u64(50);
@@ -1267,7 +1252,8 @@ fn test_i8() {
 
 #[test]
 fn test_i16() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_i16(15);
 	buf.write_i16(-11);
 	buf.write_i16(50);
@@ -1282,7 +1268,8 @@ fn test_i16() {
 
 #[test]
 fn test_i32() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_i32(15);
 	buf.write_i32(-11);
 	buf.write_i32(50);
@@ -1301,7 +1288,8 @@ fn test_i32() {
 
 #[test]
 fn test_i64() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_i64(15);
 	buf.write_i64(-11);
 	buf.write_i64(50);
@@ -1324,7 +1312,8 @@ fn test_i64() {
 
 #[test]
 fn test_f32() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_f32(1.0);
 	buf.write_f32(0.0);
 	buf.write_f32(5.0);
@@ -1337,7 +1326,8 @@ fn test_f32() {
 
 #[test]
 fn test_f64() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_f64(1.0);
 	buf.write_f64(0.0);
 	buf.write_f64(5.0);
@@ -1350,14 +1340,16 @@ fn test_f64() {
 
 #[test]
 fn test_utf8() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
     buf.write_utf8("123byufgeruy");
     assert_eq!(buf.read_utf8(), "123byufgeruy");
 }
 
 #[test]
 fn test_bin() {
-    let mut buf = BonBuffer::new();
+    let mut buffer = Vec::new();
+	let mut buf = BonBuffer::with_bytes(&mut buffer, None, None);
 	let arr = [5; 10];
     buf.write_bin(&arr,0..10);
     assert_eq!(buf.read_bin(), arr);
