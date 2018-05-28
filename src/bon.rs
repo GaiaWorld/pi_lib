@@ -31,7 +31,7 @@
 // 容器，由于有总大小的描述，从而可以只对感兴趣的部分作反序列化
 // TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
 
-use data_view::DataView;
+use data_view::{GetView, SetView};
 use std::ops::{Range};
 use std::collections::HashMap;
 use std::hash::Hash;
