@@ -59,6 +59,12 @@ impl GuidGen {
 			node_id: node_id,
 		}
 	}
+	pub fn node_time(&self) -> u64 {
+		self.node_time
+	}
+	pub fn node_id(&self) -> u16 {
+		self.node_id
+	}
 	// 分配全局唯一时间
 	#[inline]
 	pub fn time(&self) -> u64 {
