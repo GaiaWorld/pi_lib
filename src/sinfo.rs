@@ -127,13 +127,11 @@ pub struct StructInfo {
 }
 
 impl StructInfo {
-	pub fn new(name:Atom, name_hash:u32, pre: String) -> Self {
-		let mut note = HashMap::new();
-		note.insert(Atom::from("class"), Atom::from(pre));
+	pub fn new(name:Atom, name_hash:u32) -> Self {
 		StructInfo {
 			name:name,
 			name_hash: name_hash,
-			notes: Some(note),
+			notes: None,
 			fields: Vec::new(),
 		}
 	}

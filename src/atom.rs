@@ -222,9 +222,9 @@ fn read(list: &CowList<Weak<(String, u64)>>, s: &str, has_nil: &mut bool) -> Opt
 
 #[test]
 fn test_atom() {
-    let at1 = Atom::from("abc");
+    let _at1 = Atom::from("abc");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 1);
-	let at2 = Atom::from("afg");
+	let  _at2 = Atom::from("afg");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
 	let at3 = Atom::from("afg");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
