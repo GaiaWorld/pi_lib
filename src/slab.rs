@@ -1,9 +1,8 @@
 /**
- * 定长分配器，支持单线程或多线程安全
+ * 定长分配器，支持单线程或多线程安全，采用动态分配的桶。利用位索引进行查找加速。
  */
 
-use std::option::Option;
-use std::cmp::Ord;
+
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;

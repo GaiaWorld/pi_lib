@@ -5,7 +5,6 @@ use std::rc::Rc;
 #[macro_export]
 macro_rules! custom_ref { ($x:ident) => (
 
-use std::option::Option;
 use std::cmp::{Ord, Ordering};
 //use std::ops::{Generator, GeneratorState};
 

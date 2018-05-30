@@ -50,13 +50,12 @@ pub trait ImOrdMap {
 	fn size(&self) -> usize;
 	fn has(&self, &Self::Key) -> bool;
 	fn get(&self, key: &Self::Key) -> Option<&Self::Val>;
-	//fn get(&self, &Self::Key) -> Option<&Self::Val>;
 	fn min(&self) -> Option<&Entry<Self::Key, Self::Val>>;
 	fn max(&self) -> Option<&Entry<Self::Key, Self::Val>>;
 	fn rank(&self, &Self::Key) -> isize;
 	fn index(&self, usize) -> Option<&Entry<Self::Key, Self::Val>>;
-	// fn Self::Keys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> Generator;
-	//fn Self::Values(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
+	// fn keys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> Generator;
+	//fn values(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
 	//fn entrys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
 	fn select<F>(&self, Option<&Self::Key>, descending: bool, &mut F) where F: FnMut(&Entry<Self::Key, Self::Val>);
 
