@@ -7,7 +7,7 @@ use std::ops::Deref;
 use core::convert::From;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
-use bon::{Encode, Decode, BonBuffer};
+use bon::{Encode, Decode, WriteBuffer, ReadBuffer};
 use std::sync::{Arc, Weak};
 use std::sync::RwLock;
 use cowlist::CowList;
@@ -71,15 +71,15 @@ impl<'a> From<&'a [u8]> for Atom {
 }
 
 impl Encode for Atom{
-	fn encode(&self, bb: &mut BonBuffer){
+	fn encode(&self, bb: &mut WriteBuffer){
 		(*self.0).0.encode(bb);
 		(*self.0).1.encode(bb);
 	}
 }
 
 impl Decode for Atom{
-	fn decode(bb: &mut BonBuffer) -> Atom{
-		Atom(Arc::new((String::decode(bb), u64::decode(bb))))
+	fn decode(bb: &mut ReadBuffer) -> Atom{
+		Atom(Arc::new((String::decode(bb), 0)))
 	}
 }
 
@@ -222,9 +222,9 @@ fn read(list: &CowList<Weak<(String, u64)>>, s: &str, has_nil: &mut bool) -> Opt
 
 #[test]
 fn test_atom() {
-    let at1 = Atom::from("abc");
+    Atom::from("abc");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 1);
-	let at2 = Atom::from("afg");
+	Atom::from("afg");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
 	let at3 = Atom::from("afg");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
