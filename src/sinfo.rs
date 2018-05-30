@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use atom::Atom;
-use bon::{BonBuffer, Encode, Decode};
+use bon::{WriteBuffer, ReadBuffer, Encode, Decode};
 
 // 枚举结构体字段的所有类型
 pub enum EnumType {
@@ -38,7 +38,7 @@ pub enum EnumType {
 }
 
 impl Encode for EnumType{
-	fn encode(&self, bb:&mut BonBuffer){
+	fn encode(&self, bb:&mut WriteBuffer){
 		match self{
 			&EnumType::Bool => {0.encode(bb);},
 			&EnumType::U8 => {1.encode(bb);},
@@ -69,7 +69,7 @@ impl Encode for EnumType{
 }
 
 impl Decode for EnumType{
-	fn decode(bb:&mut BonBuffer) -> EnumType{
+	fn decode(bb:&mut ReadBuffer) -> EnumType{
 		let t = u8::decode(bb);
 		match t{
 			0 => {EnumType::Bool},
@@ -146,14 +146,23 @@ impl StructInfo {
 }
 
 impl Encode for StructInfo{
-	fn encode(&self, bb: &mut BonBuffer){
+	fn encode(&self, bb: &mut WriteBuffer){
 		self.name.encode(bb);
 		self.name_hash.encode(bb);
 	}
 }
 
 impl Decode for StructInfo{
-	fn decode(bb: &mut BonBuffer) -> StructInfo{
+	fn decode(bb: &mut ReadBuffer) -> StructInfo{
+		println!("7777777777777777777777");
+		Atom::decode(bb);
+		println!("-----------------------");
+		u32::decode(bb);
+		println!("11111111111111111111111");
+		Option::<HashMap<Atom, Atom>>::decode(bb);
+		println!("22222222222222222222222222");
+		Vec::<FieldInfo>::decode(bb);
+		println!("33333333333333333333333333");
 		StructInfo{
 			name: Atom::decode(bb),
 			name_hash: u32::decode(bb),
@@ -179,7 +188,7 @@ impl FieldInfo{
 	}
 }
 impl Encode for FieldInfo{
-	fn encode(&self, bb: &mut BonBuffer){
+	fn encode(&self, bb: &mut WriteBuffer){
 		self.name.encode(bb);
 		self.ftype.encode(bb);
 		self.notes.encode(bb);
@@ -187,7 +196,7 @@ impl Encode for FieldInfo{
 }
 
 impl Decode for FieldInfo{
-	fn decode(bb: &mut BonBuffer) -> FieldInfo{
+	fn decode(bb: &mut ReadBuffer) -> FieldInfo{
 		FieldInfo{
 			name: Atom::decode(bb),
 			ftype: EnumType::decode(bb),
