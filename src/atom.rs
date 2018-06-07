@@ -22,7 +22,7 @@ lazy_static! {
 }
 
 // 原子字符串
-#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct Atom(Arc<(String, u64)>);
 
 impl Deref for Atom {
