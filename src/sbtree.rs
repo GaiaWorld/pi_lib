@@ -281,7 +281,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 		let mut tree = self;
 		loop {
 			match tree {
-				&Some(ref node) => match key.cmp(&node.entry.key()) {
+				&Some(ref node) => match key.cmp(&node.entry.0) {
 					Ordering::Greater => tree = &node.right,
 					Ordering::Less => tree = &node.left,
 					_ => {
@@ -301,11 +301,11 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 		let mut tree = self;
 		loop {
 			match tree {
-				&Some(ref node) => match key.cmp(&node.entry.key()) {
+				&Some(ref node) => match key.cmp(&node.entry.0) {
 					Ordering::Greater => tree = &node.right,
 					Ordering::Less => tree = &node.left,
 					_ => {
-						return Some(&node.entry.value());
+						return Some(&node.entry.1);
 					},
 				},
 				_ => break,
@@ -360,7 +360,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 				let mut node = n;
 				let mut c: isize = 1;
 				loop {
-					match key.cmp(&node.entry.key()) {
+					match key.cmp(&node.entry.0) {
 						Ordering::Greater => {
 							match node.left {
 								Some(ref x) => c += ((*x).size as isize) + 1,
@@ -457,7 +457,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	// 递归插入
 	fn insert(&self, key: K, value: V) -> Option<Self> {
 		match self {
-			&Some(ref node) => match key.cmp(&node.entry.key()) {
+			&Some(ref node) => match key.cmp(&node.entry.0) {
 				Ordering::Greater => match node.right.insert(key, value) {
 					Some(r) => Some(Node::maintain_right(node.size + 1, &node.left, node.entry.clone(), &r)),
 					_ => None,
@@ -474,7 +474,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	// 递归更新
 	fn update(&self, key: K, value: V, copy: bool) -> Option<(Option<V>, Self)> {
 		match self {
-			&Some(ref node) => match key.cmp(&node.entry.key()) {
+			&Some(ref node) => match key.cmp(&node.entry.0) {
 				Ordering::Greater => match node.right.update(key, value, copy) {
 					Some((v, r)) => Some((v, new_tree(Node::new(node.size, node.left.clone(), node.entry.clone(), r)))),
 					_ => None,
@@ -483,7 +483,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 					Some((v, r)) => Some((v, new_tree(Node::new(node.size, r, node.entry.clone(), node.right.clone())))),
 					_ => None,
 				},
-				_ if copy => Some((Some(node.entry.value().clone()), new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
+				_ if copy => Some((Some(node.entry.1.clone()), new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
 				_ => Some((None, new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone())))),
 			},
 			_ => None,
@@ -492,7 +492,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	// 递归放入
 	fn upsert(&self, key: K, value: V, copy: bool) -> (Option<Option<V>>, Self) {
 		match self {
-			&Some(ref node) => match key.cmp(&node.entry.key()) {
+			&Some(ref node) => match key.cmp(&node.entry.0) {
 				Ordering::Greater => match node.right.upsert(key, value, copy) {
 					(None, r) => (None, Node::maintain_right(node.size + 1, &node.left, node.entry.clone(), &r)),
 					(v, r) => (v, new_tree(Node::new(node.size, node.left.clone(), node.entry.clone(), r))),
@@ -501,7 +501,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 					(None, r) => (None, Node::maintain_left(node.size + 1, &r, node.entry.clone(), &node.right)),
 					(v, r) => (v, new_tree(Node::new(node.size, r, node.entry.clone(), node.right.clone()))),
 				},
-				_ if copy => (Some(Some(node.entry.value().clone())), new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))),
+				_ if copy => (Some(Some(node.entry.1.clone())), new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))),
 				_ => (Some(None), new_tree(Node::new(node.size, node.left.clone(), Entry::new(key, value), node.right.clone()))),
 			},
 			_ => (None, new_tree(Node::new(1, None, Entry::new(key, value), None))),
@@ -511,7 +511,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	// 递归删除
 	fn delete(&self, key: &K, copy: bool) -> Option<(Option<V>, Self)> {
 		match self {
-			&Some(ref node) => match key.cmp(&node.entry.key()) {
+			&Some(ref node) => match key.cmp(&node.entry.0) {
 				Ordering::Greater => match node.right.delete(key, copy) {
 					Some((v, r)) => Some((v, Node::maintain_left(node.size - 1, &node.left, node.entry.clone(), &r))),
 					_ => None,
@@ -520,7 +520,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 					Some((v, r)) => Some((v, Node::maintain_right(node.size - 1, &r, node.entry.clone(), &node.right))),
 					_ => None,
 				},
-				_ if copy => Some((Some(node.entry.value().clone()), Node::delete(node.size - 1, &node.left, &node.right))),
+				_ if copy => Some((Some(node.entry.1.clone()), Node::delete(node.size - 1, &node.left, &node.right))),
 				_ => Some((None, Node::delete(node.size - 1, &node.left, &node.right))),
 			},
 			_ => None,
@@ -557,7 +557,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	}
 	fn action<F>(&self, key: &K, func: &mut F) -> Option<(ActionResultType, Self)> where F: FnMut(Option<&V>) -> ActionResult<V> {
 		match self {
-			&Some(ref node) => match key.cmp(&node.entry.key()) {
+			&Some(ref node) => match key.cmp(&node.entry.0) {
 				Ordering::Greater => match node.right.action(key, func) {
 					Some((ActionResultType::Insert, r)) => Some((ActionResultType::Insert, Node::maintain_right(node.size + 1, &node.left, node.entry.clone(), &r))),
 					Some((ActionResultType::Update, r)) => Some((ActionResultType::Update, new_tree(Node::new(node.size, node.left.clone(), node.entry.clone(), r)))),
@@ -570,7 +570,7 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 					Some((ActionResultType::Delete, r)) => Some((ActionResultType::Delete, Node::maintain_right(node.size - 1, &r, node.entry.clone(), &node.right))),
 					_ => None,
 				},
-				_ => match func(Some(node.entry.value())) {
+				_ => match func(Some(&node.entry.1)) {
 					ActionResult::Upsert(r) => Some((ActionResultType::Update, new_tree(Node::new(node.size, node.left.clone(), Entry::new(key.clone(), r), node.right.clone())))),
 					ActionResult::Delete => Some((ActionResultType::Delete, Node::delete(node.size - 1, &node.left, &node.right))),
 					_ => None,

@@ -19,28 +19,14 @@ pub enum ActionResultType {
 	Update,
 	Delete,
 }
-// TODO 考虑提供RcEntry，这样复制成本低一些，kv都不要求支持clone了，但内存更分散，访问k要多一层访问。
+
 #[derive(Clone)]
-// pub struct Entry<K: Clone, V: Clone>(K, V);
-pub struct Entry<K: Clone, V: Clone> {
-	pub key: K,
-	pub value: V,
-}
+pub struct Entry<K: Clone, V: Clone>(pub K, pub V);
 impl<K: Clone, V: Clone> Entry<K, V> {
 	pub fn new(k: K, v: V) -> Self {
-		Entry {
-			key: k,
-			value: v,
-		}
-	}
-	pub fn key(&self) -> &K {
-		&self.key
-	}
-	pub fn value(&self) -> &V {
-		&self.value
+		Entry(k, v)
 	}
 }
-
 pub trait ImOrdMap {
 	type Key: Clone;
 	type Val: Clone;

@@ -5,7 +5,7 @@ use std::mem::transmute;
 
 
 pub trait GetView {
-	fn get_lu8(&self, usize) -> u8;
+	fn get_u8(&self, usize) -> u8;
 
 	fn get_lu16(&self, usize) -> u16;
 
@@ -24,8 +24,6 @@ pub trait GetView {
 	fn get_lf32(&self, usize) -> f32;
 
 	fn get_lf64(&self, usize) -> f64;
-
-	fn get_bu8(&self, usize) -> u8;
 
 	fn get_bu16(&self, usize) -> u16;
 
@@ -47,7 +45,7 @@ pub trait GetView {
 }
 
 pub trait SetView {
-	fn set_lu8(&mut self, u8, usize);
+	fn set_u8(&mut self, u8, usize);
 
 	fn set_lu16(&mut self, u16, usize);
 
@@ -66,8 +64,6 @@ pub trait SetView {
 	fn set_lf32(&mut self, f32, usize);
 
 	fn set_lf64(&mut self, f64, usize);
-
-	fn set_bu8(&mut self, u8, usize);
 
 	fn set_bu16(&mut self, u16, usize);
 
@@ -93,7 +89,7 @@ pub trait SetView {
 }
 
 impl GetView for [u8] {
-	fn get_lu8(&self, offset: usize) -> u8{
+	fn get_u8(&self, offset: usize) -> u8{
 		unsafe { *(self.as_ptr().wrapping_offset(offset as isize) as *const u8) }
 	}
 
@@ -131,10 +127,6 @@ impl GetView for [u8] {
 
 	fn get_lf64(&self, offset: usize) -> f64{
 		unsafe { transmute::<u64, f64>(u64::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u64)))  }
-	}
-
-	fn get_bu8(&self, offset: usize) -> u8{
-		unsafe { *(self.as_ptr().wrapping_offset(offset as isize) as *const u8) }
 	}
 
 	fn get_bu16(&self, offset: usize) -> u16{
@@ -175,7 +167,7 @@ impl GetView for [u8] {
 }
 
 impl SetView for Vec<u8> {
-	fn set_lu8(&mut self, v: u8, offset: usize){
+	fn set_u8(&mut self, v: u8, offset: usize){
 		unsafe { 
 			let l = self.len();
 			self.set_len(l + 1);
@@ -255,13 +247,6 @@ impl SetView for Vec<u8> {
 		}
 	}
 
-	fn set_bu8(&mut self, v: u8, offset: usize){
-		unsafe {
-			let l = self.len();
-			self.set_len(l + 1);
-			*(self.as_mut_ptr().wrapping_offset(offset as isize) as *mut u8) = v.to_be()
-		}
-	}
 
 	fn set_bu16(&mut self, v: u16, offset: usize){
 		unsafe {

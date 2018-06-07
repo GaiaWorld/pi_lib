@@ -104,11 +104,11 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn get_type(&mut self) -> u8 {
-		self.bytes.get_lu8(self.head)
+		self.bytes.get_u8(self.head)
 	}
 
 	pub fn read_bool(&mut self) -> bool {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
 			1 => true,
@@ -150,7 +150,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_f32(&mut self) -> f32 {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
 			3 => {0.0},
@@ -166,7 +166,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_f64(&mut self) -> f64 {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
 			3 => {0.0},
@@ -184,9 +184,28 @@ impl<'a> ReadBuffer<'a>{
 			}
 		}
 	}
+	/**
+	 * @description 读出一个动态长度，正整数，不允许大于0x20000000。采用网络序，大端在前
+	 * @example
+	 */
+	pub fn read_lengthen(&mut self) -> u32 {
+		let t = self.bytes.get_u8(self.head);
+		if t < 0x80 {
+			self.head += 1;
+			t as u32
+		}else if t < 0xC0 {
+			self.head += 2;
+			self.bytes.get_bu16(self.head - 2) as u32 - 0x8000
+		}else if t < 0xE0 {
+			self.head += 4;
+			self.bytes.get_bu32(self.head - 4) as u32 - 0xC0000000
+		}else{
+			panic!("invalid lengthen, it's {}", t);
+		}
+	}
 
 	pub fn read_bin(&mut self) -> Vec<u8> {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
 		if t >= 40 && t <= 104{
@@ -195,7 +214,7 @@ impl<'a> ReadBuffer<'a>{
 		}else {
 			match t {
 				105 => {
-					len = self.bytes.get_lu8(self.head) as usize as usize;
+					len = self.bytes.get_u8(self.head) as usize as usize;
 					self.head += len + 1;
 				},
 				106 => {
@@ -227,7 +246,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_utf8(&mut self) -> String {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
 		if t >= 101 && t <= 174{
@@ -236,7 +255,7 @@ impl<'a> ReadBuffer<'a>{
 		}else{
 			match t {
 				175 => {
-					len = self.bytes.get_lu8(self.head) as usize as usize;
+					len = self.bytes.get_u8(self.head) as usize as usize;
 					self.head += len + 1;
 				},
 				176 => {
@@ -268,7 +287,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_container<T, F>(&mut self, read_next: F) -> T where F: FnOnce(&mut ReadBuffer, &u32) -> T{
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
 		if t >= 180 && t <= 244{
@@ -277,7 +296,7 @@ impl<'a> ReadBuffer<'a>{
 		}else{
 			match t {
 				245 => {
-					//len = self.bytes.get_lu8(self.head) as usize;
+					//len = self.bytes.get_u8(self.head) as usize;
 					self.head += 5;
 				},
 				246 => {
@@ -306,7 +325,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn is_nil(&mut self) -> bool{
-		let first = self.bytes.get_lu8(self.head);
+		let first = self.bytes.get_u8(self.head);
 		if first == 0{
 			self.head += 1;
 			true
@@ -316,7 +335,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read(&mut self) -> EnumValue{
-		let first = self.bytes.get_lu8(self.head);
+		let first = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match first{
 			0 => {EnumValue::Void},
@@ -338,7 +357,7 @@ impl<'a> ReadBuffer<'a>{
 			10..30 => {EnumValue::U8(first - 10)},
 			30 => {
 				self.head += 1;
-				EnumValue::U8(self.bytes.get_lu8(self.head - 1))
+				EnumValue::U8(self.bytes.get_u8(self.head - 1))
 			},
 			31 => {
 				self.head += 2;
@@ -358,7 +377,7 @@ impl<'a> ReadBuffer<'a>{
 			},
 			35 => {
 				self.head += 1;
-				EnumValue::I16(-(self.bytes.get_lu8(self.head - 1) as i16))
+				EnumValue::I16(-(self.bytes.get_u8(self.head - 1) as i16))
 			},
 			36 => {
 				self.head += 2;
@@ -389,7 +408,7 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	fn read_integer<T: AsFrom<u32> + AsFrom<u64> + AsFrom<i32> + AsFrom<i64>>(&mut self) -> T {
-		let t = self.bytes.get_lu8(self.head);
+		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		if t >= 9 && t <= 29{
 			T::from((t -10) as u32)
@@ -397,7 +416,7 @@ impl<'a> ReadBuffer<'a>{
 			match t {
 				30 => {
 					self.head += 1;
-					T::from(self.bytes.get_lu8(self.head - 1) as u32)
+					T::from(self.bytes.get_u8(self.head - 1) as u32)
 				},
 				31 => {
 					self.head += 2;
@@ -418,7 +437,7 @@ impl<'a> ReadBuffer<'a>{
 				},
 				35 => {
 					self.head += 1;
-					T::from(-(self.bytes.get_lu8(self.head - 1) as i32))
+					T::from(-(self.bytes.get_u8(self.head - 1) as i32))
 				},
 				36 => {
 					self.head += 2;
@@ -522,30 +541,30 @@ impl WriteBuffer{
 		self.write_int64(v);
 	}
 	pub fn write_nil(&mut self) {
-		self.bytes.set_bu8(0, self.tail);
+		self.bytes.set_u8(0, self.tail);
 		self.tail += 1;
 	}
 
 	pub fn write_bool(&mut self, v: bool) {
-		self.bytes.set_lu8(match v{true => 1, false => 2}, self.tail);
+		self.bytes.set_u8(match v{true => 1, false => 2}, self.tail);
 		self.tail += 1;
 	}
 
 	pub fn write_f32(&mut self, v: f32) {
 		if v == 0.0 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8(3, self.tail);
+			self.bytes.set_u8(3, self.tail);
 			self.tail += 1;
 			return;
 		}
 		if v == 1.0 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8(4, self.tail);
+			self.bytes.set_u8(4, self.tail);
 			self.tail += 1;
 			return;
 		}
 		self.try_extend_capity(5);
-		self.bytes.set_lu8(6, self.tail);
+		self.bytes.set_u8(6, self.tail);
 		self.bytes.set_lf32( v, self.tail + 1);
 		self.tail += 5;
 	}
@@ -553,37 +572,43 @@ impl WriteBuffer{
 	pub fn write_f64(&mut self, v: f64) {
 		if v == 0.0 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8(3, self.tail);
+			self.bytes.set_u8(3, self.tail);
 			self.tail += 1;
 			return;
 		}
 		if v == 1.0 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8(4, self.tail);
+			self.bytes.set_u8(4, self.tail);
 			self.tail += 1;
 			return;
 		}
 		self.try_extend_capity(9);
-		self.bytes.set_lu8(7, self.tail);
+		self.bytes.set_u8(7, self.tail);
 		self.bytes.set_lf64(v, self.tail + 1);
 		self.tail += 9;
 	}
-
-	pub fn write_pint(&mut self, v: u32) {
-		if v > 0x20000000{
-			//panic!("invalid pint:" + v);
-		}if v < 0x80 {
+	/**
+	 * @description 写入一个动态长度，正整数，不允许大于0x20000000。这个地方需要使用网络序，大端在前
+	 * 1字节： 0xxxxxxx
+	 * 2字节： 10xxxxxx xxxxxxxx
+	 * 4字节： 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+	 * @example
+	 */
+	pub fn write_lengthen(&mut self, t: u32) {
+		if t < 0x80 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8(v as u8, self.tail);
+			self.bytes.set_u8(t as u8, self.tail);
 			self.tail += 1;
-		}else if v < 0x4000 {
+		}else if t < 0x4000 {
 			self.try_extend_capity(2);
-			self.bytes.set_lu16((0x8000 + v) as u16, self.tail);
+			self.bytes.set_bu16((0x8000 + t) as u16, self.tail);
 			self.tail += 2;
-		}else{
+		}else if t < 0x20000000 {
 			self.try_extend_capity(4);
-			self.bytes.set_lu32( (0xC0000000 + v) as u32, self.tail);
+			self.bytes.set_bu32( (0xC0000000 + t) as u32, self.tail);
 			self.tail += 4;
+		}else {
+			panic!("invalid lengthen, it's {}", t);
 		}
 	}
 
@@ -601,33 +626,33 @@ impl WriteBuffer{
 		if length <= 64 {
 			self.try_extend_capity(1 + length);
 			// 长度小于等于64， 本字节直接表达
-			self.bytes.set_lu8( t + length as u8, self.tail);
+			self.bytes.set_u8( t + length as u8, self.tail);
 			self.tail += 1;
 		} else if length <= 0xff {
 			self.try_extend_capity(2 + length);
 			// 长度小于256， 用下一个1字节记录
-			self.bytes.set_lu8( t + 65, self.tail);
-			self.bytes.set_lu8( length as u8, self.tail + 1);
+			self.bytes.set_u8( t + 65, self.tail);
+			self.bytes.set_u8( length as u8, self.tail + 1);
 			self.tail += 2;
 		} else if length <= 0xffff {
 			self.try_extend_capity(3 + length);
-			self.bytes.set_lu8( t + 66, self.tail);
+			self.bytes.set_u8( t + 66, self.tail);
 			self.bytes.set_lu16( length as u16, self.tail + 1);
 			self.tail += 3;
 		} else if length <= 0xffffffff {
 			self.try_extend_capity(5 + length);
-			self.bytes.set_lu8( t + 67, self.tail);
+			self.bytes.set_u8( t + 67, self.tail);
 			self.bytes.set_lu32(  length as u32, self.tail + 1);
 			self.tail += 5;
 		} else if length as u64 <= 0xffffffffffff {
 			self.try_extend_capity(7 + length);
-			self.bytes.set_lu8( t + 68, self.tail);
+			self.bytes.set_u8( t + 68, self.tail);
 			self.bytes.set_lu16((length & 0xffff) as u16, self.tail + 1);
 			self.bytes.set_lu32( (length >> 16) as u32, self.tail + 3);
 			self.tail += 7;
 		} else {
 			self.try_extend_capity(9 + length);
-			self.bytes.set_lu8( t + 69, self.tail);
+			self.bytes.set_u8( t + 69, self.tail);
 			self.bytes.set_lu64(t as u64, self.tail + 1);
 			self.tail += 9;
 		}
@@ -705,28 +730,28 @@ impl WriteBuffer{
 		// 根据实际的限制大小，写入实际长度
 		match limit_size {
 			64 => {
-				self.bytes.set_lu8((180 + len) as u8, t);
+				self.bytes.set_u8((180 + len) as u8, t);
 			},
 			0xff =>{
-				self.bytes.set_lu8(245, t);
-				self.bytes.set_lu8(len as u8, t + 1);
+				self.bytes.set_u8(245, t);
+				self.bytes.set_u8(len as u8, t + 1);
 			},
 			0xffff =>{
-				self.bytes.set_lu8( 246, t);
+				self.bytes.set_u8( 246, t);
 				self.bytes.set_lu16(len as u16, t + 1);
 			},
 			0xffffffff => {
-				self.bytes.set_lu8(247, t);
+				self.bytes.set_u8(247, t);
 				self.bytes.set_lu32(len as u32, t + 1);
 			},
 			0xffffffffffff => {
-				self.bytes.set_lu8(248, t);
+				self.bytes.set_u8(248, t);
 				self.bytes.set_lu16((len & 0xffff) as u16, t + 1);
 				self.bytes.set_lu32((len >> 16) as u32, t + 3);
 			},
 
 			_ => {
-				self.bytes.set_lu8(249, t);
+				self.bytes.set_u8(249, t);
 				self.bytes.set_lu64(len as u64, t + 1);
 			},
 		}
@@ -753,7 +778,7 @@ impl WriteBuffer{
 	fn write_int32(&mut self, v: i32) {
 		if v >= -1 && v < 20 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8((v + 10) as u8, self.tail);
+			self.bytes.set_u8((v + 10) as u8, self.tail);
 			self.tail += 1;
 			return;
 		}
@@ -765,17 +790,17 @@ impl WriteBuffer{
 		}
 		if v1 <= 0xFF {
 			self.try_extend_capity(2);
-			self.bytes.set_lu8(30 + i, self.tail);
-			self.bytes.set_lu8(v1 as u8, self.tail + 1);
+			self.bytes.set_u8(30 + i, self.tail);
+			self.bytes.set_u8(v1 as u8, self.tail + 1);
 			self.tail += 2;
 		} else if v1 <= 0xFFFF {
 			self.try_extend_capity(3);
-			self.bytes.set_lu8(31 + i, self.tail);
+			self.bytes.set_u8(31 + i, self.tail);
 			self.bytes.set_lu16(v1 as u16, self.tail + 1);
 			self.tail += 3;
 		} else {
 			self.try_extend_capity(5);
-			self.bytes.set_lu8(32 + i, self.tail);
+			self.bytes.set_u8(32 + i, self.tail);
 			self.bytes.set_lu32( v1 as u32, self.tail + 1);
 			self.tail += 5;
 		}
@@ -784,7 +809,7 @@ impl WriteBuffer{
 	fn write_int64(&mut self, v: i64) {
 		if v >= -1 && v < 20 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8((v + 10) as u8, self.tail);
+			self.bytes.set_u8((v + 10) as u8, self.tail);
 			self.tail += 1;
 			return;
 		}
@@ -796,28 +821,28 @@ impl WriteBuffer{
 		}
 		if v1 <= 0xFF {
 			self.try_extend_capity(2);
-			self.bytes.set_lu8(30 + i, self.tail);
-			self.bytes.set_lu8(v1 as u8, self.tail + 1);
+			self.bytes.set_u8(30 + i, self.tail);
+			self.bytes.set_u8(v1 as u8, self.tail + 1);
 			self.tail += 2;
 		} else if v1 <= 0xFFFF {
 			self.try_extend_capity(3);
-			self.bytes.set_lu8(31 + i,self.tail);
+			self.bytes.set_u8(31 + i,self.tail);
 			self.bytes.set_lu16(v1 as u16, self.tail + 1);
 			self.tail += 3;
 		} else if v1 <= 0xFFFFFFFF {
 			self.try_extend_capity(5);
-			self.bytes.set_lu8(32 + i, self.tail);
+			self.bytes.set_u8(32 + i, self.tail);
 			self.bytes.set_lu32( v1 as u32, self.tail + 1);
 			self.tail += 5;
 		} else if v1 <= 0xFFFFFFFFFFFF {
 			self.try_extend_capity(7);
-			self.bytes.set_lu8(32 + i, self.tail);
+			self.bytes.set_u8(32 + i, self.tail);
 			self.bytes.set_lu16((v1 & 0xffff) as u16, self.tail + 1);
 			self.bytes.set_lu32( (v1 >> 16) as u32, self.tail + 3);
 			self.tail += 7;
 		} else {
 			self.try_extend_capity(9);
-			self.bytes.set_lu8(33 + i, self.tail);
+			self.bytes.set_u8(33 + i, self.tail);
 			self.bytes.set_lu64(v1 as u64, self.tail + 1);
 			self.tail += 9;
 		}
@@ -826,21 +851,21 @@ impl WriteBuffer{
 	fn write_unit32(&mut self, v: u32) {
 		if v < 20 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8((v + 10) as u8, self.tail);
+			self.bytes.set_u8((v + 10) as u8, self.tail);
 			self.tail += 1;
 		}else if v <= 0xFF {
 			self.try_extend_capity(2);
-			self.bytes.set_lu8(30 as u8, self.tail);
-			self.bytes.set_lu8(v as u8, self.tail + 1);
+			self.bytes.set_u8(30 as u8, self.tail);
+			self.bytes.set_u8(v as u8, self.tail + 1);
 			self.tail += 2;
 		} else if v <= 0xFFFF {
 			self.try_extend_capity(3);
-			self.bytes.set_lu8(31 as u8, self.tail);
+			self.bytes.set_u8(31 as u8, self.tail);
 			self.bytes.set_lu16(v as u16, self.tail + 1);
 			self.tail += 3;
 		} else {
 			self.try_extend_capity(5);
-			self.bytes.set_lu8(32 as u8, self.tail);
+			self.bytes.set_u8(32 as u8, self.tail);
 			self.bytes.set_lu32( v as u32, self.tail + 1);
 			self.tail += 5;
 		}
@@ -849,32 +874,32 @@ impl WriteBuffer{
 	fn write_unit64(&mut self, v: u64) {
 		if v < 20 {
 			self.try_extend_capity(1);
-			self.bytes.set_lu8((v + 10) as u8, self.tail);
+			self.bytes.set_u8((v + 10) as u8, self.tail);
 			self.tail += 1;
 		}else if v <= 0xFF {
 			self.try_extend_capity(2);
-			self.bytes.set_lu8(30 as u8, self.tail);
-			self.bytes.set_lu8(v as u8, self.tail + 1);
+			self.bytes.set_u8(30 as u8, self.tail);
+			self.bytes.set_u8(v as u8, self.tail + 1);
 			self.tail += 2;
 		} else if v <= 0xFFFF {
 			self.try_extend_capity(3);
-			self.bytes.set_lu8(31 as u8, self.tail);
+			self.bytes.set_u8(31 as u8, self.tail);
 			self.bytes.set_lu16(v as u16, self.tail + 1);
 			self.tail += 3;
 		} else if v <= 0xFFFFFFFF {
 			self.try_extend_capity(5);
-			self.bytes.set_lu8(32 as u8, self.tail);
+			self.bytes.set_u8(32 as u8, self.tail);
 			self.bytes.set_lu32( v as u32, self.tail + 1);
 			self.tail += 5;
 		} else if v <= 0xFFFFFFFFFFFF {
 			self.try_extend_capity(7);
-			self.bytes.set_lu8(33 as u8, self.tail);
+			self.bytes.set_u8(33 as u8, self.tail);
 			self.bytes.set_lu16((v & 0xffff) as u16, self.tail + 1);
 			self.bytes.set_lu32( (v >> 16) as u32, self.tail + 3);
 			self.tail += 7;
 		} else {
 			self.try_extend_capity(9);
-			self.bytes.set_lu8(34 as u8, self.tail);
+			self.bytes.set_u8(34 as u8, self.tail);
 			self.bytes.set_lu64(v as u64, self.tail + 1);
 			self.tail += 9;
 		}
