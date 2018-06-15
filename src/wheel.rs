@@ -17,7 +17,7 @@ pub struct Wheel<T>{
 	pub time: u64,//当前时间
 }
 
-impl<T: Clone + Ord> Wheel<T>{
+impl<T: Clone> Wheel<T>{
 
 	//创建一个轮， 支持四层轮
 	pub fn new() -> Self{
