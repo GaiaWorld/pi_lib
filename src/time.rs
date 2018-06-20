@@ -16,45 +16,33 @@ Now 200s
 
 use std::time::Instant;
 use std::time::SystemTime;
-use std::sync::{Once, ONCE_INIT};
 
-static INIT: Once = ONCE_INIT;
 
-static mut START: Option<Instant> = None;
-static mut START_SECS: u64 = 0;
+lazy_static! {
+	static ref START: Instant = Instant::now();
+	static ref START_SECS: u64 = SystemTime::UNIX_EPOCH.elapsed().unwrap().as_secs();
+}
 
 // 启动后运行的纳秒数
 pub fn now_nanos() -> u64 {
-	let d = get().elapsed();
+	let d = START.elapsed();
 	d.as_secs() * 1000_000_000 + d.subsec_nanos() as u64
 }
 // 启动后运行的微秒数
 pub fn now_micros() -> u64 {
-	let d = get().elapsed();
+	let d = START.elapsed();
 	d.as_secs() * 1000_000 + d.subsec_micros() as u64
 }
 // 启动后运行的毫秒数
 pub fn now_millis() -> u64 {
-	let d = get().elapsed();
+	let d = START.elapsed();
 	d.as_secs() * 1000 + d.subsec_millis() as u64
 }
 // 启动后运行的秒数
 pub fn now_second() -> u64 {
-	get().elapsed().as_secs()
+	START.elapsed().as_secs()
 }
 // 当前进程的启动时间，单位：秒
 pub fn start_secs() -> u64 {
-	unsafe {START_SECS}
-}
-fn get() -> Instant {
-	unsafe {
-		INIT.call_once(|| {
-			START = Some(Instant::now());
-			match SystemTime::UNIX_EPOCH.elapsed() {
-				Ok(n) => START_SECS = n.as_secs(),
-				Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-			}
-		});
-		START.unwrap()
-	}
+	*START_SECS
 }
