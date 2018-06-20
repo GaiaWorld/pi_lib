@@ -36,7 +36,7 @@ impl<T: Clone + Ord> Heap<T> {
 	//remove a element by index, Panics if index is out of bounds.
 	pub fn remove(&mut self, index: Arc<AtomicIsize>) -> T{
 		let i = index.load(AOrd::Relaxed);
-		self.delete((i - 1) as usize, self.0.len())
+		self.delete((i - 1) as usize, self.0.len()).0
 	}
 
 	//remove a element by index; returns it, or None if it is not exist;
@@ -53,9 +53,15 @@ impl<T: Clone + Ord> Heap<T> {
 		self.try_delete(0)
 	}
 
+	pub fn get_top(&mut self) -> (T, Arc<AtomicIsize>){
+		self.delete(0, self.0.len())
+	}
 
-	pub fn get(&self, index: usize) -> &T{
-		&self.0[index].0
+	pub fn get(&self, index: usize) -> Option<&T>{
+		match self.0.get(index){
+			Some(v) => Some(&v.0),
+			None => {None}
+		}
 	}
 
 	pub fn get_mut(&mut self, index: usize) -> &mut T{
@@ -72,7 +78,7 @@ impl<T: Clone + Ord> Heap<T> {
 	}
 
 	#[inline]
-	fn delete(&mut self, index: usize, len: usize) -> T{
+	fn delete(&mut self, index: usize, len: usize) -> (T, Arc<AtomicIsize>){
 		let mut elem = self.0.pop().unwrap();
 		if index + 1 < len{//如果需要移除的元素不是堆底元素， 需要将该元素位置设置为栈底元素并下沉
 			let temp = self.0[index].clone();
@@ -81,7 +87,7 @@ impl<T: Clone + Ord> Heap<T> {
 			self.down(index);
 		}
 		elem.1.store(0, AOrd::Relaxed);
-		elem.0
+		elem
 	}
 
 	#[inline]
@@ -91,7 +97,7 @@ impl<T: Clone + Ord> Heap<T> {
 		if index >= len {
 			return None;
 		}
-		Some(self.delete(index, len))
+		Some(self.delete(index, len).0)
 	}
 
 	//上朔， 使用时应该保证index不会溢出
