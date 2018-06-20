@@ -10,6 +10,7 @@
 #![feature(box_into_raw_non_null)]
 #![feature(assoc_unix_epoch)]
 #![feature(trait_alias)]
+#![feature(const_fn)]
 #![feature(nll)]
 
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]

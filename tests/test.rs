@@ -20,7 +20,7 @@ fn atom() {
 fn show(t: &OrdMap<Tree<usize, usize>>) -> Vec<usize> {
 	let mut v = Vec::new();
 	{
-		let mut f = |e:&Entry<usize, usize>| {v.push(e.key().clone()); v.push(e.value().clone())};
+		let mut f = |e:&Entry<usize, usize>| {v.push(e.0.clone()); v.push(e.1.clone())};
 		t.select(None, false, &mut f);
 	}
 	v
@@ -58,18 +58,18 @@ fn sb_test() {
 	assert!(t.get(&3) == Some(&31));
 	assert!(t.get(&40) == Some(&40));
 	assert!(t.get(&5) == None);
-	assert!(*(t.min().unwrap()).key() == 1);
-	assert!(*(t.max().unwrap()).key() == 40);
+	assert!((t.min().unwrap()).0 == 1);
+	assert!((t.max().unwrap()).0 == 40);
 	assert!(t.rank(&1) == 1);
 	assert!(t.rank(&2) == 2);
 	assert!(t.rank(&3) == 3);
 	assert!(t.rank(&40) == 4);
 	assert!(t.rank(&30) == -4);
 	assert!(t.rank(&50) == -5);
-	assert!(*(t.index(1).unwrap()).key() == 1);
-	assert!(*(t.index(2).unwrap()).key() == 2);
-	assert!(*(t.index(3).unwrap()).key() == 3);
-	assert!(*(t.index(4).unwrap()).key() == 40);
+	assert!((t.index(1).unwrap()).0 == 1);
+	assert!((t.index(2).unwrap()).0 == 2);
+	assert!((t.index(3).unwrap()).0 == 3);
+	assert!((t.index(4).unwrap()).0 == 40);
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40]);
 	assert!(t.insert(90, 90));
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 90, 90]);
@@ -85,10 +85,10 @@ fn sb_test() {
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 50, 50, 60, 60, 80, 80, 90, 90]);
 	assert!(t.insert(70, 71));
 	assert!(show(&t) == vec![1,11,2,21, 3, 31, 40, 40, 50, 50, 60, 60,  70, 71, 80, 80, 90, 90]);
-	assert!(t.pop_min(true).unwrap().unwrap().value() == &11);
+	assert!(t.pop_min(true).unwrap().unwrap().1 == 11);
 	assert!(show(&t) == vec![2,21, 3, 31, 40, 40, 50, 50, 60, 60,  70, 71, 80, 80, 90, 90]);
-	assert!(t.safe_pop_max(true).unwrap().unwrap().value() == &90);
+	assert!(t.safe_pop_max(true).unwrap().unwrap().1 == 90);
 	assert!(show(&t) == vec![2,21, 3, 31, 40, 40, 50, 50, 60, 60,  70, 71, 80, 80]);
-	assert!(t.remove(3, true).unwrap().unwrap().key() == &40);
+	assert!(t.remove(3, true).unwrap().unwrap().0 == 40);
 	assert!(show(&t) == vec![2,21, 3, 31, 50, 50, 60, 60,  70, 71, 80, 80]);
 }

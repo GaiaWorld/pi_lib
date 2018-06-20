@@ -1,4 +1,5 @@
-// 二进制数据模块
+// 二进制对象表示法 模块
+// Binary Object Notation
 
 // 小端-非网络字节序，和quic一致
 
@@ -94,7 +95,6 @@ pub struct ReadBuffer<'a>{
 	head: usize,
 }
 
-
 impl<'a> ReadBuffer<'a>{
 	pub fn new(buf: &[u8], head: usize) -> ReadBuffer {
 		ReadBuffer{
@@ -102,7 +102,9 @@ impl<'a> ReadBuffer<'a>{
 			head: head,
 		}
 	}
-
+	pub fn head(&self) -> usize {
+		self.head
+	}
 	pub fn get_type(&mut self) -> u8 {
 		self.bytes.get_u8(self.head)
 	}
@@ -475,6 +477,12 @@ pub struct WriteBuffer {
 
 impl WriteBuffer{
 
+	pub fn new() -> WriteBuffer {
+		WriteBuffer{
+			bytes: Vec::new(),
+			tail: 0,
+		}
+	}
 	pub fn with_bytes(buf: Vec<u8>, tail: usize) -> WriteBuffer {
 		println!("{:?}", buf);
 		WriteBuffer{
@@ -490,13 +498,9 @@ impl WriteBuffer{
 		}
 	}
 
-	pub fn new() -> WriteBuffer {
-		WriteBuffer{
-			bytes: Vec::new(),
-			tail: 0,
-		}
+	pub fn tail(&self) -> usize {
+		self.tail
 	}
-
 	pub fn get_byte(&self) -> &Vec<u8> {
 		&self.bytes
 	}

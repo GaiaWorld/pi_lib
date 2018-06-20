@@ -12,7 +12,7 @@ use time::{now_nanos, start_secs};
 
 // 全局唯一ID
 #[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Guid(u128);
+pub struct Guid(pub u128);
 
 impl Guid {
 	// 获取从1970年起的纳秒数
