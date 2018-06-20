@@ -4,6 +4,16 @@
 
 use std::vec::Vec;
 use std::ops::{Generator, GeneratorState};
+use std::sync::Arc;
+
+pub type Bin = Arc<Vec<u8>>;
+
+pub type SResult<T> = Result<T, String>;
+pub type OptResult = Option<SResult<()>>;
+
+pub type Callback = Arc<Fn(SResult<()>)>;
+pub type ReadCallback = Arc<Fn(SResult<Bin>)>;
+
 
 // 为Vec增加的新方法
 pub trait VecIndex {
