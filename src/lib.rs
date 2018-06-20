@@ -33,6 +33,8 @@ pub mod util;
 pub mod guid;
 pub mod time;
 pub mod cowlist;
+pub mod heap;
+pub mod wheel;
 
 #[macro_use]
 extern crate lazy_static;

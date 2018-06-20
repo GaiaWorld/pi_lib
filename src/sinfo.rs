@@ -152,10 +152,6 @@ impl Encode for StructInfo{
 
 impl Decode for StructInfo{
 	fn decode(bb: &mut ReadBuffer) -> StructInfo{
-		Atom::decode(bb);
-		u32::decode(bb);
-		Option::<HashMap<Atom, Atom>>::decode(bb);
-		Vec::<FieldInfo>::decode(bb);
 		StructInfo{
 			name: Atom::decode(bb),
 			name_hash: u32::decode(bb),
