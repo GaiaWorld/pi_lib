@@ -95,14 +95,14 @@ impl<T: Clone> Wheel<T>{
 
 	//插入到毫秒轮
 	fn insert_ms(&mut self, item: (Item<T>, Arc<AtomicIsize>), diff: u64){
-		let i = (next_tail(0, (diff/10) as u8, 10)) as usize;
+		let i = (next_tail(self.point[0], (diff/10) as u8, 100)) as usize;
 		item.1.store(sum_index(i, self.arr[i].len()), AOrd::Relaxed);
 		self.arr[i].push(item);
 	}
 
 	//秒，分钟，小时轮的插入方法
 	fn insert_wheel(&mut self, item: (Item<T>, Arc<AtomicIsize>), layer: usize, diff: u64){
-		let i = (next_tail(0, (diff/(UNIT[layer] as u64)) as u8 - 1, CAPACITY[layer]) + START[layer]) as usize;
+		let i = (next_tail(self.point[layer], (diff/(UNIT[layer] as u64)) as u8 - 1, CAPACITY[layer]) + START[layer]) as usize;
 		item.1.store(sum_index(i, self.arr[i].len()), AOrd::Relaxed);
 		self.arr[i].push(item);
 	}
@@ -128,15 +128,27 @@ impl<T: Clone> Wheel<T>{
 				true => self.get_from_heap(),
 				false => self.forward(layer + 1)
 			};
-			if layer == 0 {
-				for v in above.into_iter(){
-					let d = sub(v.0.time_point, self.time);
-					self.insert_ms(v, d)
-				}
-			}else {
-				for v in above.into_iter() {
-					let d = sub(v.0.time_point, self.time);
-					self.insert_wheel(v, layer, d)
+			// if layer == 0 {
+			// 	for v in above.into_iter(){
+			// 		let d = sub(v.0.time_point, self.time);
+			// 		self.insert_ms(v, d)
+			// 	}
+			// }else {
+			// 	for v in above.into_iter() {
+			// 		let d = sub(v.0.time_point, self.time);
+			// 		self.insert_wheel(v, layer, d)
+			// 	}
+			// }
+			for v in above.into_iter() {
+				let diff = sub(v.0.time_point, self.time);
+				if diff < 1000{
+					self.insert_ms(v, diff);
+				}else if diff < 61000{
+					self.insert_wheel(v, 1, diff);
+				}else if diff < 3661000{
+					self.insert_wheel(v, 2, diff);
+				}else{
+					self.insert_wheel(v, 3, diff);
 				}
 			}
 		}
