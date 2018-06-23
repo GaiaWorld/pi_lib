@@ -14,6 +14,8 @@ static UNIT:[u32; 4] = [10, 1000, 60000, 3600000];
 
 pub struct Wheel<T>{
 	arr: [Vec<(Item<T>, Arc<AtomicIsize>)>; 244],//毫秒精度为10， 秒，分钟， 小时精度为1
+    zero_arr:Vec<(Item<T>, Arc<AtomicIsize>)>,
+    zero_cache: Vec<(Item<T>, Arc<AtomicIsize>)>,
 	heap: Heap<Item<T>>,
 	point:[u8; 4],
 	pub time: u64,//当前时间
@@ -29,6 +31,8 @@ impl<T: Clone> Wheel<T>{
 		}
 		Wheel{
 			arr: arr,
+			zero_arr: Vec::new(),
+			zero_cache: Vec::new(),
 			heap: Heap::new(Ordering::Less),
 			point:[0, 0, 0, 0],
 			time:0
@@ -41,14 +45,21 @@ impl<T: Clone> Wheel<T>{
 	}
 
 	pub fn insert(&mut self, item: Item<T>) -> Arc<AtomicIsize>{
-		let diff = match item.time_point > self.time {
+		let mut diff = match item.time_point > self.time {
 			true => item.time_point - self.time,
 			false => 0,
 		};
+		if diff == 0 {
+			let index = Arc::new(AtomicIsize::new(sum_index(244, self.zero_arr.len())));
+			self.zero_arr.push((item, index.clone()));
+			return index;
+		}
 		if diff >= 90061000{
 			return self.heap.push(item);
 		}
 		let index = Arc::new(AtomicIsize::new(0));
+		diff = diff - 1;
+		
 		if diff < 1000{
 			self.insert_ms((item, index.clone()), diff);
 		}else if diff < 61000{
@@ -59,6 +70,18 @@ impl<T: Clone> Wheel<T>{
 			self.insert_wheel((item, index.clone()), 3, diff);
 		}
 		index
+	}
+
+	pub fn zero_size(&self) -> usize{
+		self.zero_arr.len()
+	}
+
+	pub fn get_zero(&mut self) -> Vec<(Item<T>, Arc<AtomicIsize>)>{
+		replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
+	}
+
+    pub fn set_zero_cache(&mut self, v: Vec<(Item<T>, Arc<AtomicIsize>)>){
+		replace(&mut self.zero_cache, v);
 	}
 
 	pub fn roll(&mut self) -> Vec<(Item<T>, Arc<AtomicIsize>)>{
@@ -178,13 +201,13 @@ impl<T: Clone> Wheel<T>{
 
 #[inline]
 fn sum_index(index1: usize, index2: usize) -> isize{
-	-((index2*244 + index1 + 1) as isize)
+	-((index2*245 + index1 + 1) as isize)
 }
 
 #[inline]
 fn split_index(index: isize) -> (usize, usize){
 	let index = (-index - 1) as usize;
-	(index%244, index/244)
+	(index%245, index/245)
 }
 
 #[inline]
