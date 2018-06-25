@@ -92,3 +92,37 @@ fn sb_test() {
 	assert!(t.remove(3, true).unwrap().unwrap().0 == 40);
 	assert!(show(&t) == vec![2,21, 3, 31, 50, 50, 60, 60,  70, 71, 80, 80]);
 }
+
+#[test]
+fn test_handler() {
+	use std::any::Any;
+	use std::sync::Arc;
+
+	use pi_lib::atom::Atom;
+	use pi_lib::handler::{Env, Handler, Args};
+
+	struct Tmp(u8);
+
+	impl Env for Tmp {
+		fn get_attr(&self, key: Atom) -> Option<Box<Any>> {
+			None
+		}
+
+		fn set_attr(&mut self, key: Atom, value: Box<Any>) -> Option<Box<Any>> {
+			None
+		}
+	}
+
+	struct Test;
+
+	impl Handler for Test {
+		type HandleResult = ();
+
+		fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args) -> Self::HandleResult {
+			return;
+		}
+	}
+
+	let test = Test;
+	test.handle(Arc::new(Tmp(10)), Atom::from(""), Args::new(0));
+}

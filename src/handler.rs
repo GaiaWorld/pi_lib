@@ -21,7 +21,7 @@ pub trait Handler {
     type HandleResult;
 
     //处理方法
-    fn handle(&self, env: Arc<Env>, func: Atom, args: Args) -> Self::HandleResult;
+    fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args) -> Self::HandleResult;
 }
 
 /*
