@@ -18,7 +18,6 @@
 extern crate core;
 extern crate fnv;
 
-pub mod args;
 pub mod slab;
 pub mod rc;
 pub mod ordmap;
@@ -36,6 +35,7 @@ pub mod time;
 pub mod cowlist;
 pub mod heap;
 pub mod wheel;
+pub mod handler;
 
 #[macro_use]
 extern crate lazy_static;

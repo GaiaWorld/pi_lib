@@ -1,4 +1,28 @@
 use std::any::Any;
+use std::sync::Arc;
+
+use atom::Atom;
+
+/*
+* 环境
+*/
+pub trait Env {
+    //获取属性
+    fn get_attr(&self, key: Atom) -> Option<Box<Any>>;
+
+    //设置属性，返回上个属性值
+    fn set_attr(&mut self, key: Atom, value: Box<Any>) -> Option<Box<Any>>;
+}
+
+/*
+* 通用处理器
+*/
+pub trait Handler {
+    type HandleResult;
+
+    //处理方法
+    fn handle(&self, env: Arc<Env>, func: Atom, args: Args) -> Self::HandleResult;
+}
 
 /*
 * 通用参数类型
