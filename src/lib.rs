@@ -18,6 +18,7 @@
 extern crate core;
 extern crate fnv;
 
+pub mod args;
 pub mod slab;
 pub mod rc;
 pub mod ordmap;
