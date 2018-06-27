@@ -1,8 +1,8 @@
 {
     "editor.wordWrap": "on",
 	"editor.renderWhitespace": "boundary",
-     "editor.insertSpaces": false,
-    "editor.detectIndentation": false,
+     "editor.insertSpaces": true,
+    "editor.detectIndentation": true,
 	 "typescript.tsdk": "../../pi_build/node_modules/typescript/lib",
     "files.associations": {
         "*.rsd": "rust",

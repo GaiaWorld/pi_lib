@@ -99,16 +99,20 @@ fn test_handler() {
 	use std::sync::Arc;
 
 	use pi_lib::atom::Atom;
-	use pi_lib::handler::{Env, Handler, Args};
+	use pi_lib::handler::{Env, GenType, Handler, Args};
 
 	struct Tmp(u8);
 
 	impl Env for Tmp {
-		fn get_attr(&self, key: Atom) -> Option<Box<Any>> {
+		fn get_attr(&self, key: Atom) -> Option<GenType> {
 			None
 		}
 
-		fn set_attr(&mut self, key: Atom, value: Box<Any>) -> Option<Box<Any>> {
+		fn set_attr(&mut self, key: Atom, value: GenType) -> Option<GenType> {
+			None
+		}
+
+		fn remove_attr(&mut self, key: Atom) -> Option<GenType> {
 			None
 		}
 	}
@@ -116,13 +120,21 @@ fn test_handler() {
 	struct Test;
 
 	impl Handler for Test {
+		type A = Arc<Vec<u8>>;
+		type B = ();
+		type C = ();
+		type D = ();
+		type E = ();
+		type F = ();
+		type G = ();
+		type H = ();
 		type HandleResult = ();
 
-		fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args) -> Self::HandleResult {
+		fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
 			return;
 		}
 	}
 
 	let test = Test;
-	test.handle(Arc::new(Tmp(10)), Atom::from(""), Args::new(0));
+	test.handle(Arc::new(Tmp(10)), Atom::from(""), Args::OneArgs(Arc::new(Vec::new())));
 }
