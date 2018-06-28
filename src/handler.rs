@@ -24,7 +24,7 @@ pub trait Env {
 /*
 * 通用处理器
 */
-pub trait Handler {
+pub trait Handler: Send + Sync {
     type A;
     type B;
     type C;
