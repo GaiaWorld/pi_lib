@@ -130,7 +130,7 @@ fn test_handler() {
 		type H = ();
 		type HandleResult = ();
 
-		fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
+		fn handle(&self, env: Arc<Env>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
 			return;
 		}
 	}
