@@ -64,8 +64,11 @@ impl<T: Clone + Ord> Heap<T> {
 		}
 	}
 
-	pub fn get_mut(&mut self, index: usize) -> &mut T{
-		&mut self.0[index].0
+	pub fn get_mut(&mut self, index: usize) -> Option<&mut T>{
+		match self.0.get_mut(index){
+			Some(v) => Some(&mut v.0),
+			None => {None}
+		}
 	}
 
 	pub fn len(&self) -> usize{
@@ -110,6 +113,9 @@ impl<T: Clone + Ord> Heap<T> {
 				let c = arr[parent].clone();
 				c.1.store((cur as isize) + 1, AOrd::Relaxed);
 				arr[cur] = c;
+				if parent == 0{
+					break;
+				}
 				// 往上迭代
 				cur = parent;
 				parent = (cur - 1) >> 1;
