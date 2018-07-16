@@ -67,7 +67,7 @@ impl<T: Clone + Ord> Heap<T> {
 	pub fn get_mut(&mut self, index: usize) -> Option<&mut T>{
 		match self.0.get_mut(index){
 			Some(v) => Some(&mut v.0),
-			None => {None}
+			None => None
 		}
 	}
 
@@ -145,17 +145,18 @@ impl<T: Clone + Ord> Heap<T> {
 				child = right;
 			}
 			
-			if element.0.cmp(&arr[child].0) == self.1 {
-				break;
-			} else {
-				let c = arr[child].clone();
-				c.1.store((cur as isize) + 1, AOrd::Relaxed);
-				arr[cur] = c;
-				
-				// 往下迭代
-				cur = child;
-				left = (cur << 1) + 1;
-				right = left + 1;
+			match element.0.cmp(&arr[child].0) == self.1 {
+				true => break,
+				false => {
+					let c = arr[child].clone();
+					c.1.store((cur as isize) + 1, AOrd::Relaxed);
+					arr[cur] = c;
+					
+					// 往下迭代
+					cur = child;
+					left = (cur << 1) + 1;
+					right = left + 1;
+				}
 			}
 		}
 		element.1.store((cur as isize) + 1, AOrd::Relaxed);
