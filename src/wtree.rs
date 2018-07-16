@@ -1,5 +1,5 @@
 /**
- * 线程不安全的堆，支持根据索引快速调整位置或删除
+ * 权重树
  */
 
 use std::sync::atomic::{AtomicUsize, Ordering as AOrd};
