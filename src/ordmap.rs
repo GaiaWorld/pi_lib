@@ -6,6 +6,7 @@
 
 use std::intrinsics;
 use std::mem;
+use std::cmp::Ordering;
 //use std::ops::{Generator, GeneratorState};
 
 
@@ -20,18 +21,39 @@ pub enum ActionResultType {
 	Delete,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Entry<K: Clone, V: Clone>(pub K, pub V);
 impl<K: Clone, V: Clone> Entry<K, V> {
 	pub fn new(k: K, v: V) -> Self {
 		Entry(k, v)
 	}
 }
+
+impl<K: Ord + Clone, V: Clone> PartialEq for Entry<K, V> {
+	fn eq(&self, other: &Entry<K, V>) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<K: Ord + Clone, V: Clone> PartialOrd for Entry<K, V> {
+	fn partial_cmp(&self, other: &Entry<K, V>) -> Option<Ordering> {
+        Some(self.0.cmp(&other.0))
+    }
+}
+
+impl<K: Ord + Clone, V: Clone> Eq for Entry<K, V> {}
+
+impl<K: Ord + Clone, V: Clone> Ord for Entry<K, V> {
+	fn cmp(&self, other: &Entry<K, V>) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 pub trait ImOrdMap {
 	type Key: Clone;
 	type Val: Clone;
 	fn new() -> Self;
-	//fn from_order(Vec<Entry<Self::Key, Self::Val>>) -> Self;
+	fn from_order(Vec<Entry<Self::Key, Self::Val>>) -> Self;
 	fn is_empty(&self) -> bool;
 	fn size(&self) -> usize;
 	fn has(&self, &Self::Key) -> bool;
@@ -40,10 +62,6 @@ pub trait ImOrdMap {
 	fn max(&self) -> Option<&Entry<Self::Key, Self::Val>>;
 	fn rank(&self, &Self::Key) -> isize;
 	fn index(&self, usize) -> Option<&Entry<Self::Key, Self::Val>>;
-	// fn keys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> Generator;
-	//fn values(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
-	//fn entrys(&self, Self::Key: Option<&Self::Key>, descending: bool) -> gen;
-	fn select<F>(&self, Option<&Self::Key>, descending: bool, &mut F) where F: FnMut(&Entry<Self::Key, Self::Val>);
 
 	fn insert(&self, Self::Key, Self::Val) -> Option<Self> where Self: Sized;
 	fn update(&self, Self::Key, Self::Val, bool) -> Option<(Option<Self::Val>, Self)> where Self: Sized;
@@ -53,8 +71,14 @@ pub trait ImOrdMap {
 	fn pop_min(&self, bool) -> Option<(Option<Entry<Self::Key, Self::Val>>, Self)> where Self: Sized;
 	fn pop_max(&self, bool) -> Option<(Option<Entry<Self::Key, Self::Val>>, Self)> where Self: Sized;
 	fn action<F>(&self, &Self::Key, &mut F) -> Option<(ActionResultType, Self)> where F: FnMut(Option<&Self::Val>) -> ActionResult<Self::Val>, Self: Sized;
-	// fn map(&self, Fn) -> Self;
+	fn map<F>(&self, &mut F) -> Self where F: FnMut(&Entry<Self::Key, Self::Val>) -> ActionResult<Self::Val>, Self: Sized; 
+}
 
+pub trait Iter<'a>: ImOrdMap{
+	type K: 'a + Clone + Ord;
+	type V: 'a + Clone;
+	type IterType: Iterator<Item= &'a Entry<Self::K, Self::V>>;
+	fn iter(&self, Option<&Self::Key>, bool) -> Self::IterType;
 }
 
 
@@ -63,7 +87,29 @@ pub struct OrdMap<T:Clone> {
 	root: T,
 }
 
-impl<T: ImOrdMap + Clone> OrdMap<T> {
+pub struct Keys<'a, T: Iter<'a>>{
+	inner: T::IterType
+}
+
+impl<'a, T: Iter<'a>> Iterator for Keys<'a, T>{
+	type Item = &'a T::K;
+	fn next(&mut self) -> Option<Self::Item>{
+		self.inner.next().map(|Entry(k, _)| k)
+	}
+}
+
+pub struct Values<'a, T: Iter<'a>>{
+	inner: T::IterType
+}
+
+impl<'a, T: Iter<'a>> Iterator for Values<'a, T>{
+	type Item = &'a T::V;
+	fn next(&mut self) -> Option<Self::Item>{
+		self.inner.next().map(|Entry(_, v)| v)
+	}
+}
+
+impl<'a, T: ImOrdMap + Clone + Iter<'a>> OrdMap<T> {
 	/**
 	 * 新建
 	 */
@@ -72,6 +118,7 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 			root: map,
 		}
 	}
+
 	/**
 	 * 判断指针是否相等
 	 */
@@ -133,18 +180,27 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 	pub fn index(&self, i: usize) -> Option<&Entry<T::Key, T::Val>> {
 		self.root.index(i)
 	}
-	// /**
-	//  * 返回从指定键开始的键迭代器，升序或降序，如果不指定键，则从最大或最小键开始，
-	//  */
-	// fn keys(&self, Option<&Self::Key>, descending: bool) -> Generator;
-	//fn values(&self, Option<&Self::Key>, descending: bool) -> gen;
-	//fn entrys(&self, Option<&Self::Key>, descending: bool) -> gen;
-	/**
-	 * 选择器方法，从指定键开始进行选择，TODO 升序或降序，如果不指定键，则从最小键开始
-	 */
-	pub fn select<F>(&self, key: Option<&T::Key>, descending: bool, func: &mut F) where F: FnMut(&Entry<T::Key, T::Val>) {
-		self.root.select(key, descending, func)
+
+	//返回从指定键开始的键升序或降序迭代器，如果不指定键，则从最小或最大键开始
+	//Returns the key ascending or descending iterator starting from the specified key. If the key is not specified, the minimum or maximum key starts.
+	pub fn keys(&self, key: Option<&T::Key>, descending: bool) -> Keys<'a, T> {
+		Keys{
+			inner: self.root.iter(key, descending)
+		}
 	}
+
+	//返回从指定键开始的值升序或降序迭代器，如果不指定键，则从最小或最大键开始
+	//Returns the value ascending or descending iterator starting from the specified key. If the key is not specified, the minimum or maximum key starts
+	pub fn values(&self, key: Option<&T::Key>, descending: bool) -> Values<'a, T> {
+		Values{
+			inner: self.root.iter(key, descending)
+		}
+	}
+
+	pub fn iter(&self, key: Option<&T::Key>, descending: bool) -> T::IterType {
+		self.root.iter(key, descending)
+	}
+
 	/**
 	 *  插入一个新的键值对(不允许插入存在的key)
 	 */
@@ -237,7 +293,13 @@ impl<T: ImOrdMap + Clone> OrdMap<T> {
 			_ => None,
 		}
 	}
-	// fn map(&mut self, func: &mut F) ->usize where F: FnMut(Option<&Self::Val>) {
+
+	/**
+	 * 对指定的键用指定的函数进行操作，函数返回ActionResult, 表示放弃 删除，否则为更新或插入值
+	 */
+	pub fn map<F>(&mut self, func: &mut F) where F: FnMut(&Entry<T::Key, T::Val>) -> ActionResult<T::Val> {
+		self.root = self.root.map(func);
+	}
 
 	/**
 	 *  多线程下，安全的插入一个新的键值对(不允许插入存在的key)

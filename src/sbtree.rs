@@ -7,9 +7,12 @@ macro_rules! custom_ref { ($x:ident) => (
 
 use std::cmp::{Ord, Ordering};
 //use std::ops::{Generator, GeneratorState};
+use core::marker::PhantomData;
+use std::mem::{uninitialized};
+use core::ops::Deref;
 
 //use std::fmt::{Debug};
-use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap};
+use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap, Iter};
 
 
 #[inline]
@@ -77,6 +80,100 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 		Self::new(size, left.left.clone(), left.entry.clone(), new_tree(Self::new(lsize + rsize + 1, left.right.clone(), e, right.clone())))
 	}
 
+	fn actions<F>(node: &Tree<K, V>,  func: &mut F) -> Option<Tree<K, V>> where F: FnMut(&Entry<K, V>) -> ActionResult<V>{
+		match node{
+			Some(n) => {
+				let result = func(&n.entry);
+				let (left, right) = match Self::actions(&n.left, func) {
+					Some(l) => {
+						match Self::actions(&n.right, func) {
+							Some(r) => (l, r),
+							None => (l, n.right.clone())
+						}
+					}
+					None => {
+						match Self::actions(&n.right, func) {
+							Some(r) => (n.left.clone(), r),
+							None => {
+								match result{
+									ActionResult::Ignore => return None,
+									_ => (n.left.clone(), n.right.clone()),
+								}
+							}
+						}
+					}
+				};
+
+				let l_size = match &left {
+					&Some(ref l) => l.size,
+					None => 0,
+				};
+
+				let r_size = match &right {
+					&Some(ref r) => r.size,
+					None => 0,
+				};
+		
+				let root = match result{
+					ActionResult::Ignore => Node::new(1 + r_size + l_size, left, n.entry.clone(), right),
+					ActionResult::Delete => {
+						match Node::delete(r_size + l_size, &left, &right) {
+							Some(e) => Node::new(e.size, e.left.clone(), e.entry.clone(), e.right.clone()),
+							None => return Some(None),
+						}
+					},
+					ActionResult::Upsert(val) => Node::new(1 + r_size + l_size, left, Entry(n.entry.0.clone(), val), right),
+				};
+
+				Some(new_tree(Node::ratotes(root)))
+			},
+			None => None
+		}
+	}
+
+	//多次旋转
+	fn ratotes (self) -> Self {
+		match &self.left {
+			&Some(ref l) => {
+				match &self.right {
+					&Some(ref r) => {
+						match (*r).right {
+							Some(ref rr) if (*rr).size > (*l).size => return Self::ratotes(Self::left_ratote(self.size, &self.left, self.entry.clone(), &*r)),
+							_ => (),
+						};
+
+						match (*r).left {
+							Some(ref rl) if (*rl).size > (*r).size => {
+								return Self::ratotes(Self::left_ratote(self.size, &self.left, self.entry.clone() , &Self::right_ratote((*r).size, &*rl, (*r).entry.clone(), &(*r).left)))
+							},
+							_ => (),
+						}
+
+						match (*l).left {
+							Some(ref ll) if (*ll).size > (*r).size => return Self::ratotes(Self::right_ratote(self.size, &*l, self.entry.clone(), &self.right)),
+							_ => (),
+						};
+						
+						match (*l).right {
+							Some(ref lr) if (*lr).size > (*r).size => {
+								return Self::ratotes(Self::right_ratote(self.size, &Self::left_ratote((*l).size, &(*r).left , (*l).entry.clone(), &*lr), self.entry.clone(), &self.right))
+							},
+							_ => (),
+						}
+					},
+					_ => (),
+				}
+			},
+			_ => {
+				match &self.right {
+					&Some(ref r) if (*r).size > 1 => return Self::ratotes(Self::left_ratote(self.size, &None, self.entry.clone(), &(*r))),
+					_ => (),
+				}
+			},
+		};
+		self
+	}
+
 	//Maintain操作，Maintain(T)用于修复以T为根的 SBT。调用Maintain(T)的前提条件是T的子树都已经是SBT。
 	// 左节点增加大小，Maintain操作
 	//#[inline]
@@ -108,6 +205,8 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 		};
 		new_tree(Self::new(size, left.clone(), e, right.clone()))
 	}
+
+
 	// 右节点增加大小，Maintain操作
 	//#[inline]
 	fn maintain_right (size: usize, left: &Tree<K, V>, e: Entry<K, V>, right: &Tree<K, V>) -> Tree<K, V> {
@@ -161,20 +260,6 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 		}
 	}
 
-	fn select<F>(&self, func: &mut F) where F: FnMut(&Entry<K, V>) {
-		match self.left {
-			Some(ref x) => x.select(func),
-			_ => ()
-		};
-		func(&self.entry);
-		match self.right {
-			Some(ref x) => x.select(func),
-			_ => ()
-		};
-	}
-	fn select_key<F>(&self, _key: &K, _func: &mut F) where F: FnMut(&Entry<K, V>) {
-
-	}
 	// 递归删除最小的键值对
 	fn pop_min(&self, copy: bool) -> (Option<Entry<K, V>>, Tree<K, V>) {
 		match self.left {
@@ -228,7 +313,6 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 			_ => (None, Self::delete(self.size - 1, &self.left, &self.right)),
 		}
 	}
-
 }
 
 
@@ -237,7 +321,7 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 // 	fn fmt(&self, f: &mut Formatter) -> Result;
 // }
 
-impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { // 
+impl< K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { // 
 	type Key = K;
 	type Val = V;
 	/**
@@ -246,6 +330,19 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 	fn new() -> Self {
 		None
 	}
+
+	fn from_order(mut arr: Vec<Entry<K, V>>) -> Self{
+		match arr.len(){
+			0 => None,
+			_ => {
+				arr.sort();
+				let len = arr.len();
+				new_tree(creat_node(&mut arr, 0, len))
+			}
+		}
+	}
+
+
 	// /**
 	//  * 克隆
 	//  */
@@ -439,20 +536,6 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 			_ => None
 		}
 	}
-	/**
-	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始, TODO descending还未实现
-	 */
-	fn select<F>(&self, key: Option<&K>, _descending: bool, func: &mut F) where F: FnMut(&Entry<K, V>) {
-		match self {
-			&Some(ref node) => {
-				match key {
-					Some(ref k) => node.select_key(k, func),
-					_ => node.select(func),
-				};
-			},
-			_ => (),
-		}
-	}
 
 	// 递归插入
 	fn insert(&self, key: K, value: V) -> Option<Self> {
@@ -583,6 +666,197 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 		}
 	}
 
+	fn map<F>(&self, func: &mut F) -> Self where F: FnMut(&Entry<Self::Key, Self::Val>) -> ActionResult<Self::Val>{
+		match Node::actions(self, func){
+			Some(node) => node,
+			None => self.clone()
+		}
+	}
+}
+//升序或降序引用迭代器
+pub struct IterTree<'a, K: 'a + Clone, V: 'a + Clone>{
+    arr: [*const Node<K, V>; 32],
+	len: usize,
+	next_fn: fn(&mut IterTree<'a, K, V>) -> Option<&'a Entry<K, V>>,
+	marker: PhantomData<&'a Node<K, V>>
+}
+
+impl<'a, K: 'a + Clone, V: 'a + Clone> IterTree<'a, K, V>{
+	fn next_ascending(it: &mut IterTree<'a, K, V>) -> Option<&'a Entry<K, V>>{
+		match it.len{
+			0 => return None,
+			_ => {
+				it.len -= 1;
+				let node = unsafe{&*it.arr[it.len]};
+				match node.right{
+					Some(ref right) => {
+						it.arr[it.len] = right.deref() as *const Node<K, V>;
+						it.len += 1;
+						it.len += down_l(&mut it.arr, &right, it.len);
+					}
+					None => {}
+				};
+				return Some(&node.entry);
+			},
+		}
+	}
+
+	fn next_descending(it: &mut IterTree<'a, K, V>) -> Option<&'a Entry<K, V>>{
+		match it.len{
+			0 => return None,
+			_ => {
+				it.len -= 1;
+				let node = unsafe{&*it.arr[it.len]};
+				match node.left{
+					Some(ref left) => {
+						it.arr[it.len ] = left.deref() as *const Node<K, V>;
+						it.len += 1;
+						it.len += down_r(&mut it.arr, &left, it.len);
+					}
+					None => {}
+				};
+				return Some(&node.entry);
+			},
+		}
+	}
+}
+
+impl<'a, K: Clone, V: Clone> Iterator for IterTree<'a, K, V>{
+	type Item = &'a Entry<K, V>;
+	fn next(&mut self) -> Option<Self::Item>{
+		(self.next_fn)(self)
+	}
+}
+
+impl<'a, K: 'a + Clone + Ord, V: 'a + Clone> Iter<'a> for Tree<K, V>{
+	type K = K;
+	type V = V;
+	type IterType = IterTree<'a, K, V>;
+	fn iter(&self, key: Option<&K>, descending: bool) -> Self::IterType{
+		let mut it = IterTree{
+			arr: unsafe{uninitialized()},
+			len: 0,
+			next_fn: IterTree::next_ascending,
+			marker: PhantomData
+		};
+		match self {
+			Some(ref node) => {
+				match key{
+					Some(k) => {
+						match descending{
+							true => {it.len = some_down_key_r(&mut it.arr, node, k, it.len); it.next_fn = IterTree::next_descending;},
+							false => it.len = some_down_key_l(&mut it.arr, node, k, it.len)
+						};
+					},
+					None => {
+						it.arr[it.len] = node.deref();
+						it.len += 1;
+						match descending{
+							true => {it.len += down_r(&mut it.arr, node, it.len); it.next_fn = IterTree::next_descending;},
+							false => it.len += down_l(&mut it.arr, node, it.len)
+						};
+					}
+				}
+			},
+			_ => {}
+		}
+		it
+	}
+} 
+
+fn creat_node<K: Ord + Clone, V: Clone>(arr: &mut Vec<Entry<K, V>>, start: usize, len: usize) -> (Node<K, V>){
+	let r_size = (len-1)/2;
+	let l_size = len - r_size - 1;
+	let index = start + l_size;
+
+	let r_node = match r_size{
+		0 => None,
+		_ => new_tree(creat_node(arr, index + 1, r_size))
+	};
+
+	let mut root = Node::new(len, None, arr.pop().unwrap(), r_node);
+
+	root.left = match l_size{
+		0 => None,
+		_ => {new_tree(creat_node(arr, index - l_size, l_size))}
+	};
+	root
+}
+
+fn down_r<'a, K: Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], last: &'a Node<K, V>, index: usize) -> usize{
+	match last.right{
+		Some(ref v) => {
+			arr[index] = v.deref();
+			down_r(arr, v, index + 1) + 1
+		},
+		None => 0,
+	}
+}
+
+fn down_l<'a, K: Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], last: &'a Node<K, V>, index: usize) -> usize{
+	match last.left{
+		Some(ref v) => {
+			arr[index] = v.deref();
+			down_l(arr, v, index + 1) + 1
+		},
+		None => 0,
+	}
+}
+
+fn down_key_l<'a, K: Ord + Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], last: &'a Node<K, V>, key: &K, index: usize) -> usize{
+	match last.left{
+		Some(ref v) => {
+			some_down_key_l(arr, v, key, index)
+		},
+		None => 0
+	}
+}
+
+fn down_key_r<'a, K: Ord + Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], last: &'a Node<K, V>, key: &K, index: usize) -> usize{
+	match last.right{
+		Some(ref v) => {
+			some_down_key_r(arr, v, key, index)
+		},
+		None => 0
+	}
+}
+
+fn some_down_key_l<'a, K: Ord + Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], v: &'a Node<K, V>, key: &K, index: usize) -> usize{
+	match key.cmp(&v.entry.0) {
+		Ordering::Less => {
+			arr[index] = v;
+			return down_key_l(arr, v, key, index + 1) + 1;
+		},
+		Ordering::Greater => {
+			match v.right{
+				Some(ref r) => return some_down_key_l(arr, r, key, index),
+				None => return 0,
+			}
+		},
+		Ordering::Equal => {
+			arr[index] = v;
+			return 1;
+		}
+	} 
+}
+
+fn some_down_key_r<'a, K: Ord + Clone, V: Clone>(arr: &mut [*const Node<K, V>; 32], v: &'a Node<K, V>, key: &K, index: usize) -> usize{
+	match key.cmp(&v.entry.0) {
+		Ordering::Less => {
+			match v.left{
+				Some(ref l) => return some_down_key_r(arr, l, key, index),
+				None => return 0,
+			}
+		},
+		Ordering::Greater => {
+			arr[index] = v;
+			return down_key_r(arr, v, key, index + 1) + 1;
+		},
+		Ordering::Equal => {
+			arr[index] = v;
+			return 1;
+		}
+	} 
 }
 
 )}
@@ -590,4 +864,90 @@ impl<K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 custom_ref!(Rc);
 pub fn new<K: Clone+Ord, V: Clone>() -> Tree<K, V> {
 	None
+}
+
+#[test]
+pub fn test_sbtree(){
+	use ordmap::{ActionResult, Entry, ImOrdMap, Iter};
+	//测试迭代---------------------------------------------------------------------------------
+	let mut tree = Tree::new();
+	for i in 1..101{
+		let r = tree.insert(i,i);
+		match r{
+			Some(t) => {tree = t;}
+			None => {}
+		}
+	}
+
+	let mut i = 1;
+	for v in Iter::iter(&mut tree, None, false) {//升序迭代
+		//print!("{},", v.0);
+		assert_eq!(v.0, i);
+		i += 1;
+	}
+
+	let mut i = 100;
+	for v in Iter::iter(&mut tree, None, true){//降序迭代
+		//print!("{},", v.0);
+		assert_eq!(v.0, i);
+		i -= 1;
+	}
+
+	let mut i = 50;
+	for v in Iter::iter(&mut tree, Some(&50), false){//从指定键升序迭代
+		//print!("{},", v.0);
+		assert_eq!(v.0, i);
+		i += 1;
+	}
+	assert_eq!(i, 101);
+
+	let mut i = 50;
+	for v in  Iter::iter(&mut tree, Some(&50), true){//从指定键降序迭代
+		assert_eq!(v.0, i);
+		i -= 1;
+	}
+	assert_eq!(i, 0);
+
+	//测试from_order---------------------------------------------------------------------------------
+	let mut arr = Vec::new();
+	for i in 1..100{
+		arr.push(Entry(i, i));
+	}
+	let mut tree = Tree::from_order(arr);
+	let mut i = 1;
+	for v in  Iter::iter(&mut tree, None, false){
+		//print!("{},", v.0);
+		assert_eq!(v.0, i);
+		i += 1;
+	}
+
+	//测试map---------------------------------------------------------------------------------
+	let mut arr = Vec::new();
+	for i in 1..101{
+		arr.push(Entry(i, i));
+	}
+	let tree = Tree::from_order(arr);
+	let mut tree_new = <Tree<i32, i32> as ImOrdMap>::map(&tree, &mut |el: &Entry<i32, i32>|{ 
+		if el.0 < 10 || el.0 == 45 || el.0 == 52{
+			return ActionResult::Upsert(1000);
+		}else if el.0 > 90 || el.0 == 30 || el.0 == 58{
+		 	return ActionResult::Delete;
+		}else{
+			return ActionResult::Ignore
+		}
+	});
+	let mut i = 1;
+	for el in  Iter::iter(&mut tree_new, None, false){
+		//print!("{},", el.1);
+		if el.0 < 10 || el.0 == 45 || el.0 == 52{
+			assert_eq!(el.1, 1000);
+		}else{
+			assert_eq!(el.1, i);
+		}
+
+		if el.0 == 29 || el.0 == 57{
+		 	i += 1;
+		}
+		i += 1;
+	}
 }

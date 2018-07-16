@@ -36,6 +36,7 @@ pub mod cowlist;
 pub mod heap;
 pub mod wheel;
 pub mod handler;
+pub mod wtree;
 
 #[macro_use]
 extern crate lazy_static;
