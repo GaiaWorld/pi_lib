@@ -260,20 +260,6 @@ impl<K: Ord+Clone, V: Clone> Node<K, V> {
 		}
 	}
 
-	fn select<F>(&self, func: &mut F) where F: FnMut(&Entry<K, V>) {
-		match self.left {
-			Some(ref x) => x.select(func),
-			_ => ()
-		};
-		func(&self.entry);
-		match self.right {
-			Some(ref x) => x.select(func),
-			_ => ()
-		};
-	}
-	fn select_key<F>(&self, _key: &K, _func: &mut F) where F: FnMut(&Entry<K, V>) {
-
-	}
 	// 递归删除最小的键值对
 	fn pop_min(&self, copy: bool) -> (Option<Entry<K, V>>, Tree<K, V>) {
 		match self.left {
@@ -548,20 +534,6 @@ impl< K: Ord+Clone, V: Clone> ImOrdMap for Tree<K, V> { //
 				Some(&node.entry)
 			},
 			_ => None
-		}
-	}
-	/**
-	 * 选择器方法，从指定键开始进行选择，如果不指定键，则从最小键开始, TODO descending还未实现
-	 */
-	fn select<F>(&self, key: Option<&K>, _descending: bool, func: &mut F) where F: FnMut(&Entry<K, V>) {
-		match self {
-			&Some(ref node) => {
-				match key {
-					Some(ref k) => node.select_key(k, func),
-					_ => node.select(func),
-				};
-			},
-			_ => (),
 		}
 	}
 

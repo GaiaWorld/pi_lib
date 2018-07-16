@@ -62,7 +62,6 @@ pub trait ImOrdMap {
 	fn max(&self) -> Option<&Entry<Self::Key, Self::Val>>;
 	fn rank(&self, &Self::Key) -> isize;
 	fn index(&self, usize) -> Option<&Entry<Self::Key, Self::Val>>;
-	fn select<F>(&self, Option<&Self::Key>, descending: bool, &mut F) where F: FnMut(&Entry<Self::Key, Self::Val>);
 
 	fn insert(&self, Self::Key, Self::Val) -> Option<Self> where Self: Sized;
 	fn update(&self, Self::Key, Self::Val, bool) -> Option<(Option<Self::Val>, Self)> where Self: Sized;
@@ -202,12 +201,6 @@ impl<'a, T: ImOrdMap + Clone + Iter<'a>> OrdMap<T> {
 		self.root.iter(key, descending)
 	}
 
-	/**
-	 * 选择器方法，从指定键开始进行选择，TODO 升序或降序，如果不指定键，则从最小键开始
-	 */
-	pub fn select<F>(&self, key: Option<&T::Key>, descending: bool, func: &mut F) where F: FnMut(&Entry<T::Key, T::Val>) {
-		self.root.select(key, descending, func)
-	}
 	/**
 	 *  插入一个新的键值对(不允许插入存在的key)
 	 */
