@@ -2,7 +2,6 @@
 #[cfg(test)]
 extern crate pi_lib;
 
-use pi_lib::ordmap::Entry;
 use pi_lib::ordmap::{OrdMap};
 use pi_lib::sbtree::{Tree, new};
 use pi_lib::atom::Atom;
@@ -20,8 +19,9 @@ fn atom() {
 fn show(t: &OrdMap<Tree<usize, usize>>) -> Vec<usize> {
 	let mut v = Vec::new();
 	{
-		let mut f = |e:&Entry<usize, usize>| {v.push(e.0.clone()); v.push(e.1.clone())};
-		t.select(None, false, &mut f);
+		for e in t.iter(None, false){
+			v.push(e.0.clone()); v.push(e.1.clone())
+		}
 	}
 	v
 }
@@ -95,7 +95,6 @@ fn sb_test() {
 
 #[test]
 fn test_handler() {
-	use std::any::Any;
 	use std::sync::Arc;
 
 	use pi_lib::atom::Atom;
@@ -104,15 +103,15 @@ fn test_handler() {
 	struct Tmp(u8);
 
 	impl Env for Tmp {
-		fn get_attr(&self, key: Atom) -> Option<GenType> {
+		fn get_attr(&self, _key: Atom) -> Option<GenType> {
 			None
 		}
 
-		fn set_attr(&mut self, key: Atom, value: GenType) -> Option<GenType> {
+		fn set_attr(&mut self, _key: Atom, _value: GenType) -> Option<GenType> {
 			None
 		}
 
-		fn remove_attr(&mut self, key: Atom) -> Option<GenType> {
+		fn remove_attr(&mut self, _key: Atom) -> Option<GenType> {
 			None
 		}
 	}
@@ -130,7 +129,7 @@ fn test_handler() {
 		type H = ();
 		type HandleResult = ();
 
-		fn handle(&self, env: Arc<Env>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
+		fn handle(&self, _env: Arc<Env>, _func: Atom, _args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
 			return;
 		}
 	}

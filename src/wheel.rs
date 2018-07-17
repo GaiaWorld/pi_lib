@@ -1,5 +1,5 @@
 /**
- * 线程不安全的轮结构，支持根据索引快速删除
+ * 线程不安全的轮结构，支持根据索引快速删除, 精度为10毫秒， 
  */
 use std::sync::atomic::{AtomicIsize, Ordering as AOrd};
 use std::sync::Arc;
@@ -44,11 +44,12 @@ impl<T: Clone> Wheel<T>{
 		self.time = ms;
 	}
 
+	//插入元素
 	pub fn insert(&mut self, item: Item<T>) -> Arc<AtomicIsize>{
-		let mut diff = match item.time_point > self.time {
-			true => item.time_point - self.time,
-			false => 0,
-		};
+		// 计算时间差
+		let mut diff = sub(item.time_point, self.time);
+
+		//如果时间差为0， 则将其插入到zero_arr（特殊处理0毫秒）
 		if diff == 0 {
 			let index = Arc::new(AtomicIsize::new(sum_index(244, self.zero_arr.len())));
 			self.zero_arr.push((item, index.clone()));
@@ -151,27 +152,16 @@ impl<T: Clone> Wheel<T>{
 				true => self.get_from_heap(),
 				false => self.forward(layer + 1)
 			};
-			// if layer == 0 {
-			// 	for v in above.into_iter(){
-			// 		let d = sub(v.0.time_point, self.time);
-			// 		self.insert_ms(v, d)
-			// 	}
-			// }else {
-			// 	for v in above.into_iter() {
-			// 		let d = sub(v.0.time_point, self.time);
-			// 		self.insert_wheel(v, layer, d)
-			// 	}
-			// }
 			for v in above.into_iter() {
-				let diff = sub(v.0.time_point, self.time);
-				if diff < 1000{
-					self.insert_ms(v, diff);
-				}else if diff < 61000{
-					self.insert_wheel(v, 1, diff);
-				}else if diff < 3661000{
-					self.insert_wheel(v, 2, diff);
-				}else{
-					self.insert_wheel(v, 3, diff);
+				let diff = match v.0.time_point > self.time{
+					true => v.0.time_point - self.time - 1,
+					false => 0,
+				};
+				match diff{
+					0..1000 => self.insert_ms(v, diff),
+					1000..61000 => self.insert_wheel(v, 1, diff),
+					61000..3661000 => self.insert_wheel(v, 2, diff),
+					_ => self.insert_wheel(v, 3, diff)
 				}
 			}
 		}
@@ -255,7 +245,7 @@ fn test(){
 	let mut wheel = Wheel::new();
 	let mut arr = Vec::new();
 	let times = [0, 10, 1000, 3000, 3100, 50, 60000, 61000, 3600000, 3500000, 86400000, 86600000, 90061001];
-	let expect_index = [-1, -2, -101, -103, -347, -6, -160, -161, -220, -218, -244, -488, 1];
+	let expect_index = [-245, -1, -100, -102, -103, -5, -159, -160, -219, -218, -243, -244, 1];
 	let mut i = 0;
 	for v in times.iter(){
 		let index = wheel.insert(Item{elem: v.clone(), time_point: v.clone() as u64});
@@ -266,25 +256,27 @@ fn test(){
 
 	let r = wheel.roll();
 	assert_eq!(r.len(), 1);
-	assert_eq!(r[0].0.time_point, 0);
-	let r = wheel.roll();
-	assert_eq!(r.len(), 1);
 	assert_eq!(r[0].0.time_point, 10);
 
-	for _i in 3..101{
+	for _i in 1..4{
 		wheel.roll();
 	}
+	let r = wheel.roll();
+	assert_eq!(r.len(), 1);
+	assert_eq!(r[0].0.time_point, 50);
 
+	for _i in 1..95{
+		wheel.roll();
+	}
 	let r = wheel.roll();
 	assert_eq!(r.len(), 1);
 	assert_eq!(r[0].0.time_point, 1000);
 
-	for _i in 2..201{
+	for _i in 1..200{
 		wheel.roll();
 	}
-
 	let r = wheel.roll();
-	assert_eq!(r.len(), 2);
+	assert_eq!(r.len(), 1);
 	assert_eq!(r[0].0.time_point, 3000);
 
 	let r = wheel.remove(arr[7].clone());
