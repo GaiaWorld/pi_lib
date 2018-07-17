@@ -1,4 +1,5 @@
 #![crate_type = "rlib"]
+#![feature(const_vec_new)]
 #![feature(integer_atomics)]
 #![feature(duration_extras)]
 #![feature(custom_derive,asm,box_syntax,box_patterns)]
