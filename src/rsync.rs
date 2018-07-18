@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use adler32::RollingAdler32;
-use crc::crc32::{Digest, KOOPMAN};
+use crc::crc32::{Digest, IEEE};
 use crc::Hasher32;
 
 pub struct RSync{
@@ -35,7 +35,7 @@ impl RSync{
 		let mut last_matched_end = 0;
 		let mut prev_rolling_weak: Option<RollingAdler32> = None;
 		let mut hashtable = create_hashtable(old_check_sums);
-		let mut crc = Digest::new(KOOPMAN);
+		let mut crc = Digest::new(IEEE);
 		
 		let mut weak;
 		let mut weak_16;
@@ -129,7 +129,7 @@ impl RSync{
 		let mut results: Vec<CheckSum> = Vec::new();
 		let mut result;
 
-		let mut d = Digest::new(KOOPMAN);
+		let mut d = Digest::new(IEEE);
 		while start < data_len{
 			let chunk  = &data[start..end];
 			let weak = RollingAdler32::from_buffer(chunk).hash();
