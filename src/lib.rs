@@ -1,4 +1,5 @@
 #![crate_type = "rlib"]
+#![feature(rustc_private)]
 #![feature(const_vec_new)]
 #![feature(integer_atomics)]
 #![feature(duration_extras)]
@@ -18,6 +19,7 @@
 
 extern crate core;
 extern crate fnv;
+extern crate crc;
 
 pub mod slab;
 pub mod rc;
@@ -38,6 +40,11 @@ pub mod heap;
 pub mod wheel;
 pub mod handler;
 pub mod wtree;
+pub mod adler32;
+pub mod rsync;
 
 #[macro_use]
 extern crate lazy_static;
+
+#[cfg(test)]
+extern crate rand;

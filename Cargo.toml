@@ -6,3 +6,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 [dependencies]
 lazy_static = "*"
 fnv = "1.0.6"
+rand = "0.5.4"
+crc = "1.8.1"
