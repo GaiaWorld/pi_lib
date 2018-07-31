@@ -147,6 +147,8 @@ impl Encode for StructInfo{
 	fn encode(&self, bb: &mut WriteBuffer){
 		self.name.encode(bb);
 		self.name_hash.encode(bb);
+        self.notes.encode(bb);
+        self.fields.encode(bb);
 	}
 }
 
