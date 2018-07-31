@@ -75,7 +75,7 @@ impl Encode for Atom{
 
 impl Decode for Atom{
 	fn decode(bb: &mut ReadBuffer) -> Atom{
-		Atom::from(String::decode(bb)
+		Atom::from(String::decode(bb))
 	}
 }
 
