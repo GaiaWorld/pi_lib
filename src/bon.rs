@@ -39,6 +39,7 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::marker::Sized;
 use std::cmp::{Ord, Eq, PartialOrd, PartialEq, Ordering};
+use std::ops::{Deref};
 
 use data_view::{GetView, SetView};
 use atom::Atom;
@@ -94,6 +95,7 @@ pub struct FieldValue {
 	pub fvalue: EnumValue,
 }
 
+#[derive(Default, Clone, Debug)]
 pub struct ReadBuffer<'a>{
 	// u8数组
 	pub bytes: &'a [u8],
@@ -280,7 +282,7 @@ impl<'a> ReadBuffer<'a>{
 		match t {
 			3 => {0.0},
 			4 => {1.0},
-			6 => {
+			5..7 => {
 				self.head += 4;
 				self.bytes.get_lf32(self.head - 4) as f32
 			},
@@ -594,11 +596,42 @@ impl<'a> ReadBuffer<'a>{
  * @description 二进制数据缓存
  * @example
  */
+#[derive(Default, Clone, Debug, Hash)]
 pub struct WriteBuffer {
 	// u8数组
 	pub bytes: Vec<u8>,
 	// 尾部指针
 	tail:usize,
+}
+
+impl Deref for WriteBuffer{
+	type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.bytes
+    }
+}
+
+impl PartialOrd for WriteBuffer {
+	fn partial_cmp(&self, other: &WriteBuffer) -> Option<Ordering> {
+		ReadBuffer::new(self.bytes.as_slice(), 0).partial_cmp(&ReadBuffer::new(other.bytes.as_slice(), 0))
+	}
+}
+
+impl PartialEq for WriteBuffer{
+	 fn eq(&self, other: &WriteBuffer) -> bool {
+        match self.partial_cmp(other){
+			Some(Ordering::Equal) => return true,
+			_ => return false
+		};
+    }
+}
+
+impl Eq for WriteBuffer{}
+
+impl Ord for WriteBuffer{
+	fn cmp(&self, other: &WriteBuffer) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
 
 impl WriteBuffer{

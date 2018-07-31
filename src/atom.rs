@@ -70,13 +70,12 @@ impl<'a> From<&'a [u8]> for Atom {
 impl Encode for Atom{
 	fn encode(&self, bb: &mut WriteBuffer){
 		(*self.0).0.encode(bb);
-		(*self.0).1.encode(bb);
 	}
 }
 
 impl Decode for Atom{
 	fn decode(bb: &mut ReadBuffer) -> Atom{
-		Atom(Arc::new((String::decode(bb), 0)))
+		Atom::from(String::decode(bb))
 	}
 }
 
