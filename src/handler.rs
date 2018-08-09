@@ -15,10 +15,10 @@ pub trait Env {
     fn get_attr(&self, key: Atom) -> Option<GenType>;
 
     //设置属性，返回上个属性值
-    fn set_attr(&mut self, key: Atom, value: GenType) -> Option<GenType>;
+    fn set_attr(&self, key: Atom, value: GenType) -> Option<GenType>;
 
     //移除属性，返回属性值
-    fn remove_attr(&mut self, key: Atom) -> Option<GenType>;
+    fn remove_attr(&self, key: Atom) -> Option<GenType>;
 }
 
 /*
