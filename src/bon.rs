@@ -1471,6 +1471,30 @@ impl Decode for i128{
 	}
 }
 
+impl Encode for f32{
+	fn encode(&self, bb: &mut WriteBuffer){
+		bb.write_f32(self.clone());
+	}
+}
+
+impl Decode for f32{
+	fn decode(bb: &mut ReadBuffer) -> Self{
+		bb.read_f32()
+	}
+}
+
+impl Encode for f64{
+	fn encode(&self, bb: &mut WriteBuffer){
+		bb.write_f64(self.clone());
+	}
+}
+
+impl Decode for f64{
+	fn decode(bb: &mut ReadBuffer) -> Self{
+		bb.read_f64()
+	}
+}
+
 impl Encode for bool{
 	fn encode(&self, bb: &mut WriteBuffer){
 		bb.write_bool(self.clone());
