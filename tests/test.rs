@@ -98,21 +98,17 @@ fn test_handler() {
 	use std::sync::Arc;
 
 	use pi_lib::atom::Atom;
-	use pi_lib::handler::{Env, GenType, Handler, Args};
+	use pi_lib::handler::{Handler, Args};
+	use pi_lib::gray::GrayVersion;
 
 	struct Tmp(u8);
 
-	impl Env for Tmp {
-		fn get_attr(&self, _key: Atom) -> Option<GenType> {
-			None
+	impl GrayVersion for Tmp {
+		fn get_gray(&self) -> &Option<usize> {
+			&None
 		}
 
-		fn set_attr(&mut self, _key: Atom, _value: GenType) -> Option<GenType> {
-			None
-		}
-
-		fn remove_attr(&mut self, _key: Atom) -> Option<GenType> {
-			None
+		fn set_gray(&mut self, _gray: Option<usize>){
 		}
 	}
 
@@ -129,7 +125,7 @@ fn test_handler() {
 		type H = ();
 		type HandleResult = ();
 
-		fn handle(&self, _env: Arc<Env>, _func: Atom, _args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
+		fn handle(&self, _env: Arc<GrayVersion>, _func: Atom, _args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult {
 			return;
 		}
 	}
