@@ -42,6 +42,7 @@ pub mod handler;
 pub mod wtree;
 pub mod adler32;
 pub mod rsync;
+pub mod gray;
 
 #[macro_use]
 extern crate lazy_static;

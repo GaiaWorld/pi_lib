@@ -6,19 +6,25 @@ use std::collections::HashMap;
 use fnv::FnvHashMap;
 
 use atom::Atom;
-
+use gray::GrayVersion;
 /*
 * 环境
 */
 pub trait Env {
     //获取属性
-    fn get_attr(&self, key: Atom) -> Option<GenType>;
+    fn get_attr(&self, _key: Atom) -> Option<GenType> {
+        None
+    }
 
     //设置属性，返回上个属性值
-    fn set_attr(&self, key: Atom, value: GenType) -> Option<GenType>;
+    fn set_attr(&self, _key: Atom, _value: GenType) -> Option<GenType> {
+        None
+    }
 
     //移除属性，返回属性值
-    fn remove_attr(&self, key: Atom) -> Option<GenType>;
+    fn remove_attr(&self, _key: Atom) -> Option<GenType> {
+        None
+    }
 }
 
 /*
@@ -36,7 +42,7 @@ pub trait Handler: Send + Sync {
     type HandleResult;
 
     //处理方法
-    fn handle(&self, env: Arc<dyn Env>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult;
+    fn handle(&self, env: Arc<dyn GrayVersion>, func: Atom, args: Args<Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G, Self::H>) -> Self::HandleResult;
 }
 
 /*

@@ -148,7 +148,7 @@ impl<T: Clone> Wheel<T>{
 		let r = replace(&mut self.arr[point + s], Vec::new());
 		self.point[layer] = next_tail(point as u8, 1, (START[(layer + 1) as usize] - s as u8) as u8);
 		if self.point[layer] == 0{
-			let above = match layer > 3{
+			let above = match layer > 2{
 				true => self.get_from_heap(),
 				false => self.forward(layer + 1)
 			};
