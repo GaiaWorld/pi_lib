@@ -143,7 +143,7 @@ impl<T: Clone> Wheel<T>{
 		let point = self.point[layer] as usize;
 		let s = START[layer] as usize;
 		let r = replace(&mut self.arr[point + s], Vec::new());
-		self.point[layer] = next_tail(point as u8, 1, (START[(layer + 1) as usize] - s as u8) as u8);
+		self.point[layer] = next_tail(point as u8, 1, CAPACITY[layer]);
 		if self.point[layer] == 0{
 			let above = match layer > 2{
 				true => self.get_from_heap(),
