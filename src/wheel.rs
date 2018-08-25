@@ -140,6 +140,9 @@ impl<T: Clone> Wheel<T>{
 
 	//前进一个单位
 	fn forward(&mut self, layer: usize) -> Vec<(Item<T>, Arc<AtomicIsize>)>{
+		if layer > 2{
+			println!("layer-------------{}", layer);
+		}
 		let point = self.point[layer] as usize;
 		let s = START[layer] as usize;
 		let r = replace(&mut self.arr[point + s], Vec::new());
