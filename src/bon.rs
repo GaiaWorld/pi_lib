@@ -312,7 +312,7 @@ impl<'a> ReadBuffer<'a>{
 		}
 	}
 	/**
-	 * @description 读出一个动态长度，正整数，不允许大于0x20000000。采用网络序，大端在前
+	 * @description 读出一个动态长度，正整数，不允许大于0x20000000
 	 * @example
 	 */
 	pub fn read_lengthen(&mut self) -> u32 {
@@ -761,7 +761,7 @@ impl WriteBuffer{
 		self.tail += 9;
 	}
 	/**
-	 * @description 写入一个动态长度，正整数，不允许大于0x20000000。这个地方需要使用网络序，大端在前
+	 * @description 写入一个动态长度，正整数，不允许大于0x20000000。
 	 * 1字节： 0xxxxxxx
 	 * 2字节： 10xxxxxx xxxxxxxx
 	 * 4字节： 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
