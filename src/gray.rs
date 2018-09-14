@@ -3,6 +3,7 @@ use fnv::FnvHashMap;
 pub trait GrayVersion {
     fn get_gray(&self) -> &Option<usize>;
     fn set_gray(&mut self, Option<usize>);
+	fn get_id(&self) -> usize;
 }
 
 pub trait Gray{}

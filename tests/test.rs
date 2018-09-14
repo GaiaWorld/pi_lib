@@ -110,6 +110,10 @@ fn test_handler() {
 
 		fn set_gray(&mut self, _gray: Option<usize>){
 		}
+
+		fn get_id(&self) -> usize{
+			1
+		}
 	}
 
 	struct Test;

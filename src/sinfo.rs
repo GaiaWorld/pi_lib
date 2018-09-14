@@ -10,6 +10,7 @@ use atom::Atom;
 use bon::{WriteBuffer, ReadBuffer, Encode, Decode};
 
 // 枚举结构体字段的所有类型
+#[derive(Debug)]
 pub enum EnumType {
 	Bool,
 	U8,
@@ -31,39 +32,41 @@ pub enum EnumType {
 	BigI,
 	Str,
 	Bin,
-	UTC,
 	Arr(Arc<EnumType>),
 	Map(Arc<EnumType>, Arc<EnumType>),
 	Struct(Arc<StructInfo>),
+	Option(Arc<EnumType>),
+	Enum(Arc<EnumInfo>)
 }
 
 impl Encode for EnumType{
 	fn encode(&self, bb:&mut WriteBuffer){
 		match self{
-			&EnumType::Bool => {0.encode(bb);},
-			&EnumType::U8 => {1.encode(bb);},
-			&EnumType::U16 => {2.encode(bb);},
-			&EnumType::U32 => {3.encode(bb);},
-			&EnumType::U64 => {4.encode(bb);},
-			&EnumType::U128 => {5.encode(bb);},
-			&EnumType::U256 => {6.encode(bb);},
-			&EnumType::Usize => {7.encode(bb);},
-			&EnumType::I8 => {8.encode(bb);},
-			&EnumType::I16 => {9.encode(bb);},
-			&EnumType::I32 => {10.encode(bb);},
-			&EnumType::I64 => {11.encode(bb);},
-			&EnumType::I128 => {12.encode(bb);},
-			&EnumType::I256 => {13.encode(bb);},
-			&EnumType::Isize => {14.encode(bb);},
-			&EnumType::F32 => {15.encode(bb);},
-			&EnumType::F64 => {16.encode(bb);},
-			&EnumType::BigI => {17.encode(bb);},
-			&EnumType::Str => {18.encode(bb);},
-			&EnumType::Bin => {19.encode(bb);},
-			&EnumType::UTC => {20.encode(bb);},
-			&EnumType::Arr(ref v) => {21.encode(bb); v.encode(bb);},
-			&EnumType::Map(ref k, ref v) => {22.encode(bb); k.encode(bb); v.encode(bb);},
-			&EnumType::Struct(ref v) => {23.encode(bb); v.encode(bb);},
+			&EnumType::Bool => 0.encode(bb),
+			&EnumType::U8 => 1.encode(bb),
+			&EnumType::U16 => 2.encode(bb),
+			&EnumType::U32 => 3.encode(bb),
+			&EnumType::U64 => 4.encode(bb),
+			&EnumType::U128 => 5.encode(bb),
+			&EnumType::U256 => 6.encode(bb),
+			&EnumType::Usize => 7.encode(bb),
+			&EnumType::I8 => 8.encode(bb),
+			&EnumType::I16 => 9.encode(bb),
+			&EnumType::I32 => 10.encode(bb),
+			&EnumType::I64 => 11.encode(bb),
+			&EnumType::I128 => 12.encode(bb),
+			&EnumType::I256 => 13.encode(bb),
+			&EnumType::Isize => 14.encode(bb),
+			&EnumType::F32 => 15.encode(bb),
+			&EnumType::F64 => 16.encode(bb),
+			&EnumType::BigI => 17.encode(bb),
+			&EnumType::Str => 18.encode(bb),
+			&EnumType::Bin => 19.encode(bb),
+			&EnumType::Arr(ref v) => {20.encode(bb); v.encode(bb);},
+			&EnumType::Map(ref k, ref v) => {21.encode(bb); k.encode(bb); v.encode(bb);},
+			&EnumType::Struct(ref v) => {22.encode(bb); v.encode(bb);},
+			&EnumType::Option(ref v) => {23.encode(bb); v.encode(bb);},
+			&EnumType::Enum(ref v) => {24.encode(bb); v.encode(bb);},
 		};
 	}
 }
@@ -92,15 +95,17 @@ impl Decode for EnumType{
 			17 => {EnumType::BigI},
 			18 => {EnumType::Str},
 			19 => {EnumType::Bin},
-			20 => {EnumType::UTC},
-			21 => {EnumType::Arr(Arc::new(EnumType::decode(bb)))},
-			22 => {EnumType::Map(Arc::new(EnumType::decode(bb)), Arc::new(EnumType::decode(bb)))},
-			23 => {EnumType::Struct(Arc::new(StructInfo::decode(bb)))},
+			20 => {EnumType::Arr(Arc::new(EnumType::decode(bb)))},
+			21 => {EnumType::Map(Arc::new(EnumType::decode(bb)), Arc::new(EnumType::decode(bb)))},
+			22 => {EnumType::Struct(Arc::new(StructInfo::decode(bb)))},
+			23 => {EnumType::Option(Arc::new(EnumType::decode(bb)))},
+			24 => {EnumType::Enum(Arc::new(EnumInfo::decode(bb)))},
 			_ => {panic!("EnumType is not exist:{}", t);}
 		}
 	}
 }
 
+#[derive(Debug)]
 pub struct StructInfo {
 	pub name: Atom,
 	pub name_hash: u32,
@@ -145,6 +150,7 @@ impl Decode for StructInfo{
 	}
 }
 
+#[derive(Debug)]
 pub struct FieldInfo {
 	pub name: Atom,
 	pub ftype: EnumType,
@@ -177,3 +183,43 @@ impl Decode for FieldInfo{
 		}
 	}
 }
+
+#[derive(Debug)]
+pub struct EnumInfo {
+	pub name: Atom,
+	pub name_hash: u32,
+	pub notes: Option<HashMap<Atom, Atom>>,
+	pub members: Vec<Option<EnumType>>,
+}
+
+impl EnumInfo {
+	pub fn new(name:Atom, name_hash:u32) -> Self {
+		EnumInfo {
+			name:name,
+			name_hash: name_hash,
+			notes: None,
+			members: Vec::new(),
+		}
+	}
+}
+
+impl Encode for EnumInfo{
+	fn encode(&self, bb: &mut WriteBuffer){
+		self.name.encode(bb);
+		self.name_hash.encode(bb);
+        self.notes.encode(bb);
+        self.members.encode(bb);
+	}
+}
+
+impl Decode for EnumInfo{
+	fn decode(bb: &mut ReadBuffer) -> EnumInfo{
+		EnumInfo{
+			name: Atom::decode(bb),
+			name_hash: u32::decode(bb),
+			notes: Option::decode(bb),
+			members: Vec::decode(bb),
+		}
+	}
+}
+
