@@ -512,11 +512,11 @@ impl<'a> ReadBuffer<'a>{
 			}
 			13 => {
 				self.head += 8;
-				EnumValue::I64(-(self.bytes.get_lu64(self.head - 4) as i64))
+				EnumValue::I64(-(self.bytes.get_lu64(self.head - 8) as i64))
 			},
 			14 => {
 				self.head += 16;
-				EnumValue::I128(-(self.bytes.get_lu128(self.head - 4) as i128))
+				EnumValue::I128(-(self.bytes.get_lu128(self.head - 16) as i128))
 			},
 			42..111 => {
 				EnumValue::Str(self.read_utf8())
@@ -555,11 +555,11 @@ impl<'a> ReadBuffer<'a>{
 				}
 				13 => {
 					self.head += 8;
-					T::from(-(self.bytes.get_lu64(self.head - 4) as i64))
+					T::from(-(self.bytes.get_lu64(self.head - 8) as i64))
 				},
 				14 => {
 					self.head += 8;
-					T::from(-(self.bytes.get_lu128(self.head - 4) as i128))
+					T::from(-(self.bytes.get_lu128(self.head - 16) as i128))
 				},
 				36 => {
 					self.head += 1;
