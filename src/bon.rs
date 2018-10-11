@@ -1666,21 +1666,22 @@ fn compare_str<'a>(rb1: &ReadBuffer<'a>, rb2: &ReadBuffer<'a>, t1: u8, t2: u8) -
 	let mut head2 = 1;
 	let len1 = match t1{
 		42..107 => (t1 - 42) as usize,
-		107 => {head1 += 1; rb1.bytes.get_u8(head1) as usize},
-		108 => {head1 += 2; rb1.bytes.get_lu16(head1) as usize},
-		109 => {head1 += 4; rb1.bytes.get_lu32(head1) as usize},
-		110 => {head1 += 6; rb1.bytes.get_lu16(head1) as usize + (rb1.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		107 => {head1 += 1; rb1.bytes.get_u8(head1 - 1) as usize},
+		108 => {head1 += 2; rb1.bytes.get_lu16(head1 - 2) as usize},
+		109 => {head1 += 4; rb1.bytes.get_lu32(head1 - 4) as usize},
+		110 => {head1 += 6; rb1.bytes.get_lu16(head1 - 6) as usize + (rb1.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("t1 is not str:{}", t1);}
 	};
 
 	let len2 = match t2{
 		42..107 => (t2 - 42) as usize,
-		107 => {head2 += 1; rb2.bytes.get_u8(head2) as usize},
-		108 => {head2 += 2; rb2.bytes.get_lu16(head2) as usize},
-		109 => {head2 += 4; rb2.bytes.get_lu32(head2) as usize},
-		110 => {head2 += 6; rb2.bytes.get_lu16(head2) as usize + (rb2.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		107 => {head2 += 1; rb2.bytes.get_u8(head2 - 1) as usize},
+		108 => {head2 += 2; rb2.bytes.get_lu16(head2 - 2) as usize},
+		109 => {head2 += 4; rb2.bytes.get_lu32(head2 - 4) as usize},
+		110 => {head2 += 6; rb2.bytes.get_lu16(head2 - 6) as usize + (rb2.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("t2 is not str:{}", t2);}
 	};
+	//println!("head1:{}, len1:{},head2:{}, len2:{}, t1:{},  byte1_len:{}, byte1:{:?}", head1, len1, head2, len2, t1, rb1.bytes.len(), rb1.bytes);
 	rb1.bytes[head1..head1+len1].partial_cmp(&rb2.bytes[head2..head2+len2]).unwrap()
 }
 
@@ -1689,19 +1690,19 @@ fn compare_bin<'a>(rb1: &ReadBuffer<'a>, rb2: &ReadBuffer<'a>, t1: u8, t2: u8) -
 	let mut head2 = 1;
 	let len1 = match t1{
 		111..176 => (t1 - 111) as usize,
-		176 => {head1 += 1; rb1.bytes.get_u8(head1) as usize},
-		177 => {head1 += 2; rb1.bytes.get_lu16(head1) as usize},
-		178 => {head1 += 4; rb1.bytes.get_lu32(head1) as usize},
-		179 => {head1 += 6; rb1.bytes.get_lu16(head1) as usize + (rb1.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		176 => {head1 += 1; rb1.bytes.get_u8(head1 - 1) as usize},
+		177 => {head1 += 2; rb1.bytes.get_lu16(head1 - 2) as usize},
+		178 => {head1 += 4; rb1.bytes.get_lu32(head1 - 4) as usize},
+		179 => {head1 += 6; rb1.bytes.get_lu16(head1 - 6) as usize + (rb1.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("t1 is not bin:{}", t1);}
 	};
 
 	let len2 = match t2{
 		111..176 => (t2 - 111) as usize,
-		176 => {head2 += 1; rb2.bytes.get_u8(head2) as usize},
-		177 => {head2 += 2; rb2.bytes.get_lu16(head2) as usize},
-		178 => {head2 += 4; rb2.bytes.get_lu32(head2) as usize},
-		179 => {head2 += 6; rb2.bytes.get_lu16(head2) as usize + (rb2.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		176 => {head2 += 1; rb2.bytes.get_u8(head2 - 1) as usize},
+		177 => {head2 += 2; rb2.bytes.get_lu16(head2 - 2) as usize},
+		178 => {head2 += 4; rb2.bytes.get_lu32(head2 - 4) as usize},
+		179 => {head2 += 6; rb2.bytes.get_lu16(head2 - 6) as usize + (rb2.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("t2 is not bin:{}", t2);}
 	};
 
@@ -1713,19 +1714,19 @@ fn compare_contain<'a>(rb1: &ReadBuffer<'a>, rb2: &ReadBuffer<'a>, t1: u8, t2: u
 	let mut head2 = 1;
 	let len1 = match t1{
 		180..245 => (t1 - 180) as usize,
-		245 => {head1 += 1; rb1.bytes.get_u8(head1) as usize},
-		246 => {head1 += 2; rb1.bytes.get_lu16(head1) as usize},
-		247 => {head1 += 4; rb1.bytes.get_lu32(head1) as usize},
-		248 => {head1 += 6; rb1.bytes.get_lu16(head1) as usize + (rb1.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		245 => {head1 += 1; rb1.bytes.get_u8(head1 - 1) as usize},
+		246 => {head1 += 2; rb1.bytes.get_lu16(head1 - 2) as usize},
+		247 => {head1 += 4; rb1.bytes.get_lu32(head1 - 4) as usize},
+		248 => {head1 += 6; rb1.bytes.get_lu16(head1 - 6) as usize + (rb1.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("it is not contain");}
 	};
 
 	let len2 = match t2{
 		180..245 => (t2 - 180) as usize,
-		245 => {head2 += 1; rb2.bytes.get_u8(head2) as usize},
-		246 => {head2 += 2; rb2.bytes.get_lu16(head2) as usize},
-		247 => {head2 += 4; rb2.bytes.get_lu32(head2) as usize},
-		248 => {head2 += 6; rb2.bytes.get_lu16(head2) as usize + (rb2.bytes.get_lu32(head1 + 2) * 0x10000) as usize}
+		245 => {head2 += 1; rb2.bytes.get_u8(head2 - 1) as usize},
+		246 => {head2 += 2; rb2.bytes.get_lu16(head2 - 2) as usize},
+		247 => {head2 += 4; rb2.bytes.get_lu32(head2 - 4) as usize},
+		248 => {head2 += 6; rb2.bytes.get_lu16(head2 - 6) as usize + (rb2.bytes.get_lu32(head1 - 4) * 0x10000) as usize}
 		_ => {panic!("it is not contain");}
 	};
 
