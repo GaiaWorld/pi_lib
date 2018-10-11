@@ -172,10 +172,10 @@ impl<T: Clone> Wheel<T>{
 		let mut r = Vec::new();
 		let mut flag = true;
 		while flag {
-			match self.heap.get(0){
+			match self.heap.get_top(){
 				Some(v) => {
 					if sub(v.time_point, self.time) < 90061000{
-						r.push(self.heap.get_top());
+						r.push(self.heap.remove_top());
 					}else{
 						flag = false;
 					}

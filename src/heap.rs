@@ -39,6 +39,10 @@ impl<T: Clone + Ord> Heap<T> {
 		self.delete((i - 1) as usize, self.0.len()).0
 	}
 
+	pub fn remove_top(&mut self) -> (T, Arc<AtomicIsize>){
+		self.delete(0, self.0.len())
+	}
+
 	//remove a element by index; returns it, or None if it is not exist;
 	pub fn try_remove(&mut self, index: Arc<AtomicIsize>) -> Option<T>{
 		let i = index.load(AOrd::Relaxed);
@@ -53,19 +57,32 @@ impl<T: Clone + Ord> Heap<T> {
 		self.try_delete(0)
 	}
 
-	pub fn get_top(&mut self) -> (T, Arc<AtomicIsize>){
-		self.delete(0, self.0.len())
-	}
+	
 
-	pub fn get(&self, index: usize) -> Option<&T>{
-		match self.0.get(index){
+	pub fn get_top(&mut self) -> Option<&T>{
+		match self.0.get(0){
 			Some(v) => Some(&v.0),
 			None => {None}
 		}
 	}
 
-	pub fn get_mut(&mut self, index: usize) -> Option<&mut T>{
-		match self.0.get_mut(index){
+	pub fn get(&self, index: Arc<AtomicIsize>) -> Option<&T>{
+		let i = index.load(AOrd::Relaxed);
+		if i < 0{
+			return None;
+		}
+		match self.0.get((i-1) as usize){
+			Some(v) => Some(&v.0),
+			None => {None}
+		}
+	}
+
+	pub fn get_mut(&mut self, index: Arc<AtomicIsize>) -> Option<&mut T>{
+		let i = index.load(AOrd::Relaxed);
+		if i < 0{
+			return None;
+		}
+		match self.0.get_mut((i-1) as usize){
 			Some(v) => Some(&mut v.0),
 			None => None
 		}
