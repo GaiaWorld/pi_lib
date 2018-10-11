@@ -223,10 +223,16 @@ impl<'a> ReadBuffer<'a>{
 		self.head
 	}
 	pub fn get_type(&self) -> u8 {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		self.bytes.get_u8(self.head)
 	}
 
 	pub fn read_bool(&mut self) -> bool {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
@@ -277,6 +283,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_f32(&mut self) -> f32 {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
@@ -293,6 +302,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_f64(&mut self) -> f64 {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match t {
@@ -316,6 +328,9 @@ impl<'a> ReadBuffer<'a>{
 	 * @example
 	 */
 	pub fn read_lengthen(&mut self) -> u32 {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		if t < 0x80 {
 			self.head += 1;
@@ -332,6 +347,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_bin(&mut self) -> Vec<u8> {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
@@ -369,6 +387,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_utf8(&mut self) -> String {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
@@ -406,6 +427,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read_container<T, F>(&mut self, read_next: F) -> T where F: FnOnce(&mut ReadBuffer, &u32) -> T{
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		let len: usize;
@@ -440,6 +464,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn is_nil(&mut self) -> bool{
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let first = self.bytes.get_u8(self.head);
 		if first == 0{
 			self.head += 1;
@@ -450,6 +477,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	pub fn read(&mut self) -> EnumValue{
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let first = self.bytes.get_u8(self.head);
 		self.head += 1;
 		match first{
@@ -519,9 +549,11 @@ impl<'a> ReadBuffer<'a>{
 				EnumValue::I128(-(self.bytes.get_lu128(self.head - 16) as i128))
 			},
 			42..111 => {
+				self.head -= 1;
 				EnumValue::Str(self.read_utf8())
 			},
 			111..180 => {
+				self.head -= 1;
 				EnumValue::Bin(self.read_bin())
 			},
 			_ => {
@@ -531,6 +563,9 @@ impl<'a> ReadBuffer<'a>{
 	}
 
 	fn read_integer<T: AsFrom<u32> + AsFrom<u64> + AsFrom<i32> + AsFrom<i64> + AsFrom<i128> + AsFrom<u128>>(&mut self) -> T {
+		if self.head >= self.bytes.len(){
+			panic!("overflow, tail is {}, head is {}", self.bytes.len(), self.head);
+		}
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		if t >= 15 && t <= 35{
