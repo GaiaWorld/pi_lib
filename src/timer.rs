@@ -30,7 +30,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
 			loop {
                 thread::sleep(Duration::from_millis(sleep_time));
                 let mut now = now_millis();
-                //now = run_zero(&s, now);//运行0毫秒任务
+                now = run_zero(&s, now);//运行0毫秒任务
                 loop {
                     let mut r = {
                         let mut s = s.lock().unwrap();
@@ -43,7 +43,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
                         }
                     };
                     now = run_task(&s, &mut r, now);
-                    //now = run_zero(&s, now);//运行0毫秒任务
+                    now = run_zero(&s, now);//运行0毫秒任务
                 }
 			}
 		});
@@ -175,7 +175,7 @@ fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item
 fn test(){
     TIMER.run();
     //thread::sleep(Duration::from_millis(8));
-    let now = now_millis();
+    //let now = now_millis();
     TIMER.set_timeout(FuncRuner::new(Box::new(move||{
         println!("test timer Success");
 	})), 10);

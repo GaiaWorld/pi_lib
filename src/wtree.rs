@@ -1,10 +1,11 @@
 /**
- * 权重树
+ * 权重树，支持使用索引删除
  */
+
+//需要实现一个简单版的权重树， 不支持索引删除， 提高权重树的性能， TODO
 
 use std::sync::atomic::{AtomicUsize, Ordering as AOrd};
 use std::sync::Arc;
-use std::mem::{replace};
 
 pub struct Item<T>{
     elem: T,
@@ -58,19 +59,22 @@ impl<T> WeightTree<T> {
 	}
 
 	//remove a element by index, Panics if index is out of bounds.
-	pub fn remove(&mut self, index: &Arc<AtomicUsize>) -> (T, usize){
+	pub fn remove(&mut self, index: &Arc<AtomicUsize>) -> T{
 		let i = load_index(index);
 		let r = self.delete((i - 1) as usize, self.0.len());
-		(r.0, r.1)
+		r.0
 	}
 
 	//remove a element by index; returns it, or None if it is not exist;
-	pub fn try_remove(&mut self, index: Arc<AtomicUsize>) -> Option<(T, usize)>{
-		let i = load_index(&index);
+	pub fn try_remove(&mut self, index: &Arc<AtomicUsize>) -> Option<T>{
+		let i = load_index(index);
 		if i == 0{
 			return None;
 		}
-		self.try_delete((i - 1) as usize)
+		match self.try_delete((i - 1) as usize) {
+			Some (v) => Some(v.0),
+			None => None
+		}
 	}
 
 	//All element weights and
@@ -212,7 +216,7 @@ impl<T> WeightTree<T> {
 			let e = &self.0[index];
 			(e.count, e.amount)
 		};
-		
+		// 优化算法： TODO
 		if index + 1 < len{//如果需要移除的元素不是堆底元素， 需要将该元素位置设置为栈底元素并下沉
 			let last = len - 1;
 			let (last_count, last_amount) = {
@@ -225,16 +229,6 @@ impl<T> WeightTree<T> {
 			self.0[last].count = last_count;
 			self.0[last].amount = last_amount;
 			self.up_update(index, last_count);
-
-			// let mut r = Vec::new();
-			// let mut r1 = Vec::new();
-
-			// for i in 0..self.0.len(){
-			// 	r.push(self.0[i].count);
-			// 	r1.push(self.0[i].amount);
-			// }
-			// println!("count2:{:?}",r);
-			// println!("amount2:{:?}",r1);
 			self.up_update(last, 0);
 			self.down(index);
 		}else{
@@ -389,52 +383,52 @@ fn load_index(index: &Arc<AtomicUsize>) -> usize{
 }
 
 //判断一个index是否为另一个节点的父节点
-#[inline]
-fn assert(mut child: usize, parent: usize) -> bool{
-	while child > 0 {
-		child = (child - 1) >> 1;
-		if child == parent {
-			return true;
-		}
-	}
-	false
-}
-
-// #[test]
-// fn test(){
-// 	let mut wtree: WeightTree<u32> = WeightTree::new();
-// 	wtree.push(100, 100);
-// 	wtree.push(2000, 2000);
-// 	wtree.push(50, 50);
-// 	wtree.push(70, 70);
-// 	wtree.push(500, 500);
-// 	let index_2 = wtree.push(20, 20);
-// 	assert_eq!(wtree.amount(), 2740);
-
-// 	wtree.update_weight(60, &index_2);
-// 	assert_eq!(load_index(&index_2), 3);
-// 	assert_eq!(wtree.amount(), 2780);
-
-// 	wtree.update_weight(20, &index_2);
-// 	assert_eq!(wtree.amount(), 2740);
-// 	assert_eq!(load_index(&index_2), 6);
-
-// 	assert_eq!(wtree.remove_by_weight(2739).1, 20);
-// 	assert_eq!(wtree.amount(), 2720);
-
-// 	assert_eq!(wtree.remove_by_weight(2000).1, 500);
-// 	assert_eq!(wtree.amount(), 2220);
-	
-// 	assert_eq!(wtree.remove_by_weight(1999).1, 2000);
-// 	assert_eq!(wtree.amount(), 220);
-
-// 	let index = wtree.push(30, 30);
-// 	wtree.update_weight(80, &index);
-
-// 	assert_eq!(wtree.remove_by_weight(140).1, 80);
-// 	assert_eq!(wtree.amount(), 220);
-
+// #[inline]
+// fn assert(mut child: usize, parent: usize) -> bool{
+// 	while child > 0 {
+// 		child = (child - 1) >> 1;
+// 		if child == parent {
+// 			return true;
+// 		}
+// 	}
+// 	false
 // }
+
+#[test]
+fn test(){
+	let mut wtree: WeightTree<u32> = WeightTree::new();
+	wtree.push(100, 100);
+	wtree.push(2000, 2000);
+	wtree.push(50, 50);
+	wtree.push(70, 70);
+	wtree.push(500, 500);
+	let index_2 = wtree.push(20, 20);
+	assert_eq!(wtree.amount(), 2740);
+
+	wtree.update_weight(60, &index_2);
+	assert_eq!(load_index(&index_2), 3);
+	assert_eq!(wtree.amount(), 2780);
+
+	wtree.update_weight(20, &index_2);
+	assert_eq!(wtree.amount(), 2740);
+	assert_eq!(load_index(&index_2), 6);
+
+	assert_eq!(wtree.remove_by_weight(2739).1, 20);
+	assert_eq!(wtree.amount(), 2720);
+
+	assert_eq!(wtree.remove_by_weight(2000).1, 500);
+	assert_eq!(wtree.amount(), 2220);
+	
+	assert_eq!(wtree.remove_by_weight(1999).1, 2000);
+	assert_eq!(wtree.amount(), 220);
+
+	let index = wtree.push(30, 30);
+	wtree.update_weight(80, &index);
+
+	assert_eq!(wtree.remove_by_weight(140).1, 80);
+	assert_eq!(wtree.amount(), 220);
+
+}
 
 #[cfg(test)]
 use time::now_millis;
@@ -463,7 +457,7 @@ fn test_effic(){
 	println!("push VecDeque time{}",  now_millis() - now);
 
 	let now = now_millis();
-	for i in 0..max{
+	for _ in 0..max{
 		rand::thread_rng().gen_range(0, 100000);
 	}
 	println!("rand time{}",  now_millis() - now);

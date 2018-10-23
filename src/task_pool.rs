@@ -34,12 +34,12 @@ impl<T: 'static> TaskPool<T>{
     }
     
     /// create sync queues, return true, or false if id is exist
-    pub fn create_sync_queue(&self, id: u64, weight: usize, can_del: bool) -> bool{
-        self.sync_pool.1.lock().unwrap().create_queue(id, weight, can_del)
+    pub fn create_sync_queue(&self, weight: usize, can_del: bool) -> usize{
+        self.sync_pool.1.lock().unwrap().create_queue(weight, can_del)
     }
 
     /// delete sync queues, return true, or false if id is not exist
-    pub fn del_sync_queue(&self, id: &u64) {
+    pub fn del_sync_queue(&self, id: &usize) {
         self.sync_pool.1.lock().unwrap().remove(id)
     }
 
@@ -56,7 +56,7 @@ impl<T: 'static> TaskPool<T>{
     // }
 
     /// push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_sync(&self, task: T, id: u64, direc: Direction) -> Result<Arc<AtomicUsize>, String>{
+    pub fn push_sync(&self, task: T, id: usize, direc: Direction) -> Result<Arc<AtomicUsize>, String>{
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
         match direc {
             Direction::Front => {
@@ -82,7 +82,7 @@ impl<T: 'static> TaskPool<T>{
     }
 
     /// push a delay task, return Arc<AtomicUsize> as index
-    pub fn push_delay(&self, mut task: T, task_type: TaskType, ms: u32) -> Arc<AtomicUsize> {
+    pub fn push_delay(&self, task: T, task_type: TaskType, ms: u32) -> Arc<AtomicUsize> {
         let r = DelayTask{
             task_type: task_type,
             task: Box::into_raw_non_null(Box::new(task)),
@@ -159,6 +159,15 @@ impl<T: 'static> TaskPool<T>{
         }
     }
 
+    pub fn remove_sync(&self, _index: &Arc<AtomicUsize>) {
+        //TODO
+        //self.sync_pool.1.lock().unwrap().remove();
+    }
+
+    pub fn remove_async(&self, index: &Arc<AtomicUsize>) -> Option<T> {
+        self.async_pool.1.lock().unwrap().try_remove(index)
+    }
+
     pub fn clear(&self) {
         self.sync_pool.1.lock().unwrap().clear();
         self.async_pool.1.lock().unwrap().clear();
@@ -224,7 +233,7 @@ pub enum Task<T: 'static> {
 #[derive(Clone)]
 pub enum TaskType {
     Async(usize),      //异步任务, Async(任务优先级)
-    Sync(u64, Direction),       //同步任务Sync(队列id)
+    Sync(usize, Direction),       //同步任务Sync(队列id)
 }
 
 //同步任务push的方向
@@ -234,10 +243,12 @@ pub enum Direction {
     Back,
 }
 
+// map性能低， 考虑去掉map， weight_queues使用slab， TODO
 struct SyncPool<T: 'static>{
     weight_queues: WeightTree<Rc<RefCell<WeightQueue<T>>>>,
-    weight_map: FnvHashMap<u64, (Rc<RefCell<WeightQueue<T>>>, Arc<AtomicUsize>)>,
+    weight_map: FnvHashMap<usize, (Rc<RefCell<WeightQueue<T>>>, Arc<AtomicUsize>)>,
     len: usize,
+    max: usize,
 }
 
 unsafe impl<T: Send> Send for SyncPool<T> {}
@@ -249,20 +260,18 @@ impl<T: 'static> SyncPool<T>{
         SyncPool {
             weight_queues: WeightTree::new(),
             weight_map: FnvHashMap::default(),
-            len: 0
+            len: 0,
+            max: 0
         }
     }
 
     //create queues, if id is exist, return false
-    fn create_queue(&mut self, id: u64, weight: usize, can_del: bool) -> bool {
-        if self.weight_map.contains_key(&id) {
-            return false;
-        }else {
-            let r = Rc::new(RefCell::new(WeightQueue::new(weight, can_del)));
-            let index = self.weight_queues.push(r.clone(), 0);
-            self.weight_map.insert(id, (r.clone(), index));
-            return true;
-        }
+    fn create_queue(&mut self, weight: usize, can_del: bool) -> usize {
+        self.max = to_ring_usize(self.max);
+        let r = Rc::new(RefCell::new(WeightQueue::new(weight, can_del)));
+        let index = self.weight_queues.push(r.clone(), 0);
+        self.weight_map.insert(self.max, (r.clone(), index));
+        return self.max;
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
@@ -311,28 +320,28 @@ impl<T: 'static> SyncPool<T>{
     }
 
     //Append an element to the queue of the specified ID. return true, or false if the queue is not exist
-    fn push_back(&mut self, id: u64, task: T) -> Result<Arc<AtomicUsize>, String> {
+    fn push_back(&mut self, id: usize, task: T) -> Result<Arc<AtomicUsize>, String> {
         let index = Arc::new(AtomicUsize::new(0));
         match self.push_back_with_index(id, task, &index){
             true => {
                 Ok(index)
             },
-            false => Err(String::from("id is not exist")),
+            false => Err(format!("id is not exist:{}",id)),
         }
     }
 
     //Prepends an element to the queue of the specified ID. return true, or false if the queue is not exist
-    fn push_front(&mut self, id: u64, task: T) -> Result<Arc<AtomicUsize>, String>{
+    fn push_front(&mut self, id: usize, task: T) -> Result<Arc<AtomicUsize>, String>{
         let index = Arc::new(AtomicUsize::new(0));
         match self.push_front_with_index(id, task, &index){
             true => {
                 Ok(index)
             },
-            false => Err(String::from("id is not exist")),
+            false => Err(format!("id is not exist:{}",id)),
         }
     }
 
-    fn push_front_with_index(&mut self, id: u64, task: T, index: &Arc<AtomicUsize>) -> bool{
+    fn push_front_with_index(&mut self, id: usize, task: T, index: &Arc<AtomicUsize>) -> bool{
         let (weight, index) = match self.weight_map.get_mut(&id){
             Some(q) => {
                 self.len += 1;
@@ -346,7 +355,7 @@ impl<T: 'static> SyncPool<T>{
         true
     }
 
-    fn push_back_with_index(&mut self, id: u64, task: T, index: &Arc<AtomicUsize>) -> bool{
+    fn push_back_with_index(&mut self, id: usize, task: T, index: &Arc<AtomicUsize>) -> bool{
         let (weight, index) = match self.weight_map.get_mut(&id){
             Some(q) => {
                 self.len += 1;
@@ -366,7 +375,7 @@ impl<T: 'static> SyncPool<T>{
     }
 
     //移除指定id的队列
-    fn remove(&mut self, id: &u64) {
+    fn remove(&mut self, id: &usize) {
        match self.weight_map.remove(id){
            Some((_, index)) => {
                self.weight_queues.remove(&index);
@@ -400,7 +409,7 @@ impl<T: 'static> Runer for DelayTask<T> {
     fn run(self, index: &Arc<AtomicUsize>){
         match self.task_type {
             TaskType::Async(priority) => {
-                let mut lock = self.async_pool.1.lock().unwrap();
+                let lock = self.async_pool.1.lock().unwrap();
                 self.async_pool.1.lock().unwrap().push(unsafe {self.task.as_ptr().read()} , priority);
                 self.async_pool.0.store(lock.amount(), AOrd::Relaxed);
             },
@@ -426,7 +435,7 @@ unsafe impl<T> Send for DelayTask<T> {}
 
 enum Deque<T>{
     VecDeque(VecDeque<T>),
-    FastDeque(FastDeque<T>)
+    FastDeque(FastDeque<T>)  //需要优化，后期改为slab， TODO
 }
 
 //权重队列， WeightQueue(权重, 队列)
@@ -505,6 +514,14 @@ impl<T> WeightQueue<T>{
     }
 }
 
+fn to_ring_usize(id: usize) -> usize{
+    if id == <usize>::max_value(){
+        return 1;
+    }else {
+        return id + 1;
+    }
+}
+
 #[cfg(test)]
 use time::now_millis;
 #[cfg(test)]
@@ -520,12 +537,12 @@ fn test_sync(){
 
     let now = now_millis();
     for i in 0..syncs.len() {
-        task_pool.create_sync_queue(i as u64, i + 1, false);
+        task_pool.create_sync_queue(i + 1, false);
     }
 
     for i in 0..syncs.len() {
         for v in 0..syncs[i].clone() {
-           task_pool.push_sync(v, i as u64, Direction::Back);
+           task_pool.push_sync(v, i + 1, Direction::Back).expect("");
         }
     }
     println!("push sync back time{}",  now_millis() - now);
@@ -556,7 +573,7 @@ fn test_async(){
 	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new());
 
     for i in 0..5{
-        task_pool.create_sync_queue(i as u64, i + 1, false);
+        task_pool.create_sync_queue(i + 1, false);
     }
 
     let now = now_millis();
@@ -566,7 +583,7 @@ fn test_async(){
         let count = count.clone();
         thread::spawn(move || {
             for v in 0..1000 {
-                task_pool.push_sync(v, i as u64, Direction::Back);
+                task_pool.push_sync(v, i + 1, Direction::Back).expect("");
             }
             count.fetch_add(1, AOrd::Relaxed);
             if count.load(AOrd::Relaxed) == 10 {
