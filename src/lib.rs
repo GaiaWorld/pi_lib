@@ -14,12 +14,14 @@
 #![feature(trait_alias)]
 #![feature(const_fn)]
 #![feature(nll)]
+#![feature(fnbox)]
 
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]
 
 extern crate core;
 extern crate fnv;
 extern crate crc;
+extern crate rand;
 
 pub mod slab;
 pub mod rc;
@@ -43,9 +45,9 @@ pub mod wtree;
 pub mod adler32;
 pub mod rsync;
 pub mod gray;
+pub mod task_pool;
+pub mod timer;
+pub mod fast_deque;
 
 #[macro_use]
 extern crate lazy_static;
-
-#[cfg(test)]
-extern crate rand;
