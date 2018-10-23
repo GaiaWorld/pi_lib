@@ -569,7 +569,7 @@ impl<'a> ReadBuffer<'a>{
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
 		if t >= 15 && t <= 35{
-			T::from((t - 16) as u32)
+			T::from((t as i32) - 16)
 		}else{
 			match t {
 				9 => {
