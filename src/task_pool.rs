@@ -17,64 +17,67 @@ use timer::{Timer, Runer};
 use fast_deque::FastDeque;
 
 pub struct TaskPool<T: 'static>{
-    sync_pool: (Arc<AtomicUsize>, Arc<Mutex<SyncPool<T>>>),
-    async_pool: (Arc<AtomicUsize>, Arc<Mutex<AsyncPool<T>>>),
+    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
+    async_pool: Arc<(AtomicUsize, Mutex<AsyncPool<T>>)>,
     delay_queue: Timer<DelayTask<T>>,
 }
 
+pub struct QueueId<T: 'static>{
+    id: usize,
+    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
+}
+
+impl<T: 'static> Drop for QueueId<T> {
+    fn drop(&mut self){
+        self.sync_pool.1.lock().unwrap().try_remove(&self.id)
+    }
+}
+
 impl<T: 'static> TaskPool<T>{
-    pub fn new() -> Self {
-        let timer = Timer::new(10);
-        timer.run();
+    pub fn new(timer: Timer<DelayTask<T>>,) -> Self {
+        // let timer = Timer::new(10);
+        // timer.run();
         TaskPool {
-            sync_pool: (Arc::new(AtomicUsize::new(0)), Arc::new(Mutex::new(SyncPool::new()))),
-            async_pool: (Arc::new(AtomicUsize::new(0)), Arc::new(Mutex::new(AsyncPool::new()))),
+            sync_pool: Arc::new((AtomicUsize::new(0), Mutex::new(SyncPool::new()))),
+            async_pool: Arc::new((AtomicUsize::new(0), Mutex::new(AsyncPool::new()))),
             delay_queue: timer,
         }
     }
     
     /// create sync queues, return true, or false if id is exist
-    pub fn create_sync_queue(&self, weight: usize, can_del: bool) -> usize{
-        self.sync_pool.1.lock().unwrap().create_queue(weight, can_del)
+    pub fn create_sync_queue(&self, weight: usize, can_del: bool) -> QueueId<T>{
+        QueueId{
+            id: self.sync_pool.1.lock().unwrap().create_queue(weight, can_del),
+            sync_pool: self.sync_pool.clone()
+        }
     }
-
-    /// delete sync queues, return true, or false if id is not exist
-    pub fn del_sync_queue(&self, id: &usize) {
-        self.sync_pool.1.lock().unwrap().remove(id)
-    }
-
-    /// push a task, return Ok(index), or Err if tasktype is Sync and queue id is exist
-    // pub fn push(&self, task: T, task_type: TaskType) -> Result<Arc<AtomicUsize>, Atom>{
-    //     match task_type {
-    //         TaskType::Async(priority) => {
-    //             Ok(self.push_async(task, priority))
-    //         },
-    //         TaskType::Sync(id, direc) => {
-    //             self.push_sync(task, id, direc)
-    //         }
-    //     }
-    // }
 
     /// push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_sync(&self, task: T, id: usize, direc: Direction) -> Result<Arc<AtomicUsize>, String>{
+    pub fn push_sync(&self, task: T, id: &QueueId<T>, direc: Direction) -> Option<Arc<AtomicUsize>>{
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
         match direc {
             Direction::Front => {
-                let r = sync_pool.push_front(id, task);
+                let r = sync_pool.push_front(id.id, task);
                 self.sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
                 r
             },
             Direction::Back => {
-                let r = sync_pool.push_back(id, task);
+                let r = sync_pool.push_back(id.id, task);
                 self.sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
                 r
             }
         }
     }
 
-    /// push a async task, return Arc<AtomicUsize> as index
-    #[inline]
-    pub fn push_async(&self, task: T, priority: usize) -> Arc<AtomicUsize> {
+    /// push a async task
+    pub fn push_async(&self, task: T, priority: usize){
+        let mut lock = self.async_pool.1.lock().unwrap();
+        lock.push(task, priority);
+        self.async_pool.0.store(lock.amount(), AOrd::Relaxed);
+    }
+
+    /// push a async task, return Arc<AtomicUsize> as index, the task can removed with index
+    pub fn push_async_with_index(&self, task: T, priority: usize) -> Arc<AtomicUsize> {
         let mut lock = self.async_pool.1.lock().unwrap();
         let r = lock.push(task, priority);
         self.async_pool.0.store(lock.amount(), AOrd::Relaxed);
@@ -82,23 +85,34 @@ impl<T: 'static> TaskPool<T>{
     }
 
     /// push a delay task, return Arc<AtomicUsize> as index
-    pub fn push_delay(&self, task: T, task_type: TaskType, ms: u32) -> Arc<AtomicUsize> {
-        let r = DelayTask{
-            task_type: task_type,
-            task: Box::into_raw_non_null(Box::new(task)),
-            sync_pool: self.sync_pool.clone(),
-            async_pool: self.async_pool.clone(),
+    pub fn push_delay(&self, task: T, task_type: TaskType<T>, ms: u32) -> Arc<AtomicUsize> {
+        let r = match task_type {
+            TaskType::Async(priority) => {
+                DelayTask::Async {
+                    priority: priority,
+                    async_pool: self.async_pool.clone(),
+                    task: Box::into_raw_non_null(Box::new(task)),
+                }
+            },
+            TaskType::Sync(id, direc) => {
+                DelayTask::Sync {
+                    id: id,
+                    direc: direc,
+                    sync_pool: self.sync_pool.clone(),
+                    task: Box::into_raw_non_null(Box::new(task)),
+                }
+            },
         };
         self.delay_queue.set_timeout(r, ms)
     }
 
     /// pop a task by weight
-    pub fn pop(&self) -> Option<T>{
+    pub fn pop_unlock(&self) -> Option<T>{
         let async_w = self.async_pool.0.load(AOrd::Relaxed);  //异步池总权重
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
-        let r: usize = rand::thread_rng().gen();
+        let r: usize = rand::thread_rng().gen(); // 由外部实现随机生成器， TODO
         let amount = async_w + sync_w;
-        let w =  if amount == 0 {
+        let w = if amount == 0 {
             0
         }else {
             r%amount
@@ -124,7 +138,7 @@ impl<T: 'static> TaskPool<T>{
     }
 
     /// pop a task , lock the queue of tasks if task is sync
-    pub fn pop_with_sync_lock(&self) -> Option<Task<T>>{
+    pub fn pop(&self) -> Option<Task<T>>{
         let async_w = self.async_pool.0.load(AOrd::Relaxed); //异步池总权重
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed); //同步池总权重
         let r: usize = rand::thread_rng().gen();
@@ -142,7 +156,7 @@ impl<T: 'static> TaskPool<T>{
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
                 return Some(Task::Sync(TaskLock{
                     task: NonNull::new(&mut elem as *mut T).unwrap(),
-                    sync_pool: self.sync_pool.1.clone(),
+                    sync_pool: self.sync_pool.clone(),
                     index: index,
                     weight: weight,
                 }));
@@ -190,7 +204,7 @@ impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
 
 pub struct TaskLock<T: 'static>{
     task: NonNull<T>,
-    sync_pool: Arc<Mutex<SyncPool<T>>>,
+    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
     index: Arc<AtomicUsize>,
     weight: usize,
 }
@@ -203,7 +217,7 @@ impl<T: 'static> TaskLock<T> {
 
 impl<T: 'static> Drop for TaskLock<T> {
     fn drop(&mut self){
-        self.sync_pool.lock().unwrap().free_lock(&self.index, self.weight);
+        self.sync_pool.1.lock().unwrap().free_lock(&self.index, self.weight);
     }
 }
 
@@ -231,9 +245,9 @@ pub enum Task<T: 'static> {
 
 //任务类型
 #[derive(Clone)]
-pub enum TaskType {
-    Async(usize),      //异步任务, Async(任务优先级)
-    Sync(usize, Direction),       //同步任务Sync(队列id)
+pub enum TaskType<T: 'static> {
+    Async(usize),      //异步任务, Async(任务优先级, 能否删除)
+    Sync(Arc<QueueId<T>>, Direction),       //同步任务Sync(队列id, push方向)
 }
 
 //同步任务push的方向
@@ -242,9 +256,8 @@ pub enum Direction {
     Front,
     Back,
 }
-
 // map性能低， 考虑去掉map， weight_queues使用slab， TODO
-struct SyncPool<T: 'static>{
+pub struct SyncPool<T: 'static>{
     weight_queues: WeightTree<Rc<RefCell<WeightQueue<T>>>>,
     weight_map: FnvHashMap<usize, (Rc<RefCell<WeightQueue<T>>>, Arc<AtomicUsize>)>,
     len: usize,
@@ -294,7 +307,7 @@ impl<T: 'static> SyncPool<T>{
             (q.pop_front().unwrap(), queue.1.clone(), q.get_weight()) //如果能够根据权重取到队列， 必然能从队列中弹出元素
         };
         self.weight_queues.update_weight(0, &r.1);
-        self.len += 1;
+        self.len -= 1;
         r
     }
 
@@ -319,54 +332,52 @@ impl<T: 'static> SyncPool<T>{
         r
     }
 
-    //Append an element to the queue of the specified ID. return true, or false if the queue is not exist
-    fn push_back(&mut self, id: usize, task: T) -> Result<Arc<AtomicUsize>, String> {
-        let index = Arc::new(AtomicUsize::new(0));
-        match self.push_back_with_index(id, task, &index){
-            true => {
-                Ok(index)
-            },
-            false => Err(format!("id is not exist:{}",id)),
-        }
+    //Append an element to the queue of the specified ID. return index, or None if the queue is FastQueue
+    fn push_back(&mut self, id: usize, task: T) -> Option<Arc<AtomicUsize>> {
+        self.len += 1;
+        let q = self.weight_map.get_mut(&id).unwrap();
+        let mut borrow_mut = q.0.borrow_mut();
+        let r = borrow_mut.push_back(task);
+        self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        r
     }
 
-    //Prepends an element to the queue of the specified ID. return true, or false if the queue is not exist
-    fn push_front(&mut self, id: usize, task: T) -> Result<Arc<AtomicUsize>, String>{
-        let index = Arc::new(AtomicUsize::new(0));
-        match self.push_front_with_index(id, task, &index){
-            true => {
-                Ok(index)
-            },
-            false => Err(format!("id is not exist:{}",id)),
-        }
+    //Prepends an element to the queue of the specified ID. return index, or None if the queue is FastQueue
+    fn push_front(&mut self, id: usize, task: T) -> Option<Arc<AtomicUsize>>{
+        self.len += 1;
+        let q = self.weight_map.get_mut(&id).unwrap();
+        let mut borrow_mut = q.0.borrow_mut();
+        let r = borrow_mut.push_front(task);
+        self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        r
     }
 
+    //Prepends an element to the queue of the specified ID. return true, or false if the queue is VecQueue
     fn push_front_with_index(&mut self, id: usize, task: T, index: &Arc<AtomicUsize>) -> bool{
-        let (weight, index) = match self.weight_map.get_mut(&id){
-            Some(q) => {
+        let q = self.weight_map.get_mut(&id).unwrap();
+        let mut borrow_mut = q.0.borrow_mut();
+        match borrow_mut.push_front_with_index(task, index){
+            true => {
                 self.len += 1;
-                let mut queue = q.0.borrow_mut();
-                queue.push_front_with_index(task, index);
-                (queue.get_weight(), q.1.clone())
+                self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+                true
             },
-            None => return false,
-        };
-        self.weight_queues.update_weight(weight, &index);
-        true
+            false => false,
+        }
     }
 
+    //Append an element to the queue of the specified ID. return true, or false if the queue is VecQueue
     fn push_back_with_index(&mut self, id: usize, task: T, index: &Arc<AtomicUsize>) -> bool{
-        let (weight, index) = match self.weight_map.get_mut(&id){
-            Some(q) => {
+        let q = self.weight_map.get_mut(&id).unwrap();
+        let mut borrow_mut = q.0.borrow_mut();
+        match borrow_mut.push_back_with_index(task, index){
+            true => {
                 self.len += 1;
-                let mut queue = q.0.borrow_mut();
-                queue.push_back_with_index(task, index);
-                (queue.get_weight(), q.1.clone())
+                self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+                true
             },
-            None => return false,
-        };
-        self.weight_queues.update_weight(weight, &index);
-        true
+            false => false,
+        }
     }
 
     //取队列的权重（所有任务的权重总值）
@@ -375,10 +386,19 @@ impl<T: 'static> SyncPool<T>{
     }
 
     //移除指定id的队列
-    fn remove(&mut self, id: &usize) {
+    fn _remove(&mut self, id: &usize) {
        match self.weight_map.remove(id){
            Some((_, index)) => {
                self.weight_queues.remove(&index);
+           },
+           None => ()
+       }
+    }
+
+    fn try_remove(&mut self, id: &usize) {
+       match self.weight_map.remove(id){
+           Some((_, index)) => {
+               self.weight_queues.try_remove(&index);
            },
            None => ()
        }
@@ -396,34 +416,45 @@ impl<T: 'static> SyncPool<T>{
     }
 }
 
-type AsyncPool<T> = WeightTree<T>;
+pub type AsyncPool<T> = WeightTree<T>;
 
-struct DelayTask<T: 'static> {
-    task_type: TaskType,
-    task: NonNull<T>,
-    sync_pool: (Arc<AtomicUsize>, Arc<Mutex<SyncPool<T>>>),
-    async_pool: (Arc<AtomicUsize>, Arc<Mutex<AsyncPool<T>>>),
+pub enum DelayTask<T: 'static> {
+    Async{
+        priority: usize,
+        async_pool: Arc<(AtomicUsize, Mutex<AsyncPool<T>>)>,
+        task:  NonNull<T>,
+    },//异步任务
+    Sync{
+        id: Arc<QueueId<T>>,
+        direc: Direction,
+        sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
+        task:  NonNull<T>,
+    }//同步任务Sync(队列id, push方向)
 }
 
 impl<T: 'static> Runer for DelayTask<T> {
     fn run(self, index: &Arc<AtomicUsize>){
-        match self.task_type {
-            TaskType::Async(priority) => {
-                let lock = self.async_pool.1.lock().unwrap();
-                self.async_pool.1.lock().unwrap().push(unsafe {self.task.as_ptr().read()} , priority);
-                self.async_pool.0.store(lock.amount(), AOrd::Relaxed);
+        match self {
+            DelayTask::Async { priority,async_pool,task } => {
+                let mut lock = async_pool.1.lock().unwrap();
+                lock.push_with_index(unsafe {task.as_ptr().read()} , priority, index);
+                async_pool.0.store(lock.amount(), AOrd::Relaxed);
             },
-            TaskType::Sync(id, direc) => {
+            DelayTask::Sync { id, direc, sync_pool, task } => {
                 match direc {
                     Direction::Front => {
-                        let mut lock = self.sync_pool.1.lock().unwrap();
-                        lock.push_front_with_index(id, unsafe {self.task.as_ptr().read()}, &index);
-                        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        let mut lock = sync_pool.1.lock().unwrap();
+                        if !lock.push_front_with_index(id.id, unsafe {task.as_ptr().read()}, &index){
+                            println!("push a sync task fail, A delayed task should be deleted, id corresponding queue cannot be deleted. id:{}", id.id);
+                        };
+                        sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
                     },
                     Direction::Back => {
-                        let mut lock = self.sync_pool.1.lock().unwrap();
-                        lock.push_back_with_index(id, unsafe {self.task.as_ptr().read()}, &index);
-                        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        let mut lock = sync_pool.1.lock().unwrap();
+                        if !lock.push_back_with_index(id.id, unsafe {task.as_ptr().read()}, &index){
+                            println!("push a sync task fail, A delayed task should be deleted, id corresponding queue cannot be deleted. id:{}", id.id);
+                        }
+                        sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
                     }
                 }
             }
@@ -480,31 +511,33 @@ impl<T> WeightQueue<T>{
         r
     }
 
-    fn _push_back(&mut self, task: T) -> Arc<AtomicUsize>{
-        let r = Arc::new(AtomicUsize::new(0));
-        self.push_back_with_index(task, &r);
-        r
-    }
-
-    fn _push_front(&mut self, task: T) -> Arc<AtomicUsize>{
-        let r = Arc::new(AtomicUsize::new(0));
-        self.push_front_with_index(task, &r);
-        r
-    }
-
-    fn push_back_with_index(&mut self, task: T, index: &Arc<AtomicUsize>){
+    fn push_back(&mut self, task: T) -> Option<Arc<AtomicUsize>>{
         self.weight += self.weight_unit;
         match self.queue {
-            Deque::FastDeque(ref mut queue) => index.store(queue.push_back(task), AOrd::Relaxed),
-            Deque::VecDeque(ref mut queue) => {queue.push_back(task); index.store(0, AOrd::Relaxed);},
+            Deque::FastDeque(ref mut queue) => return Some(Arc::new(AtomicUsize::new(queue.push_back(task)))),
+            Deque::VecDeque(ref mut queue) => {queue.push_back(task); return None},
         }
     }
 
-    fn push_front_with_index(&mut self, task: T, index: &Arc<AtomicUsize>){
+    fn push_front(&mut self, task: T) -> Option<Arc<AtomicUsize>>{
         self.weight += self.weight_unit;
         match self.queue {
-            Deque::FastDeque(ref mut queue) => index.store(queue.push_front(task), AOrd::Relaxed),
-            Deque::VecDeque(ref mut queue) => {queue.push_front(task); index.store(0, AOrd::Relaxed);},
+            Deque::FastDeque(ref mut queue) => Some(Arc::new(AtomicUsize::new(queue.push_front(task)))),
+            Deque::VecDeque(ref mut queue) => {queue.push_front(task); None},
+        }
+    }
+
+    fn push_back_with_index(&mut self, task: T, index: &Arc<AtomicUsize>) -> bool{
+        match self.queue {
+            Deque::FastDeque(ref mut queue) => {self.weight += self.weight_unit; index.store(queue.push_back(task), AOrd::Relaxed); true},
+            _ => false,
+        }
+    }
+
+    fn push_front_with_index(&mut self, task: T, index: &Arc<AtomicUsize>) -> bool{
+        match self.queue {
+            Deque::FastDeque(ref mut queue) => {self.weight += self.weight_unit; index.store(queue.push_front(task), AOrd::Relaxed); true},
+            _ => false,
         }
     }
 
@@ -531,25 +564,26 @@ use std::time::{Duration};
 
 #[test]
 fn test_sync(){
-	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new());
+	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(10)));
     let syncs:[u32; 5] = [100000, 100000, 100000, 100000, 100000];
+    let mut id_arr = Vec::new();
     let async = 100000;
 
     let now = now_millis();
     for i in 0..syncs.len() {
-        task_pool.create_sync_queue(i + 1, false);
+        id_arr.push(task_pool.create_sync_queue(i + 1, false));
     }
 
     for i in 0..syncs.len() {
         for v in 0..syncs[i].clone() {
-           task_pool.push_sync(v, i + 1, Direction::Back).expect("");
+           task_pool.push_sync(v, &id_arr[i], Direction::Back);
         }
     }
     println!("push sync back time{}",  now_millis() - now);
 
     let now = now_millis();
     for i in 0..async{
-        task_pool.push_async(i, i as usize);
+        task_pool.push_async(i, (i + 1) as usize);
     }
     println!("push async back time{}",  now_millis() - now);
 
@@ -563,6 +597,7 @@ fn test_sync(){
     for _ in 0..max{
         task_pool.pop();
     }
+    println!("task_pool len------{:?}", task_pool);
     println!("pop back time{}",  now_millis() - now);
 }
 
@@ -570,10 +605,11 @@ fn test_sync(){
 
 #[test]
 fn test_async(){
-	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new());
+	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
+    let mut id_arr = Vec::new();
 
     for i in 0..5{
-        task_pool.create_sync_queue(i + 1, false);
+        id_arr.push(Arc::new(task_pool.create_sync_queue(i + 1, false)));
     }
 
     let now = now_millis();
@@ -581,9 +617,10 @@ fn test_async(){
     for i in 0..5{
         let task_pool = task_pool.clone();
         let count = count.clone();
+        let id = id_arr[i].clone();
         thread::spawn(move || {
             for v in 0..1000 {
-                task_pool.push_sync(v, i + 1, Direction::Back).expect("");
+                task_pool.push_sync(v, &id, Direction::Back);
             }
             count.fetch_add(1, AOrd::Relaxed);
             if count.load(AOrd::Relaxed) == 10 {
@@ -621,7 +658,7 @@ fn pop (task_pool: Arc<TaskPool<u32>>){
         let count = count.clone();
         thread::spawn(move || {
             for _ in 0..1000 {
-                task_pool.pop().unwrap();
+                task_pool.pop();
             }
             count.fetch_add(1, AOrd::Relaxed);
             if count.load(AOrd::Relaxed) == 10 {
