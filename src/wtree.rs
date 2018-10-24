@@ -45,7 +45,7 @@ impl<T> WeightTree<T> {
 	}
 
 	//插入元素，返回该元素的位置
-	pub fn push_with_index(&mut self, elem: T, weight: usize, index: Arc<AtomicUsize>){
+	pub fn push_with_index(&mut self, elem: T, weight: usize, index: &Arc<AtomicUsize>){
 		// println!("update_weight----arr[0].a:{}, arr[1].a:{}, arr[0].w:{}, arr[1].w:{}, weight:{}", self.0[0].amount, self.0[1].amount, self.0[0].count, self.0[1].count,  weight);
 		let len = self.0.len();
 		store_index(len + 1, &index);
@@ -53,13 +53,14 @@ impl<T> WeightTree<T> {
 			elem: elem,
 			count: weight,
 			amount: weight,
-			index: index,
+			index: index.clone(),
 		});
 		self.up(len);
 	}
 
 	//remove a element by index, Panics if index is out of bounds.
 	pub fn remove(&mut self, index: &Arc<AtomicUsize>) -> T{
+		println!("remove---------------------{}", index.load(AOrd::Relaxed));
 		let i = load_index(index);
 		let r = self.delete((i - 1) as usize, self.0.len());
 		r.0
@@ -228,6 +229,7 @@ impl<T> WeightTree<T> {
 			self.0[index].amount = index_amount;
 			self.0[last].count = last_count;
 			self.0[last].amount = last_amount;
+			store_index(index + 1, &self.0[index].index);
 			self.up_update(index, last_count);
 			self.up_update(last, 0);
 			self.down(index);

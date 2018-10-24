@@ -115,6 +115,7 @@ lazy_static! {
 	pub static ref TIMER: Timer<FuncRuner> = Timer::new(10);
 }
 
+#[derive(Clone)]
 pub struct Timer<T: 'static + Send + Runer>(Arc<Mutex<TimerImpl<T>>>);
 
 #[derive(Clone)]
