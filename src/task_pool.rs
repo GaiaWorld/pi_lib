@@ -217,7 +217,9 @@ impl<T: 'static> TaskLock<T> {
 
 impl<T: 'static> Drop for TaskLock<T> {
     fn drop(&mut self){
-        self.sync_pool.1.lock().unwrap().free_lock(&self.index, self.weight);
+        let mut lock = self.sync_pool.1.lock().unwrap();
+        lock.free_lock(&self.index, self.weight);
+        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
     }
 }
 
