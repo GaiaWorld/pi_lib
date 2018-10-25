@@ -22,26 +22,6 @@ pub struct TaskPool<T: 'static>{
     delay_queue: Timer<DelayTask<T>>,
 }
 
-pub struct QueueId<T: 'static>{
-    id: usize,
-    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
-}
-
-impl<T: 'static> Drop for QueueId<T> {
-    fn drop(&mut self){
-        self.sync_pool.1.lock().unwrap().try_remove(&self.id)
-    }
-}
-
-impl<T: 'static> Clone for QueueId<T> {
-    fn clone(&self) -> Self {
-        QueueId {
-            id: self.id,
-            sync_pool: self.sync_pool.clone(),
-        }
-    }
-}
-
 impl<T: 'static> TaskPool<T>{
     pub fn new(timer: Timer<DelayTask<T>>,) -> Self {
         // let timer = Timer::new(10);
@@ -165,9 +145,11 @@ impl<T: 'static> TaskPool<T>{
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
                 return Some(Task::Sync(TaskLock{
                     task: elem,
-                    sync_pool: self.sync_pool.clone(),
-                    index: index,
-                    weight: weight,
+                    _queue_lock: QueueLock{
+                        sync_pool: self.sync_pool.clone(),
+                        index: index,
+                        weight: weight,
+                    }
                 }));
             }
         }
@@ -204,6 +186,16 @@ impl<T: 'static> TaskPool<T>{
         let async_pool = self.async_pool.1.lock().unwrap();
         sync_pool.len() + async_pool.len()
     }
+
+     /// lock sync_queue weight
+    pub fn lock_sync_queue(&self, id: &QueueId<T>) -> QueueLock<T>{
+        let r = self.sync_pool.1.lock().unwrap().lock_queue(&id.id);
+        QueueLock{
+            sync_pool:self.sync_pool.clone(),
+            index: r.0,
+            weight: r.1
+        }
+    }
 }
 
 unsafe impl<T: Send> Send for TaskPool<T> {}
@@ -219,19 +211,8 @@ impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
 
 pub struct TaskLock<T: 'static>{
     task: T,
-    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
-    index: Arc<AtomicUsize>,
-    weight: usize,
+    _queue_lock: QueueLock<T>,
 }
-
-impl<T: 'static> Drop for TaskLock<T> {
-    fn drop(&mut self){
-        let mut lock = self.sync_pool.1.lock().unwrap();
-        lock.free_lock(&self.index, self.weight);
-        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-    }
-}
-
 
 impl<T: 'static> Deref for TaskLock<T> {
     type Target = T;
@@ -247,6 +228,40 @@ impl<T: 'static> DerefMut for TaskLock<T> {
 }
 
 unsafe impl<T: Send> Send for TaskLock<T> {}
+
+pub struct QueueLock<T: 'static>{
+    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
+    index: Arc<AtomicUsize>,
+    weight: usize,
+}
+
+impl<T: 'static> Drop for QueueLock<T> {
+    fn drop(&mut self){
+        let mut lock = self.sync_pool.1.lock().unwrap();
+        lock.free_lock(&self.index, self.weight);
+        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+    }
+}
+
+pub struct QueueId<T: 'static>{
+    id: usize,
+    sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
+}
+
+impl<T: 'static> Drop for QueueId<T> {
+    fn drop(&mut self){
+        self.sync_pool.1.lock().unwrap().try_remove(&self.id)
+    }
+}
+
+impl<T: 'static> Clone for QueueId<T> {
+    fn clone(&self) -> Self {
+        QueueId {
+            id: self.id,
+            sync_pool: self.sync_pool.clone(),
+        }
+    }
+}
 
 //任务
 pub enum Task<T: 'static> {
@@ -296,6 +311,13 @@ impl<T: 'static> SyncPool<T>{
         let index = self.weight_queues.push(r.clone(), 0);
         self.weight_map.insert(self.max, (r.clone(), index));
         return self.max;
+    }
+
+    fn lock_queue(&mut self, id: &usize) -> (Arc<AtomicUsize>, usize) {
+        let r = self.weight_map.get(id).unwrap();
+        let w = r.0.borrow().get_weight();
+        self.weight_queues.update_weight(0, &r.1);
+        (r.1.clone(), w)
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
