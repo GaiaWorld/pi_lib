@@ -115,8 +115,13 @@ lazy_static! {
 	pub static ref TIMER: Timer<FuncRuner> = Timer::new(10);
 }
 
-#[derive(Clone)]
 pub struct Timer<T: 'static + Send + Runer>(Arc<Mutex<TimerImpl<T>>>);
+
+impl<T: 'static + Send + Runer> Clone for Timer<T> {
+    fn clone(&self) -> Self{
+        Timer(self.0.clone())
+    }
+}
 
 #[derive(Clone)]
 struct Statistics {

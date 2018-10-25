@@ -33,6 +33,15 @@ impl<T: 'static> Drop for QueueId<T> {
     }
 }
 
+impl<T: 'static> Clone for QueueId<T> {
+    fn clone(&self) -> Self {
+        QueueId {
+            id: self.id,
+            sync_pool: self.sync_pool.clone(),
+        }
+    }
+}
+
 impl<T: 'static> TaskPool<T>{
     pub fn new(timer: Timer<DelayTask<T>>,) -> Self {
         // let timer = Timer::new(10);
@@ -152,10 +161,10 @@ impl<T: 'static> TaskPool<T>{
             let mut lock = self.sync_pool.1.lock().unwrap();
             let w = lock.get_weight();
             if w != 0 {
-                let (mut elem, index, weight) = lock.pop_front_with_lock(r%w);
+                let (elem, index, weight) = lock.pop_front_with_lock(r%w);
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
                 return Some(Task::Sync(TaskLock{
-                    task: NonNull::new(&mut elem as *mut T).unwrap(),
+                    task: elem,
                     sync_pool: self.sync_pool.clone(),
                     index: index,
                     weight: weight,
@@ -189,6 +198,12 @@ impl<T: 'static> TaskPool<T>{
         self.async_pool.0.store(0, AOrd::Relaxed);
         self.delay_queue.clear();
     }
+
+    pub fn len(&self) -> usize {
+        let sync_pool = self.sync_pool.1.lock().unwrap();
+        let async_pool = self.async_pool.1.lock().unwrap();
+        sync_pool.len() + async_pool.len()
+    }
 }
 
 unsafe impl<T: Send> Send for TaskPool<T> {}
@@ -203,16 +218,10 @@ impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
 }
 
 pub struct TaskLock<T: 'static>{
-    task: NonNull<T>,
+    task: T,
     sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
     index: Arc<AtomicUsize>,
     weight: usize,
-}
-
-impl<T: 'static> TaskLock<T> {
-    pub fn unwrap(self) -> T {
-        unsafe {self.task.as_ptr().read()}
-    }
 }
 
 impl<T: 'static> Drop for TaskLock<T> {
@@ -227,13 +236,13 @@ impl<T: 'static> Drop for TaskLock<T> {
 impl<T: 'static> Deref for TaskLock<T> {
     type Target = T;
     fn deref(&self) -> &T {
-        unsafe{ self.task.as_ref() }
+        &self.task
     }
 }
 
 impl<T: 'static> DerefMut for TaskLock<T> {
     fn deref_mut(&mut self) -> &mut T {
-        unsafe{ self.task.as_mut() }
+        &mut self.task
     }
 }
 
@@ -413,7 +422,7 @@ impl<T: 'static> SyncPool<T>{
     }
 
     //清空同步任务池
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.len
     }
 }
