@@ -188,13 +188,13 @@ impl<T: 'static> TaskPool<T>{
     }
 
      /// lock sync_queue weight
-    pub fn lock_sync_queue(&self, id: &QueueId<T>) -> QueueLock<T>{
-        let r = self.sync_pool.1.lock().unwrap().lock_queue(&id.id);
-        QueueLock{
-            sync_pool:self.sync_pool.clone(),
-            index: r.0,
-            weight: r.1
-        }
+    pub fn lock_sync_queue(&self, id: &QueueId<T>) {
+        self.sync_pool.1.lock().unwrap().lock_queue(&id.id);
+    }
+
+     /// free lock sync_queue weight
+    pub fn free_lock_sync_queue(&self, id: &QueueId<T>) {
+        self.sync_pool.1.lock().unwrap().free_lock_queue(&id.id);
     }
 }
 
@@ -313,11 +313,16 @@ impl<T: 'static> SyncPool<T>{
         return self.max;
     }
 
-    fn lock_queue(&mut self, id: &usize) -> (Arc<AtomicUsize>, usize) {
+    fn lock_queue(&mut self, id: &usize) {
         let r = self.weight_map.get(id).unwrap();
         let w = r.0.borrow().get_weight();
         self.weight_queues.update_weight(0, &r.1);
-        (r.1.clone(), w)
+    }
+
+    fn free_lock_queue(&mut self, id: &usize) {
+        let r = self.weight_map.get(id).unwrap();
+        let w = r.0.borrow().get_weight();
+        self.weight_queues.update_weight(w, &r.1);
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
