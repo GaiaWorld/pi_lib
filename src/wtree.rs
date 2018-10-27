@@ -123,17 +123,25 @@ impl<T> WeightTree<T> {
 		}
 	}
 
-	pub fn get(&self, index: usize) -> Option<&T>{
-		match self.0.get(index){
+	pub fn get(&self, index: &Arc<AtomicUsize>) -> Option<&T>{
+		let i = load_index(index);
+		if i == 0 {
+			return None;
+		}
+		match self.0.get(i - 1){
 			Some(v) => Some(&v.elem),
 			None => {None}
 		}
 	}
 
-	pub fn get_mut(&mut self, index: usize) -> Option<&mut T>{
-		match self.0.get_mut(index){
+	pub fn get_mut(&mut self, index:  &Arc<AtomicUsize>) -> Option<&mut T>{
+		let i = load_index(index);
+		if i == 0 {
+			return None;
+		}
+		match self.0.get_mut(i - 1){
 			Some(v) => Some(&mut v.elem),
-			None => None
+			None => {None}
 		}
 	}
 
