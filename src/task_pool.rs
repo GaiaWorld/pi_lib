@@ -132,14 +132,17 @@ impl<T: 'static> TaskPool<T>{
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed); //同步池总权重
         let r: usize = rand::thread_rng().gen();
         let amount = async_w + sync_w;
+        //println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
         let w =  if amount == 0 {
             0
         }else {
             r%amount
         };
+        //println!("w------------------{}", w);
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let w = lock.get_weight();
+            //println!("sync_w------------------amount:{}, sync_w:{}, w:{}", amount, sync_w, w);
             if w != 0 {
                 let (elem, index, weight) = lock.pop_front_with_lock(r%w);
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
@@ -189,12 +192,17 @@ impl<T: 'static> TaskPool<T>{
 
      /// lock sync_queue weight
     pub fn lock_sync_queue(&self, id: &QueueId<T>) {
-        self.sync_pool.1.lock().unwrap().lock_queue(&id.id);
+        let mut lock = self.sync_pool.1.lock().unwrap();
+        lock.lock_queue(&id.id);
+        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+
     }
 
      /// free lock sync_queue weight
     pub fn free_lock_sync_queue(&self, id: &QueueId<T>) {
-        self.sync_pool.1.lock().unwrap().free_lock_queue(&id.id);
+        let mut lock = self.sync_pool.1.lock().unwrap();
+        lock.free_lock_queue(&id.id);
+        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
     }
 }
 
@@ -300,7 +308,7 @@ impl<T: 'static> SyncPool<T>{
             weight_queues: WeightTree::new(),
             weight_map: FnvHashMap::default(),
             len: 0,
-            max: 0
+            max: 0,
         }
     }
 
@@ -315,14 +323,28 @@ impl<T: 'static> SyncPool<T>{
 
     fn lock_queue(&mut self, id: &usize) {
         let r = self.weight_map.get(id).unwrap();
-        let w = r.0.borrow().get_weight();
+        r.0.borrow_mut().lock();
         self.weight_queues.update_weight(0, &r.1);
     }
 
     fn free_lock_queue(&mut self, id: &usize) {
-        let r = self.weight_map.get(id).unwrap();
+        let r = self.weight_map.get_mut(id).unwrap();
         let w = r.0.borrow().get_weight();
+        r.0.borrow_mut().free_lock();
         self.weight_queues.update_weight(w, &r.1);
+    }
+
+    fn free_lock(&mut self, index: &Arc<AtomicUsize>, weight: usize) {
+        let q = self.weight_queues.get_mut(index);
+        match q {
+            Some(v) => {
+                v.borrow_mut().free_lock();
+            },
+            None => {
+                return;
+            }
+        };
+        self.weight_queues.update_weight(weight, &index);
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
@@ -342,15 +364,12 @@ impl<T: 'static> SyncPool<T>{
         let r = {
             let queue = self.weight_queues.get_mut_by_weight(weight);
             let mut q = queue.0.borrow_mut();
+            q.lock();
             (q.pop_front().unwrap(), queue.1.clone(), q.get_weight()) //如果能够根据权重取到队列， 必然能从队列中弹出元素
         };
         self.weight_queues.update_weight(0, &r.1);
         self.len -= 1;
         r
-    }
-
-    fn free_lock(&mut self, index: &Arc<AtomicUsize>, weight: usize) {
-        self.weight_queues.update_weight(weight, &index);
     }
 
     //Find a queue with weight, Removes the last element from the queue and returns it, or None if the queue is empty or the queue is not exist.
@@ -376,7 +395,9 @@ impl<T: 'static> SyncPool<T>{
         let q = self.weight_map.get_mut(&id).unwrap();
         let mut borrow_mut = q.0.borrow_mut();
         let r = borrow_mut.push_back(task);
-        self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        if !borrow_mut.is_lock(){
+            self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        }
         r
     }
 
@@ -386,7 +407,9 @@ impl<T: 'static> SyncPool<T>{
         let q = self.weight_map.get_mut(&id).unwrap();
         let mut borrow_mut = q.0.borrow_mut();
         let r = borrow_mut.push_front(task);
-        self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        if !borrow_mut.is_lock(){
+            self.weight_queues.update_weight(borrow_mut.get_weight(), &q.1);
+        }
         r
     }
 
@@ -512,6 +535,7 @@ struct WeightQueue<T>{
     weight_unit: usize, //单个任务权重
     weight: usize, //队列总权重
     queue: Deque<T>, //队列
+    lock: bool,
 }
 
 impl<T> WeightQueue<T>{
@@ -523,7 +547,8 @@ impl<T> WeightQueue<T>{
         WeightQueue{
             weight_unit: weight_unit,
             weight: 0,
-            queue: q
+            queue: q,
+            lock: false
         }
     }
 
@@ -582,6 +607,25 @@ impl<T> WeightQueue<T>{
     //取队列的权重（所有任务的权重总值）
     fn get_weight(&self) -> usize{
         self.weight
+    }
+
+    fn _len(&self) -> usize{
+        match self.queue {
+            Deque::FastDeque(ref _queue) => 0,
+            Deque::VecDeque(ref queue) => queue.len(),
+        }
+    }
+
+    fn lock(&mut self){
+        self.lock = true;
+    }
+
+    fn free_lock(&mut self){
+        self.lock = false;
+    }
+
+    fn is_lock(&self) -> bool{
+        self.lock
     }
 }
 
@@ -705,4 +749,22 @@ fn pop (task_pool: Arc<TaskPool<u32>>){
             }
         });
     }
+}
+
+
+#[test]
+fn lock_queue(){
+    let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
+    // task_pool.create_sync_queue(1, false);
+    // task_pool.create_sync_queue(2, false);
+    // task_pool.create_sync_queue(3, false);
+    let id = task_pool.create_sync_queue(4, false);
+    task_pool.lock_sync_queue(&id);
+    for i in 4..7 {
+        task_pool.push_sync(i, &id, Direction::Back);
+    }
+
+    assert_eq!(task_pool.pop().is_some(), false);
+    task_pool.free_lock_sync_queue(&id);
+    assert_eq!(task_pool.pop().is_some(), true);
 }
