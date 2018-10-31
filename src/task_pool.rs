@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use std::marker::Send;
 use rand::Rng;
 use rand;
-use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use std::fmt;
 
@@ -132,27 +131,24 @@ impl<T: 'static> TaskPool<T>{
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed); //同步池总权重
         let r: usize = rand::thread_rng().gen();
         let amount = async_w + sync_w;
-        //println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
+        println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
         let w =  if amount == 0 {
             0
         }else {
             r%amount
         };
-        //println!("w------------------{}", w);
+        println!("w------------------{}", w);
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let w = lock.get_weight();
-            //println!("sync_w------------------amount:{}, sync_w:{}, w:{}", amount, sync_w, w);
+            println!("sync_w------------------amount:{}, sync_w:{}, w:{}", amount, sync_w, w);
             if w != 0 {
                 let (elem, index, weight) = lock.pop_front_with_lock(r%w);
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-                return Some(Task::Sync(TaskLock{
-                    task: elem,
-                    _queue_lock: QueueLock{
-                        sync_pool: self.sync_pool.clone(),
-                        index: index,
-                        weight: weight,
-                    }
+                return Some(Task::Sync(elem, QueueLock{
+                    sync_pool: self.sync_pool.clone(),
+                    index: index,
+                    weight: weight,
                 }));
             }
         }
@@ -217,26 +213,6 @@ impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
     }
 }
 
-pub struct TaskLock<T: 'static>{
-    task: T,
-    _queue_lock: QueueLock<T>,
-}
-
-impl<T: 'static> Deref for TaskLock<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.task
-    }
-}
-
-impl<T: 'static> DerefMut for TaskLock<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        &mut self.task
-    }
-}
-
-unsafe impl<T: Send> Send for TaskLock<T> {}
-
 pub struct QueueLock<T: 'static>{
     sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
     index: Arc<AtomicUsize>,
@@ -245,6 +221,7 @@ pub struct QueueLock<T: 'static>{
 
 impl<T: 'static> Drop for QueueLock<T> {
     fn drop(&mut self){
+        println!("drop--------------------------------{:?}", self.index);
         let mut lock = self.sync_pool.1.lock().unwrap();
         lock.free_lock(&self.index, self.weight);
         self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
@@ -274,7 +251,7 @@ impl<T: 'static> Clone for QueueId<T> {
 //任务
 pub enum Task<T: 'static> {
     Async(T),
-    Sync(TaskLock<T>),
+    Sync(T, QueueLock<T>),
 }
 
 //任务类型
@@ -365,6 +342,7 @@ impl<T: 'static> SyncPool<T>{
             let queue = self.weight_queues.get_mut_by_weight(weight);
             let mut q = queue.0.borrow_mut();
             q.lock();
+            println!("lock--------------------------------------------{:?}", queue.1.clone());
             (q.pop_front().unwrap(), queue.1.clone(), q.get_weight()) //如果能够根据权重取到队列， 必然能从队列中弹出元素
         };
         self.weight_queues.update_weight(0, &r.1);
@@ -644,112 +622,112 @@ use std::thread;
 #[cfg(test)]
 use std::time::{Duration};
 
-#[test]
-fn test_sync(){
-	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(10)));
-    let syncs:[u32; 5] = [100000, 100000, 100000, 100000, 100000];
-    let mut id_arr = Vec::new();
-    let async = 100000;
+// #[test]
+// fn test_sync(){
+// 	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(10)));
+//     let syncs:[u32; 5] = [100000, 100000, 100000, 100000, 100000];
+//     let mut id_arr = Vec::new();
+//     let async = 100000;
 
-    let now = now_millis();
-    for i in 0..syncs.len() {
-        id_arr.push(task_pool.create_sync_queue(i + 1, false));
-    }
+//     let now = now_millis();
+//     for i in 0..syncs.len() {
+//         id_arr.push(task_pool.create_sync_queue(i + 1, false));
+//     }
 
-    for i in 0..syncs.len() {
-        for v in 0..syncs[i].clone() {
-           task_pool.push_sync(v, &id_arr[i], Direction::Back);
-        }
-    }
-    println!("push sync back time{}",  now_millis() - now);
+//     for i in 0..syncs.len() {
+//         for v in 0..syncs[i].clone() {
+//            task_pool.push_sync(v, &id_arr[i], Direction::Back);
+//         }
+//     }
+//     println!("push sync back time{}",  now_millis() - now);
 
-    let now = now_millis();
-    for i in 0..async{
-        task_pool.push_async(i, (i + 1) as usize);
-    }
-    println!("push async back time{}",  now_millis() - now);
+//     let now = now_millis();
+//     for i in 0..async{
+//         task_pool.push_async(i, (i + 1) as usize);
+//     }
+//     println!("push async back time{}",  now_millis() - now);
 
-    let mut max = async;
-    //let mut max = 0;
-    for i in 0..syncs.len() {
-        max += syncs[i];
-    }
+//     let mut max = async;
+//     //let mut max = 0;
+//     for i in 0..syncs.len() {
+//         max += syncs[i];
+//     }
 
-    let now = now_millis();
-    for _ in 0..max{
-        task_pool.pop();
-    }
-    println!("task_pool len------{:?}", task_pool);
-    println!("pop back time{}",  now_millis() - now);
-}
+//     let now = now_millis();
+//     for _ in 0..max{
+//         task_pool.pop();
+//     }
+//     println!("task_pool len------{:?}", task_pool);
+//     println!("pop back time{}",  now_millis() - now);
+// }
 
 
 
-#[test]
-fn test_async(){
-	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
-    let mut id_arr = Vec::new();
+// #[test]
+// fn test_async(){
+// 	let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
+//     let mut id_arr = Vec::new();
 
-    for i in 0..5{
-        id_arr.push(Arc::new(task_pool.create_sync_queue(i + 1, false)));
-    }
+//     for i in 0..5{
+//         id_arr.push(Arc::new(task_pool.create_sync_queue(i + 1, false)));
+//     }
 
-    let now = now_millis();
-    let count = Arc::new(AtomicUsize::new(0));
-    for i in 0..5{
-        let task_pool = task_pool.clone();
-        let count = count.clone();
-        let id = id_arr[i].clone();
-        thread::spawn(move || {
-            for v in 0..1000 {
-                task_pool.push_sync(v, &id, Direction::Back);
-            }
-            count.fetch_add(1, AOrd::Relaxed);
-            if count.load(AOrd::Relaxed) == 10 {
-                println!("push time{}",  now_millis() - now);
-                pop(task_pool.clone());
-            }
-        });
-    }
-    for i in 0..5{
-        let task_pool = task_pool.clone();
-        let count = count.clone();
-        thread::spawn(move || {
-            for v in 0..1000 {
-                let r = v * i;
-                task_pool.push_async(r as u32, r + 1);
-            }
-            count.fetch_add(1, AOrd::Relaxed);
-            if count.load(AOrd::Relaxed) == 10 {
-                println!("push time{}",  now_millis() - now);
-                pop(task_pool.clone());
-            }
-        });
-    }
+//     let now = now_millis();
+//     let count = Arc::new(AtomicUsize::new(0));
+//     for i in 0..5{
+//         let task_pool = task_pool.clone();
+//         let count = count.clone();
+//         let id = id_arr[i].clone();
+//         thread::spawn(move || {
+//             for v in 0..1000 {
+//                 task_pool.push_sync(v, &id, Direction::Back);
+//             }
+//             count.fetch_add(1, AOrd::Relaxed);
+//             if count.load(AOrd::Relaxed) == 10 {
+//                 println!("push time{}",  now_millis() - now);
+//                 pop(task_pool.clone());
+//             }
+//         });
+//     }
+//     for i in 0..5{
+//         let task_pool = task_pool.clone();
+//         let count = count.clone();
+//         thread::spawn(move || {
+//             for v in 0..1000 {
+//                 let r = v * i;
+//                 task_pool.push_async(r as u32, r + 1);
+//             }
+//             count.fetch_add(1, AOrd::Relaxed);
+//             if count.load(AOrd::Relaxed) == 10 {
+//                 println!("push time{}",  now_millis() - now);
+//                 pop(task_pool.clone());
+//             }
+//         });
+//     }
 
-    thread::sleep(Duration::from_millis(1000));
-}
+//     thread::sleep(Duration::from_millis(1000));
+// }
 
-#[cfg(test)]
-fn pop (task_pool: Arc<TaskPool<u32>>){
-    let now = now_millis();
-    let count = Arc::new(AtomicUsize::new(0));
-    println!("task_pool len------{:?}", task_pool);
-    for _ in 0..10{
-        let task_pool = task_pool.clone();
-        let count = count.clone();
-        thread::spawn(move || {
-            for _ in 0..1000 {
-                task_pool.pop();
-            }
-            count.fetch_add(1, AOrd::Relaxed);
-            if count.load(AOrd::Relaxed) == 10 {
-                println!("pop time{}",  now_millis() - now);
-                println!("task_pool len------{:?}", task_pool);
-            }
-        });
-    }
-}
+// #[cfg(test)]
+// fn pop (task_pool: Arc<TaskPool<u32>>){
+//     let now = now_millis();
+//     let count = Arc::new(AtomicUsize::new(0));
+//     println!("task_pool len------{:?}", task_pool);
+//     for _ in 0..10{
+//         let task_pool = task_pool.clone();
+//         let count = count.clone();
+//         thread::spawn(move || {
+//             for _ in 0..1000 {
+//                 task_pool.pop();
+//             }
+//             count.fetch_add(1, AOrd::Relaxed);
+//             if count.load(AOrd::Relaxed) == 10 {
+//                 println!("pop time{}",  now_millis() - now);
+//                 println!("task_pool len------{:?}", task_pool);
+//             }
+//         });
+//     }
+// }
 
 
 #[test]
@@ -757,14 +735,32 @@ fn lock_queue(){
     let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
     // task_pool.create_sync_queue(1, false);
     // task_pool.create_sync_queue(2, false);
-    // task_pool.create_sync_queue(3, false);
+    let id1 = task_pool.create_sync_queue(3, false);
     let id = task_pool.create_sync_queue(4, false);
     task_pool.lock_sync_queue(&id);
-    for i in 4..7 {
+    for i in 4..10 {
         task_pool.push_sync(i, &id, Direction::Back);
     }
 
-    assert_eq!(task_pool.pop().is_some(), false);
-    task_pool.free_lock_sync_queue(&id);
+    for i in 4..10 {
+        task_pool.push_sync(i, &id1, Direction::Back);
+    }
+
+    for i in 4..10 {
+        task_pool.push_sync(i, &id, Direction::Back);
+    }
+
     assert_eq!(task_pool.pop().is_some(), true);
+    task_pool.free_lock_sync_queue(&id);
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    task_pool.pop();
+    // task_pool.free_lock_sync_queue(&id);
+    // assert_eq!(r.is_some(), true);
+    // assert_eq!(task_pool.pop().is_some(), false);
 }
