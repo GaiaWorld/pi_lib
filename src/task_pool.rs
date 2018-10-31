@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use std::marker::Send;
 use rand::Rng;
 use rand;
-use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use std::fmt;
 
@@ -46,10 +45,8 @@ impl<T: 'static> TaskPool<T>{
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
         match direc {
             Direction::Front => {
-                // println!("!!!!!!push front before, weight: {}", sync_pool.get_weight());
                 let r = sync_pool.push_front(id.id, task);
                 self.sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
-                // println!("!!!!!!push front after, weight: {}", sync_pool.get_weight());
                 r
             },
             Direction::Back => {
@@ -134,9 +131,7 @@ impl<T: 'static> TaskPool<T>{
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed); //同步池总权重
         let r: usize = rand::thread_rng().gen();
         let amount = async_w + sync_w;
-        // if amount > 0 {
-        //     println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
-        // }
+        println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
         let w =  if amount == 0 {
             0
         }else {
@@ -150,11 +145,10 @@ impl<T: 'static> TaskPool<T>{
             if w != 0 {
                 let (elem, index, weight) = lock.pop_front_with_lock(r%w);
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-                return Some(Task::Sync(TaskLock{
-                    task: elem,
-                    _queue_lock: QueueLock{
-                        sync_pool: self.sync_pool.clone(),
-                        index: index,                    }
+                return Some(Task::Sync(elem, QueueLock{
+                    sync_pool: self.sync_pool.clone(),
+                    index: index,
+                    weight: weight,
                 }));
             }
         }
@@ -219,29 +213,10 @@ impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
     }
 }
 
-pub struct TaskLock<T: 'static>{
-    task: T,
-    _queue_lock: QueueLock<T>,
-}
-
-impl<T: 'static> Deref for TaskLock<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.task
-    }
-}
-
-impl<T: 'static> DerefMut for TaskLock<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        &mut self.task
-    }
-}
-
-unsafe impl<T: Send> Send for TaskLock<T> {}
-
 pub struct QueueLock<T: 'static>{
     sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
     index: Arc<AtomicUsize>,
+    weight: usize,
 }
 
 impl<T: 'static> Drop for QueueLock<T> {
@@ -249,7 +224,6 @@ impl<T: 'static> Drop for QueueLock<T> {
         let mut lock = self.sync_pool.1.lock().unwrap();
         lock.free_lock(&self.index);
         self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-        // println!("drop--------------------------------------------");
     }
 }
 
@@ -276,7 +250,7 @@ impl<T: 'static> Clone for QueueId<T> {
 //任务
 pub enum Task<T: 'static> {
     Async(T),
-    Sync(TaskLock<T>),
+    Sync(T, QueueLock<T>),
 }
 
 //任务类型
@@ -761,14 +735,22 @@ fn lock_queue(){
     let task_pool: Arc<TaskPool<u32>> = Arc::new(TaskPool::new(Timer::new(0)));
     // task_pool.create_sync_queue(1, false);
     // task_pool.create_sync_queue(2, false);
-    // task_pool.create_sync_queue(3, false);
+    let id1 = task_pool.create_sync_queue(3, false);
     let id = task_pool.create_sync_queue(4, false);
     task_pool.lock_sync_queue(&id);
-    for i in 4..7 {
+    for i in 4..10 {
         task_pool.push_sync(i, &id, Direction::Back);
     }
 
-    assert_eq!(task_pool.pop().is_some(), false);
+    for i in 4..10 {
+        task_pool.push_sync(i, &id1, Direction::Back);
+    }
+
+    for i in 4..10 {
+        task_pool.push_sync(i, &id, Direction::Back);
+    }
+
+    assert_eq!(task_pool.pop().is_some(), true);
     task_pool.free_lock_sync_queue(&id);
     assert_eq!(task_pool.pop().is_some(), true);
 }
