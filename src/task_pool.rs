@@ -46,8 +46,10 @@ impl<T: 'static> TaskPool<T>{
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
         match direc {
             Direction::Front => {
+                // println!("!!!!!!push front before, weight: {}", sync_pool.get_weight());
                 let r = sync_pool.push_front(id.id, task);
                 self.sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
+                // println!("!!!!!!push front after, weight: {}", sync_pool.get_weight());
                 r
             },
             Direction::Back => {
@@ -132,7 +134,9 @@ impl<T: 'static> TaskPool<T>{
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed); //同步池总权重
         let r: usize = rand::thread_rng().gen();
         let amount = async_w + sync_w;
-        //println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
+        // if amount > 0 {
+        //     println!("pop------------------amount:{}, sync_w:{}", amount, sync_w);
+        // }
         let w =  if amount == 0 {
             0
         }else {
@@ -142,7 +146,7 @@ impl<T: 'static> TaskPool<T>{
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let w = lock.get_weight();
-            //println!("sync_w------------------amount:{}, sync_w:{}, w:{}", amount, sync_w, w);
+            // println!("sync_w------------------amount:{}, sync_w:{}, w:{}", amount, sync_w, w);
             if w != 0 {
                 let (elem, index, weight) = lock.pop_front_with_lock(r%w);
                 self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
@@ -150,9 +154,7 @@ impl<T: 'static> TaskPool<T>{
                     task: elem,
                     _queue_lock: QueueLock{
                         sync_pool: self.sync_pool.clone(),
-                        index: index,
-                        weight: weight,
-                    }
+                        index: index,                    }
                 }));
             }
         }
@@ -240,14 +242,14 @@ unsafe impl<T: Send> Send for TaskLock<T> {}
 pub struct QueueLock<T: 'static>{
     sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
     index: Arc<AtomicUsize>,
-    weight: usize,
 }
 
 impl<T: 'static> Drop for QueueLock<T> {
     fn drop(&mut self){
         let mut lock = self.sync_pool.1.lock().unwrap();
-        lock.free_lock(&self.index, self.weight);
+        lock.free_lock(&self.index);
         self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+        // println!("drop--------------------------------------------");
     }
 }
 
@@ -334,17 +336,19 @@ impl<T: 'static> SyncPool<T>{
         self.weight_queues.update_weight(w, &r.1);
     }
 
-    fn free_lock(&mut self, index: &Arc<AtomicUsize>, weight: usize) {
+    fn free_lock(&mut self, index: &Arc<AtomicUsize>) {
         let q = self.weight_queues.get_mut(index);
-        match q {
+        let w = match q {
             Some(v) => {
-                v.borrow_mut().free_lock();
+                let mut borrow_mut = v.borrow_mut();
+                borrow_mut.free_lock();
+                borrow_mut.get_weight()
             },
             None => {
                 return;
             }
         };
-        self.weight_queues.update_weight(weight, &index);
+        self.weight_queues.update_weight(w, &index);
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
