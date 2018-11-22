@@ -55,3 +55,10 @@ where
 	}
 	It(g)
 }
+
+pub fn err_map<T, E: ToString>(err: Result<T, E>) -> Result<T, String>{
+	match err {
+		Ok(o) => Ok(o),
+		Err(e) => Err(e.to_string())
+	}
+}
