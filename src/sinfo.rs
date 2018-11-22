@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use atom::Atom;
-use bon::{WriteBuffer, ReadBuffer, Encode, Decode};
+use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 
 // 枚举结构体字段的所有类型
 #[derive(Debug)]
@@ -72,35 +72,35 @@ impl Encode for EnumType{
 }
 
 impl Decode for EnumType{
-	fn decode(bb:&mut ReadBuffer) -> EnumType{
-		let t = u8::decode(bb);
+	fn decode(bb:&mut ReadBuffer) -> Result<EnumType, ReadBonErr> {
+		let t = u8::decode(bb)?;
 		match t{
-			0 => {EnumType::Bool},
-			1 => {EnumType::U8},
-			2 => {EnumType::U16},
-			3 => {EnumType::U32},
-			4 => {EnumType::U64},
-			5 => {EnumType::U128},
-			6 => {EnumType::U256},
-			7 => {EnumType::Usize},
-			8 => {EnumType::I8},
-			9 => {EnumType::I16},
-			10 => {EnumType::I32},
-			11 => {EnumType::I64},
-			12 => {EnumType::I128},
-			13 => {EnumType::I256},
-			14 => {EnumType::Isize},
-			15 => {EnumType::F32},
-			16 => {EnumType::F64},
-			17 => {EnumType::BigI},
-			18 => {EnumType::Str},
-			19 => {EnumType::Bin},
-			20 => {EnumType::Arr(Arc::new(EnumType::decode(bb)))},
-			21 => {EnumType::Map(Arc::new(EnumType::decode(bb)), Arc::new(EnumType::decode(bb)))},
-			22 => {EnumType::Struct(Arc::new(StructInfo::decode(bb)))},
-			23 => {EnumType::Option(Arc::new(EnumType::decode(bb)))},
-			24 => {EnumType::Enum(Arc::new(EnumInfo::decode(bb)))},
-			_ => {panic!("EnumType is not exist:{}", t);}
+			0 => Ok(EnumType::Bool),
+			1 => Ok(EnumType::U8),
+			2 => Ok(EnumType::U16),
+			3 => Ok(EnumType::U32),
+			4 => Ok(EnumType::U64),
+			5 => Ok(EnumType::U128),
+			6 => Ok(EnumType::U256),
+			7 => Ok(EnumType::Usize),
+			8 => Ok(EnumType::I8),
+			9 => Ok(EnumType::I16),
+			10 => Ok(EnumType::I32),
+			11 => Ok(EnumType::I64),
+			12 => Ok(EnumType::I128),
+			13 => Ok(EnumType::I256),
+			14 => Ok(EnumType::Isize),
+			15 => Ok(EnumType::F32),
+			16 => Ok(EnumType::F64),
+			17 => Ok(EnumType::BigI),
+			18 => Ok(EnumType::Str),
+			19 => Ok(EnumType::Bin),
+			20 => Ok(EnumType::Arr(Arc::new(EnumType::decode(bb)?))),
+			21 => Ok(EnumType::Map(Arc::new(EnumType::decode(bb)?), Arc::new(EnumType::decode(bb)?))),
+			22 => Ok(EnumType::Struct(Arc::new(StructInfo::decode(bb)?))),
+			23 => Ok(EnumType::Option(Arc::new(EnumType::decode(bb)?))),
+			24 => Ok(EnumType::Enum(Arc::new(EnumInfo::decode(bb)?))),
+			_ => panic!("EnumType is not exist:{}", t)
 		}
 	}
 }
@@ -140,13 +140,13 @@ impl Encode for StructInfo{
 }
 
 impl Decode for StructInfo{
-	fn decode(bb: &mut ReadBuffer) -> StructInfo{
-		StructInfo{
-			name: Atom::decode(bb),
-			name_hash: u32::decode(bb),
-			notes: Option::decode(bb),
-			fields: Vec::decode(bb),
-		}
+	fn decode(bb: &mut ReadBuffer) -> Result<StructInfo, ReadBonErr> {
+		Ok(StructInfo{
+			name: Atom::decode(bb)?,
+			name_hash: u32::decode(bb)?,
+			notes: Option::decode(bb)?,
+			fields: Vec::decode(bb)?,
+		})
 	}
 }
 
@@ -175,12 +175,12 @@ impl Encode for FieldInfo{
 }
 
 impl Decode for FieldInfo{
-	fn decode(bb: &mut ReadBuffer) -> FieldInfo{
-		FieldInfo{
-			name: Atom::decode(bb),
-			ftype: EnumType::decode(bb),
-			notes: Option::decode(bb),
-		}
+	fn decode(bb: &mut ReadBuffer) -> Result<FieldInfo, ReadBonErr> {
+		Ok(FieldInfo{
+			name: Atom::decode(bb)?,
+			ftype: EnumType::decode(bb)?,
+			notes: Option::decode(bb)?,
+		})
 	}
 }
 
@@ -213,13 +213,13 @@ impl Encode for EnumInfo{
 }
 
 impl Decode for EnumInfo{
-	fn decode(bb: &mut ReadBuffer) -> EnumInfo{
-		EnumInfo{
-			name: Atom::decode(bb),
-			name_hash: u32::decode(bb),
-			notes: Option::decode(bb),
-			members: Vec::decode(bb),
-		}
+	fn decode(bb: &mut ReadBuffer) -> Result<EnumInfo, ReadBonErr>{
+		Ok(EnumInfo{
+			name: Atom::decode(bb)?,
+			name_hash: u32::decode(bb)?,
+			notes: Option::decode(bb)?,
+			members: Vec::decode(bb)?,
+		})
 	}
 }
 

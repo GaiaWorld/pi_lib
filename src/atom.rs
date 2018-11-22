@@ -7,7 +7,7 @@ use std::ops::Deref;
 use core::convert::From;
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
-use bon::{Encode, Decode, WriteBuffer, ReadBuffer};
+use bon::{Encode, Decode, WriteBuffer, ReadBuffer, ReadBonErr};
 use std::sync::{Arc, Weak};
 use std::sync::RwLock;
 use cowlist::CowList;
@@ -74,8 +74,8 @@ impl Encode for Atom{
 }
 
 impl Decode for Atom{
-	fn decode(bb: &mut ReadBuffer) -> Atom{
-		Atom::from(String::decode(bb))
+	fn decode(bb: &mut ReadBuffer) -> Result<Atom, ReadBonErr>{
+		Ok(Atom::from(String::decode(bb)?))
 	}
 }
 
