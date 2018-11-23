@@ -28,7 +28,7 @@ impl<T> Slab<T> {
             entries: Vec::with_capacity(capacity),
             next: 0,
             len: 0,
-            vacancy_sign: Vec::with_capacity(size_of::<usize>() * 8 << 1),
+            vacancy_sign: Vec::with_capacity(usize_size() << 1),
         }
     }
 
@@ -42,7 +42,7 @@ impl<T> Slab<T> {
         }
         let need_add = self.len + additional - self.entries.len();
         self.entries.reserve(need_add);
-        self.vacancy_sign.reserve(need_add/(size_of::<usize>() * 8));
+        self.vacancy_sign.reserve(need_add/usize_size());
     }
 
     
@@ -52,7 +52,7 @@ impl<T> Slab<T> {
         }
         let need_add = self.len + additional - self.entries.len();
         self.entries.reserve_exact(need_add);
-        self.vacancy_sign.reserve(need_add/(size_of::<usize>() * 8));
+        self.vacancy_sign.reserve(need_add/usize_size());
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -131,11 +131,11 @@ impl<T> Slab<T> {
             }
             unsafe{self.entries.set_len(len + 1)};
             self.next = key + 1;
-            let s_index = key%(size_of::<usize>() * 8);
+            let s_index = key%usize_size();
             if s_index == 0{
                 self.vacancy_sign.push(usize::max_value() - 1);
             }else {
-                one2zero(&mut self.vacancy_sign[key/(size_of::<usize>() * 8)], s_index);
+                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
             }
             &mut self.entries[key]
         } else {
@@ -157,11 +157,11 @@ impl<T> Slab<T> {
         if key == self.entries.len() {
             self.entries.push(val);
             self.next = key + 1;
-            let s_index = key%(size_of::<usize>() * 8);
+            let s_index = key%usize_size();
             if s_index == 0{
                 self.vacancy_sign.push(usize::max_value() - 1);
             }else {
-                one2zero(&mut self.vacancy_sign[key/(size_of::<usize>() * 8)], s_index);
+                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
             }
         } else {
             let mut prev = replace(&mut self.entries[key], val);
@@ -204,18 +204,18 @@ impl<T> Slab<T> {
 
     #[inline]
     fn zero2one(&mut self, index: usize){
-        zero2one(&mut self.vacancy_sign[index/(size_of::<usize>() * 8)], index%(size_of::<usize>() * 8));
+        zero2one(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
     }
 
     #[inline]
     fn one2zero(&mut self, index: usize){
-        one2zero(&mut self.vacancy_sign[index/(size_of::<usize>() * 8)], index%(size_of::<usize>() * 8));
+        one2zero(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
     }
 
     #[inline]
     fn is_one(&self, key: usize) -> bool{
-        let signs = unsafe {self.vacancy_sign.get_unchecked(key/(size_of::<usize>() * 8))};
-        is_one(signs, key%(size_of::<usize>() * 8))
+        let signs = unsafe {self.vacancy_sign.get_unchecked(key/usize_size())};
+        is_one(signs, key%usize_size())
     }
 }
 
@@ -314,8 +314,8 @@ impl<'a, T> Iterator for SlabIter<'a, T> {
         if self.curr_len == self.len {
             return None;
         }
-        let sign_index = self.curr_index/(size_of::<usize>() * 8);
-        let mut sign_index1 = self.curr_index%(size_of::<usize>() * 8);
+        let sign_index = self.curr_index/usize_size();
+        let mut sign_index1 = self.curr_index%usize_size();
         for i in sign_index..self.signs.len(){
             let sign = self.signs[i].clone() >> sign_index1;
             if sign != usize::max_value() >> sign_index1{
@@ -342,8 +342,8 @@ impl<'a, T> Iterator for SlabIterMut<'a, T> {
         if self.curr_len == self.len {
             return None;
         }
-        let sign_index = self.curr_index/(size_of::<usize>() * 8);
-        let mut sign_index1 = self.curr_index%(size_of::<usize>() * 8);
+        let sign_index = self.curr_index/usize_size();
+        let mut sign_index1 = self.curr_index%usize_size();
         for i in sign_index..self.signs.len(){
             let sign = self.signs[i].clone() >> sign_index1;
             if sign != usize::max_value() >> sign_index1{
@@ -374,6 +374,11 @@ fn zero2one(i: &mut usize, index: usize){
 #[inline]
 fn one2zero(i: &mut usize, index: usize){
     (*i) = *i - (1 << index);
+}
+
+#[inline]
+fn usize_size() -> usize{
+    size_of::<usize>() * 8
 }
 
 // 返回指定的数字中低位第一个0的位置
@@ -492,7 +497,7 @@ fn test_eff(){
         let r = slab.alloc();
         *r = i;
     }
-    println!("insert time-----------------------------------------------{}", now_millis() - time);
+    println!("alloc time-----------------------------------------------{}", now_millis() - time);
     let mut slab: Slab<u64> = Slab::new();
     let time = now_millis();
     for i in 0..1000000{
@@ -506,6 +511,13 @@ fn test_eff(){
     }
     let time2 = now_millis();
     println!("remove time-----------------------------------------------{}", time2 - time1);
+
+    let time = now_millis();
+    for i in 0..1000000{
+        slab.insert(i);
+    }
+    let time1 = now_millis();
+    println!("insert1 time-----------------------------------------------{}", time1 - time);
 
     let mut v = Vec::new();
 
