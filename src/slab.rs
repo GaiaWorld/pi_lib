@@ -116,9 +116,9 @@ impl<T> Slab<T> {
     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
         return &mut self.entries[key - 1];
     }
-    pub fn alloc(&mut self) -> &mut T{
+    pub fn alloc(&mut self) -> (usize, &mut T){
         let key = self.next;
-        self.alloc_at(key)
+        (key +1, self.alloc_at(key))
     }
 
     #[inline]
