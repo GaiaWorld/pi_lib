@@ -15,6 +15,7 @@
 #![feature(const_fn)]
 #![feature(nll)]
 #![feature(fnbox)]
+#[warn(unreachable_patterns)]
 
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]
 
@@ -48,6 +49,7 @@ pub mod gray;
 pub mod task_pool;
 pub mod timer;
 pub mod fast_deque;
+//pub mod wcs;
 
 #[macro_use]
 extern crate lazy_static;
