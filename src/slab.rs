@@ -481,7 +481,7 @@ fn test_alloc(){
     let mut slab: Slab<u64> = Slab::new();
     for i in 1..71{
         let r = slab.alloc();
-        *r = i;
+        *r.1 = i;
     }
     println!("slab ------{:?}", slab);
 }
@@ -495,7 +495,7 @@ fn test_eff(){
     let time = now_millis();
     for i in 0..1000000{
         let r = slab.alloc();
-        *r = i;
+        *r.1 = i;
     }
     println!("alloc time-----------------------------------------------{}", now_millis() - time);
     let mut slab: Slab<u64> = Slab::new();
