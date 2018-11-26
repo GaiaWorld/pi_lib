@@ -49,7 +49,8 @@ pub mod gray;
 pub mod task_pool;
 pub mod timer;
 pub mod fast_deque;
-//pub mod wcs;
+pub mod wcs;
+pub mod component;
 
 #[macro_use]
 extern crate lazy_static;
