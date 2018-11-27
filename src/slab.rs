@@ -1,8 +1,9 @@
 
-use std::mem::{size_of, replace, transmute_copy};
+use std::mem::{size_of, replace, transmute_copy, needs_drop, drop};
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ops::{Index, IndexMut};
 use std::iter::IntoIterator;
+use std::ops::Drop;
 
 pub struct Slab<T> {
     entries: Vec<T>,// Chunk of memory
@@ -216,6 +217,37 @@ impl<T> Slab<T> {
     fn is_one(&self, key: usize) -> bool{
         let signs = unsafe {self.vacancy_sign.get_unchecked(key/usize_size())};
         is_one(signs, key%usize_size())
+    }
+}
+
+impl<T> Drop for Slab<T>{
+    fn drop(&mut self) {
+        if needs_drop::<T>(){
+            let index = self.entries.len() - 1;
+            let mut index1 = index/usize_size();
+            let mut index2 = index%usize_size();
+            loop {
+                let signs = self.vacancy_sign[index1].clone();
+                let diff = usize_size() - index2 + 1;
+                let signs =  signs<<diff;
+                if signs == usize_size()<<diff {  //如果全是空位， 不需要drop
+                    unsafe{ self.entries.set_len(self.entries.len() - (index2 + 1))};
+                }else{ //否则找到容器尾部的非空位， 移除元素（移除即drop）
+                    let i = signs.leading_zeros() as usize;
+                    unsafe{ self.entries.set_len(self.entries.len() - i)};
+                    self.entries.pop();
+                    if index2 - i != 0{
+                        index2 = index2 - i - 1;
+                        continue;
+                    }
+                }
+                if index1 == 0 {
+                    return;
+                }
+                index1 -= 1;
+                index2 = 0;
+            }
+        }
     }
 }
 
