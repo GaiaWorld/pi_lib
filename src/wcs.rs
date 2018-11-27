@@ -50,8 +50,9 @@ pub trait ComponentMgr: 'static + Sized{
     fn new() -> Self;
 }
 
-pub trait System<E>: Runner<E>{
-	fn run(&mut self, e: &E);
+pub trait System<E>{
+    fn run(&mut self, e: &E);
+    fn init<C: ComponentMgr>(self, world: World<C, E>) -> Rc<RefCell<Self>>;
 }
 
 pub trait ID{
@@ -61,6 +62,12 @@ pub trait ID{
 
 pub trait Runner<E>{
     fn run(&self, e: &E);
+}
+
+impl<E, T: System<E>> Runner<E> for RefCell<T>{
+    fn run(&self, e: &E){
+        self.borrow_mut().run(e);
+    }
 }
 
 
