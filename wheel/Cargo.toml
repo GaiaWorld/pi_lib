@@ -1,0 +1,8 @@
+[package]
+name = "wheel"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+heap = {path="../heap"}
+dyn_uint = {path="../dyn_uint"}

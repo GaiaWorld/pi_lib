@@ -1,0 +1,9 @@
+[package]
+name = "wtree"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+time = {path="../time"}
+rand = "0.5.4"
+dyn_uint = {path="../dyn_uint"}

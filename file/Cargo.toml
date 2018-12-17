@@ -1,0 +1,10 @@
+[package]
+name = "file"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+atom = {path="../atom"}
+worker = {path="../worker"}
+npnc = "*"
+notify = "*"

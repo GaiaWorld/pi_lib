@@ -1,0 +1,9 @@
+[package]
+name = "handler"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+gray = {path="../gray"}
+atom = {path="../atom"}
+fnv = "1.0.6"

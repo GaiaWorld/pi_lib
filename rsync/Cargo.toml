@@ -1,0 +1,8 @@
+[package]
+name = "rsync"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+crc = "1.8.1"
+adler32 = {path="../adler32"}

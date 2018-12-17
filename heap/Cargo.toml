@@ -1,0 +1,8 @@
+[package]
+name = "heap"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+time = {path="../time"}
+dyn_uint = {path="../dyn_uint"}
