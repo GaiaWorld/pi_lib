@@ -6,5 +6,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 [dependencies]
 fnv = "1.0.6"
 lazy_static = "*"
-cowlist = {path="../cowlist"}
 bon = {path="../bon"}
+time = {path="../time"}

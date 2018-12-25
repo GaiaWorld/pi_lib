@@ -1,9 +1,9 @@
+#![feature(core_intrinsics)] 
 /**
  * 全局的线程安全的原子字符串池，为了移植问题，可能需要将实现部分移到其他库
  * 某些高频单次的Atom，可以在应用层增加一个cache来缓冲Atom，定期检查引用计数来判断是否缓冲。
  */
 
-extern crate cowlist;
 extern crate fnv;
 extern crate bon;
 
@@ -16,10 +16,10 @@ use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 use std::sync::{Arc, Weak};
 use std::sync::RwLock;
+use std::marker::PhantomData;
 
 use fnv::FnvHashMap;
 
-use cowlist::CowList;
 use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 
 // 同步原语，可用于运行一次性初始化。用于全局，FFI或相关功能的一次初始化。
@@ -127,80 +127,87 @@ impl<'a> From<&'a [u8]> for Atom {
 //     static ref STRING_CACHE: Mutex<StringCache> = Mutex::new(StringCache::new());
 // }
 
-struct Table(RwLock<FnvHashMap<u64, (usize, CowList<Weak<(String, u64)>>)>>);
+struct Table(RwLock<FnvHashMap<u64, (usize, CowList)>>);
 
 impl Table{
 	pub fn or_insert(&self, s: String) -> Arc<(String, u64)>{
 		let h = str_hash(&s, &mut DefaultHasher::new());
-
-		//读
-		let list = {
+        let list = {
 			let map = self.0.read().unwrap();
 			match map.get(&h){
 				Some(v) => Some((v.0, v.1.clone())),
 				None => None,
 			}
 		};
-		let (version, mut has_nil) = match list {
+		let (version, nil_count, mut list, strong) = match list {
 			Some((ver, cow)) => {
-				let mut nil = false;
-				match read(&cow, &s, &mut nil){
+				let mut nil_count = 0;
+				match read(&cow, &s, &mut nil_count){
 					Some(r) => return r,
-					None => (ver, nil)
+					None => {
+                        let strong = Arc::new((s, h));
+                        let mut cow = cow.clone();
+                        (ver, nil_count, cow.push(Arc::downgrade(&strong)), strong)
+                    }
 				}
 			},
-			None => (0, false)
+			None => {
+                let strong = Arc::new((s, h));
+                (0, 0, CowList::new(Arc::downgrade(&strong)), strong)
+            }
 		};
 
-
-		//如果未读到,取到写锁
-		let strong = Arc::new((s, h));
-		let mut is_end = false;
-		let mut map = self.0.write().unwrap();
-
-		//map中不存在为h的key，证明版本未更新，注解插入当前值，并返回强引用
-		let list = map.entry(h).or_insert_with(||{
-			is_end = true;
-			(1, CowList::new(Arc::downgrade(&strong)))
-		} );
-		if is_end {
-			return strong
+        // 如果存在无效弱引用，应该删除 TODO
+		if nil_count > 0{
+            let l = list.clone();
+            let mut iter = l.iter();
+            list = CowList::new(iter.next().unwrap().clone());
+            loop {
+                match iter.next() {
+                    Some(node) =>{
+                        match node.upgrade() {
+                            Some(_n) => list = list.push_uncopy(node.clone()),
+                            None => (),
+                        }
+                    },
+                    None => break,
+                }
+            }
 		}
 
-		//否则， mpa[h]存在， 算出版本差
-		let mut diff = list.0 - version;
-		//如果版本差不为0， 应该再次读
-		if diff != 0{
-			has_nil = false;
-			for v in list.1.iter(){
-				let v1 = v.upgrade();
-				match v1 {
-					Some(r) => return r,
-					None => (),
-				};
-				diff -= 1;
-				if diff == 0{
-					break;
-				}
-			}
-		}
+        let mut map = self.0.write().unwrap();
 
-		//如果存在无效弱引用，应该删除 TODO
-		if has_nil == true{
-			// list.1.iter_mut().filter(|item|{
-			// 	let strong = item.upgrade();
-			// 	match strong {
-			// 		Some(v) => false,
-			// 		None => true,
-			// 	}
-			// });
-		}
+        //map中不存在为h的key，证明版本未更新，插入当前值，并返回强引用
+        let mut is_modify = false;
+        let entry = map.entry(h).and_modify(|e|{
+            if e.0 == version {
+                e.1 = list.clone();
+                e.0 += 1;
+            } else {
+                let mut _c = 0;
+                match read(&e.1, strong.as_ref().0.as_str(), &mut _c) {
+                    Some(_) => (),
+                    None => {
+                        e.1 = e.1.push(Arc::downgrade(&strong));
+                        e.0 += 1;
+                    },
+                } 
+            }
+            is_modify = true;
+        });
+        if is_modify == false { //如果map中不存在值， 并且当前版本值为0， 直接插入list
+            if version == 0{
+                entry.or_insert((1, list));
+            }else {
+                entry.or_insert((1, CowList::new(Arc::downgrade(&strong))));
+            }
+            
+        }
+        return strong;
 
-		//第二次读取失败,需要写入
-		list.1 = list.1.push(Arc::downgrade(&strong));
-		list.0 += 1;
-		return strong;
+        //return Arc::new(("sss".to_string(), 5));
 	}
+
 
 }
 
@@ -209,7 +216,7 @@ fn str_hash<T: Hasher>(s: &str, haser: &mut T) -> u64{
 	haser.finish()
 }
 
-fn read(list: &CowList<Weak<(String, u64)>>, s: &str, has_nil: &mut bool) -> Option<Arc<(String, u64)>>{
+fn read(list: &CowList, s: &str, nil_count: &mut usize) -> Option<Arc<(String, u64)>>{
 	for o in list.iter(){
 		let strong = o.upgrade();
 		match strong {
@@ -218,12 +225,73 @@ fn read(list: &CowList<Weak<(String, u64)>>, s: &str, has_nil: &mut bool) -> Opt
 					return Some(o);
 				}
 			},
-			None => *has_nil = true,
+			None => {
+                *nil_count += 1;
+            },
 		};
 	}
 	None
 }
 
+#[derive(Clone)]
+struct CowList{
+	next:Option<Arc<CowList>>,
+	value:Weak<(String, u64)>,
+}
+
+impl CowList{
+	pub fn new(ele: Weak<(String, u64)>) -> Self {
+		CowList{
+			next: None,
+			value: ele
+		}
+	}
+
+	pub fn push(&mut self, ele: Weak<(String, u64)>) -> CowList {
+		CowList{
+			next: Some(Arc::new(self.clone())),
+			value: ele,
+		}
+	}
+
+    pub fn push_uncopy(self, ele: Weak<(String, u64)>) -> CowList {
+		CowList{
+			next: Some(Arc::new(self)),
+			value: ele,
+		}
+	}
+
+	pub fn iter(&self) -> Iter{
+		Iter{
+			head: Some(Arc::new(self.clone())),
+			marker: PhantomData,
+		}
+	}
+}
+
+pub struct Iter<'a> {
+    head: Option<Arc<CowList>>,
+	marker: PhantomData<&'a CowList>,
+}
+
+impl<'a> Iterator for Iter<'a>{
+	type Item = &'a Weak<(String, u64)>;
+	fn next(&mut self) -> Option<&'a Weak<(String, u64)>>{
+		let node = match self.head {
+			Some(ref node) => unsafe{
+				let node = &*(node.as_ref() as *const CowList);
+				node
+			},
+			None => return None,
+		};
+		self.head = node.next.clone();
+		Some(&node.value)
+	}
+}
+
+
+#[cfg(test)]
+extern crate time;
 
 #[test]
 fn test_atom() {
@@ -237,4 +305,78 @@ fn test_atom() {
     let mut buf = WriteBuffer::new();
     let a = Atom::from("vvvvvvv");
     a.encode(&mut buf);
+
+
+    let mut map = FnvHashMap::default();
+    let time = time::now_millis();
+    for _ in 0..1000000 {
+        map.insert("xx", "xx");
+    }
+    println!("insert map time{}", time::now_millis() - time);
+
+    let time = time::now_millis();
+    for i in 0..1000000 {
+        Atom::from(i.to_string());
+    }
+    println!("atom from time{}", time::now_millis() - time);
+
+    
+    let mut arr = Vec::new();
+    for i in 0..1000{
+        arr.push(Atom::from(i.to_string()));
+    }
+
+    let time = time::now_millis();
+    for i in 0..1000{
+        for _ in 0..1000{
+            Atom::from(arr[i].as_str());
+        }
+    }
+    println!("atom1 from time{}", time::now_millis() - time);
+
+
+    let time = time::now_millis();
+    for i in 0..1000{
+        for _ in 0..1000{
+            Arc::new((arr[i].as_str().to_string(), 5));
+        }
+    }
+    println!("arc::new time{}", time::now_millis() - time);
+
+    let time = time::now_millis();
+    for i in 0..1000{
+        for _ in 0..1000{
+            arr[i].as_str().to_string();
+        }
+    }
+    println!("to_string time{}", time::now_millis() - time);
+
+    let time = time::now_millis();
+    for i in 0..10{
+        for _ in 0..1000{
+            let _ = str_hash(arr[i].as_str(), &mut DefaultHasher::new());
+        }
+    }
+    println!("cul hash{}", time::now_millis() - time);
+
+    let time = time::now_millis();
+    let xx = Arc::new(1);
+    let w = Arc::downgrade(&xx);
+    for _ in 0..1000{
+        for _ in 0..1000{
+            w.upgrade();
+        }
+    }
+    println!("upgrade{}", time::now_millis() - time);
+
+    let time = time::now_millis();
+    let xx = Arc::new(1);
+    //let w = Arc::downgrade(&xx);
+    for _ in 0..1000{
+        for _ in 0..1000{
+            xx.clone();
+        }
+    }
+    println!("clone {}", time::now_millis() - time);
+
 }

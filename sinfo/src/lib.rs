@@ -179,8 +179,9 @@ impl Encode for FieldInfo{
 
 impl Decode for FieldInfo{
 	fn decode(bb: &mut ReadBuffer) -> Result<FieldInfo, ReadBonErr> {
+		let n = Atom::decode(bb)?;
 		Ok(FieldInfo{
-			name: Atom::decode(bb)?,
+			name: n,
 			ftype: EnumType::decode(bb)?,
 			notes: Option::decode(bb)?,
 		})
@@ -217,8 +218,9 @@ impl Encode for EnumInfo{
 
 impl Decode for EnumInfo{
 	fn decode(bb: &mut ReadBuffer) -> Result<EnumInfo, ReadBonErr>{
+		let n = Atom::decode(bb)?;
 		Ok(EnumInfo{
-			name: Atom::decode(bb)?,
+			name: n,
 			name_hash: u32::decode(bb)?,
 			notes: Option::decode(bb)?,
 			members: Vec::decode(bb)?,

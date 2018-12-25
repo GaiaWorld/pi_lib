@@ -4,7 +4,6 @@ members = [
   "base58",
   "atom",
   "bon",
-  "cowlist",
   "data_view",
   "gray",
   "guid",
@@ -28,11 +27,4 @@ members = [
   "file",
   "worker",
   "future",
-
-
-  "heap_old",
-  "wheel_old",
-  "wtree_old",
-  "timer_old",
-  "task_pool_old",
 ]
