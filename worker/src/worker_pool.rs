@@ -5,6 +5,8 @@ use std::fmt::{Display, Formatter, Result as FmtResult}; //避免和标准Result
 use threadpool::{ThreadPool, Builder as ThreadPoolBuilder};
 
 use task_pool::TaskPool;
+
+use task::Task;
 use worker::{WorkerStatus, Worker};
 
 /*
@@ -14,6 +16,7 @@ pub struct WorkerPool {
     counter:        u32,                            //工作者编号计数器
     map:            FnvHashMap<u32, Arc<Worker>>,   //工作者缓存
     thread_pool:    ThreadPool,                     //线程池
+    walker:         Arc<(Mutex<bool>, Condvar)>,    //唤醒者
 }
 
 impl Display for WorkerPool {
@@ -26,7 +29,7 @@ impl Display for WorkerPool {
 
 impl WorkerPool {
     //构建指定数量工作者的工作者池
-    pub fn new(len: usize, stack_size: usize, slow: u32) -> Self {
+    pub fn new(len: usize, stack_size: usize, slow: u32, walker: Arc<(Mutex<bool>, Condvar)>) -> Self {
         let mut counter: u32 = 0;
         let mut map = FnvHashMap::default();
         for _ in 0..len {
@@ -40,6 +43,7 @@ impl WorkerPool {
                                                 num_threads(len).
                                                 thread_stack_size(stack_size).
                                                 build(),
+            walker:         walker,
         }
     }
 
@@ -90,11 +94,11 @@ impl WorkerPool {
     }
 
     //启动工作者，启动时需要指定任务池的同步对象
-    pub fn start(&self, sync: Arc<(Mutex<TaskPool>, Condvar)>, uid: u32) -> bool {
+    pub fn start(&self, pool: Arc<TaskPool<Task>>, uid: u32) -> bool {
         match self.map.get(&uid) {
             Some(worker) => {
                 if worker.set_status(WorkerStatus::Stop, WorkerStatus::Running) {
-                    Worker::startup(&self.thread_pool, worker.clone(), sync.clone())
+                    Worker::startup(&self.thread_pool, self.walker.clone(), worker.clone(), pool.clone())
                 } else {
                     false
                 }
@@ -104,20 +108,21 @@ impl WorkerPool {
     }
 
     //在指定任务池中，运行工作池，需要指定任务池的同步对象
-    pub fn run(&self, sync: Arc<(Mutex<TaskPool>, Condvar)>) {
+    pub fn run(&self, pool: Arc<TaskPool<Task>>) {
+        pool.set_count(self.thread_pool.max_count()); //设置任务池线程数
         for (_, worker) in self.map.iter() {
             if worker.set_status(WorkerStatus::Wait, WorkerStatus::Running) {
-                Worker::startup(&self.thread_pool, worker.clone(), sync.clone());
+                Worker::startup(&self.thread_pool, self.walker.clone(), worker.clone(), pool.clone());
             }
         }
     }
 
     //增加工作者
-    pub fn increase(&mut self, sync: Arc<(Mutex<TaskPool>, Condvar)>, len: usize, slow: u32) {
+    pub fn increase(&mut self, pool: Arc<TaskPool<Task>>, len: usize, slow: u32) {
         if len == 0 {
             return;
         }
-        
+
         let start = self.counter + 1;
         let mut worker: Arc<Worker>;
         for _ in 0..len {
@@ -128,13 +133,14 @@ impl WorkerPool {
         }
         let end = self.counter + 1;
         self.thread_pool.set_num_threads(self.counter as usize);
+        pool.set_count(self.thread_pool.max_count()); //重置任务池线程数
         for uid in start..end {
-            self.start(sync.clone(), uid); //启动新创建的工作者
+            self.start(pool.clone(), uid); //启动新创建的工作者
         }
     }
 
     //减少工作者
-    pub fn decrease(&mut self, len: usize) {
+    pub fn decrease(&mut self, pool: Arc<TaskPool<Task>>, len: usize) {
         if len == 0 || len > self.counter as usize {
             return;
         }
@@ -151,5 +157,6 @@ impl WorkerPool {
             }
         });
         self.thread_pool.set_num_threads(self.counter as usize);
+        pool.set_count(self.thread_pool.max_count()); //重置任务池线程数
     }
 }

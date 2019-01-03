@@ -6,8 +6,9 @@
 #![feature(type_ascription)]
 #![feature(slice_internals)]
 #![feature(integer_atomics)]
+#![feature(proc_macro_hygiene)]
+#![feature(wait_timeout_until)]
 
-extern crate atom;
 extern crate fnv;
 extern crate rand;
 extern crate threadpool;
@@ -15,8 +16,16 @@ extern crate threadpool;
 #[macro_use]
 extern crate lazy_static;
 
-pub mod task_pool;
-pub mod task;
-pub mod worker_pool;
-pub mod worker;
+extern crate flame;
+#[macro_use]
+extern crate flamer;
+
+extern crate atom;
+extern crate timer;
+extern crate task_pool;
+
 pub mod impls;
+pub mod task;
+//pub mod task_pool;
+pub mod worker;
+pub mod worker_pool;

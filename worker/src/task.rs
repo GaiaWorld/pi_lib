@@ -10,23 +10,26 @@ use atom::Atom;
 */
 #[derive(Copy, Clone, Debug)]
 pub enum TaskType {
-    Empty,      //空任务
-    Async,      //异步任务
-    Sync,       //同步任务
-    SyncImme,   //同步立即任务
+    Empty,          //空任务
+    Async(bool),    //异步任务, true代表动态异步任务，false代表静态异步任务
+    Sync(bool),     //同步任务，true代表同步队列尾, false代表同步队列头
+    SyncImme,       //同步立即任务
 }
 
 unsafe impl Send for TaskType {}
+unsafe impl Sync for TaskType {}
 
 /*
 * 任务结构
 */
+#[derive(Debug)]
 pub struct Task {
     priority:       u64,                //任务优先级
     func:           (usize, usize),     //任务函数
     info:           Atom,               //任务信息
 }
 
+unsafe impl Send for Task {} //声明保证多线程安全性
 unsafe impl Sync for Task {} //声明保证多线程安全性
 
 impl Display for Task {
@@ -54,12 +57,12 @@ impl Task {
     pub fn get_priority(&self) -> u64 {
         self.priority
     }
-    
+
     pub fn set_priority(&mut self, priority: u64) {
         self.priority = priority;
     }
-    
-    pub fn set_func(&mut self, func: Option<Box<FnBox()>>) {
+
+    pub fn set_func(&mut self, func: Option<Box<FnBox(Option<isize>)>>) {
         match func {
             Some(f) => {
                 let (x, y): (usize, usize) = unsafe { transmute(f) };
@@ -84,12 +87,12 @@ impl Task {
         self.info = Atom::from("");
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, lock: Option<isize>) {
         if self.func == (0, 0) {
             return;
         }
-        let func: Box<FnBox()> = unsafe { transmute(self.func) };
-        func();
+        let func: Box<FnBox(Option<isize>)> = unsafe { transmute(self.func) };
+        func(lock);
     }
 }
 

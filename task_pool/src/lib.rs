@@ -1,5 +1,10 @@
 #![feature(box_into_raw_non_null)]
+#![feature(proc_macro_hygiene)]
 extern crate rand;
+
+extern crate flame;
+#[macro_use]
+extern crate flamer;
 
 extern crate wtree;
 extern crate timer;
@@ -7,10 +12,11 @@ extern crate dyn_uint;
 extern crate fast_deque;
 extern crate slab;
 
-mod enums;
+pub mod enums;
 mod static_pool;
 mod dyn_pool  ;
 
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicUsize, Ordering as AOrd};
 use std::sync::{Arc, Mutex};
 use std::marker::Send;
@@ -22,9 +28,9 @@ use rand::Rng;
 use timer::{Timer, Runer};
 use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
 
-use enums:: {IndexType, Direction};
+use enums:: {IndexType, Direction, Task, FreeSign};
 
-pub struct TaskPool<T: 'static>{
+pub struct TaskPool<T: Debug + 'static>{
     static_sync_pool: Arc<(AtomicUsize, Mutex<static_pool::SyncPool<T>>)>,
     // static_lock_queues: Arc<Mutex<Slab<WeightQueue<T>>>>,
 
@@ -37,11 +43,11 @@ pub struct TaskPool<T: 'static>{
     delay_queue: Timer<DelayTask<T>>,
 
     handler: Box<Fn()>,
-    count: usize,
+    count: AtomicUsize,
 }
 
-impl<T: 'static> TaskPool<T> {
-    pub fn new(timer: Timer<DelayTask<T>>, handler: Box<Fn()>, count: usize) -> Self {
+impl<T: Debug + 'static> TaskPool<T> {
+    pub fn new(timer: Timer<DelayTask<T>>, handler: Box<Fn()>) -> Self {
         // let timer = Timer::new(10);
         // timer.run();
         TaskPool {
@@ -57,9 +63,13 @@ impl<T: 'static> TaskPool<T> {
 
             //index_factory: SlabFactory::new(),
             delay_queue: timer,
-            count,
-            handler
+            count: AtomicUsize::new(0),
+            handler,
         }
+    }
+
+    pub fn set_count(&self, count: usize) {
+        self.count.store(count, AOrd::SeqCst);
     }
 
     // create sync queues, return true, or false if id is exist
@@ -80,7 +90,6 @@ impl<T: 'static> TaskPool<T> {
     // pub fn delete_static_queue(&self, id: isize) {
     //     self.static_sync_pool.1.lock().unwrap().remove_queue(from_static_queue_id(id));
     // }
-
     pub fn delete_queue(&self, id: isize) -> bool {
         if is_queue(id) {
             self.sync_pool.1.lock().unwrap().0.try_remove_queue(from_queue_id(id));
@@ -101,9 +110,12 @@ impl<T: 'static> TaskPool<T> {
             let index = sync_pool.0.push_back(task, from_queue_id(queue_id), id);
             self.sync_pool.0.store(sync_pool.0.get_weight(), AOrd::Relaxed);
             sync_pool.1.store(id, index);
+//            println!("!!!!!!push dyn sync push back, weight:{}, len: {}", sync_pool.0.get_weight(), sync_pool.0.queue_len());
             (id, sync_pool.0.queue_len())
         };
+//        println!("!!!!!!push dyn sync queue start");
         self.notify(queue_len);
+//        println!("!!!!!!push dyn sync queue finish");
         to_sync_id(id)
     }
 
@@ -129,8 +141,9 @@ impl<T: 'static> TaskPool<T> {
             self.static_sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
             sync_pool.queue_len()
         };
+//        println!("!!!!!!push static sync queue start");
         self.notify(len);
-        
+//        println!("!!!!!!push static sync queue start");
     }
 
     // // push a sync task, return Ok(index), or Err if queue id is exist
@@ -154,7 +167,9 @@ impl<T: 'static> TaskPool<T> {
             self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
             (index, pool.len())
         };
+//        println!("!!!!!!push dyn async queue start");
         self.notify(len);
+//        println!("!!!!!!push dyn async queue finish");
         to_async_id(index)
     }
 
@@ -165,7 +180,9 @@ impl<T: 'static> TaskPool<T> {
             self.static_async_pool.0.store(lock.amount(), AOrd::Relaxed);
             lock.len()
         };
+//        println!("!!!!!!push static async queue start");
         self.notify(len);
+//        println!("!!!!!!push dyn async queue finish");
     }
 
     //push a delay task, return Arc<AtomicUsize> as index
@@ -253,19 +270,20 @@ impl<T: 'static> TaskPool<T> {
         None
     }
 
-    pub fn pop(&self) -> Option<T>{
+    pub fn pop(&self) -> Option<Task<T>>{
         let (async_w, sync_w, static_async_w, static_sync_w, r, mut w) = self.weight_rng();
-        
-        //println!("{:?}", (async_w, sync_w, static_async_w, static_sync_w, r, w));
+//        println!("w--------------{:?}", (async_w, sync_w, static_async_w, static_sync_w, r, w));
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
             let w = pool.get_weight();
             if w != 0 {
-                let r = pool.pop_front_with_lock(r%w).unwrap();
+                let r = pool.pop_front_with_lock(r%w);
+                let elem = r.0.unwrap();
                 self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.destroy(r.1);
-                return Some(r.0);
+                indexs.destroy(elem.1);
+//                println!("w---dyn_sync_pop");
+                return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
             }
         } else {
             w = w - sync_w;
@@ -279,7 +297,8 @@ impl<T: 'static> TaskPool<T> {
                 let r = unsafe{pool.pop(r%w, indexs)};
                 self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
                 indexs.destroy(r.2);
-                return Some(r.0);
+//                println!("w---dyn_async_pop");
+                return Some(Task::Async(r.0));
             }
         } else {
             w = w - async_w;
@@ -290,8 +309,9 @@ impl<T: 'static> TaskPool<T> {
             let mut pool = self.static_async_pool.1.lock().unwrap();
             let w = pool.amount();
             if w != 0 {
-                let r = Some(pool.pop(r%w).0);
+                let r = Some(Task::Async(pool.pop(r%w).0));
                 self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
+//                println!("w---static_async_pop");
                 return r;
             }
         } else {
@@ -303,10 +323,13 @@ impl<T: 'static> TaskPool<T> {
             let w = pool.get_weight();
             if w != 0 {
                 let r = pool.pop_front_with_lock(r%w);
+                let elem = r.0.unwrap();
                 self.static_sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                return r;
+//                println!("w---static_sync_pop");
+                return Some(Task::Sync(elem, to_static_queue_id(r.1)));
             }
         }
+//        println!("w---empty_pop");
         None
     }
 
@@ -376,7 +399,7 @@ impl<T: 'static> TaskPool<T> {
             let mut lock = self.static_sync_pool.1.lock().unwrap();
             let r = lock.lock_queue(from_static_queue_id(id));
             if r {
-                self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                self.static_sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
             }
             r
         }else {
@@ -387,18 +410,33 @@ impl<T: 'static> TaskPool<T> {
     //free lock sync_queue
     pub fn free_queue(&self, id: isize) -> bool{
         if is_queue(id){
-            let mut lock = self.sync_pool.1.lock().unwrap();
-            let r = lock.0.free_queue(from_queue_id(id));
-            if r {
-                self.sync_pool.0.store(lock.0.get_weight(), AOrd::Relaxed);
-            }
+            let (r, len) = {
+                let mut lock = self.sync_pool.1.lock().unwrap();
+                let r = lock.0.free_queue(from_queue_id(id));
+                match r {
+                    FreeSign::Success => {
+                        self.sync_pool.0.store(lock.0.get_weight(), AOrd::Relaxed);
+                        (true, lock.0.queue_len())
+                    },
+                    FreeSign::Ignore => (true, 0),
+                    _ => (false, 0)
+                }
+            };
+            self.notify(len);
             r
         }else if is_static_queue(id) {
-            let mut lock = self.static_sync_pool.1.lock().unwrap();
-            let r = lock.free_queue(from_static_queue_id(id));
-            if r {
-                self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-            }
+            let (r, len) = {let mut lock = self.static_sync_pool.1.lock().unwrap();
+                let r = lock.free_queue(from_static_queue_id(id));
+                match r {
+                    FreeSign::Success => {
+                        self.static_sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        (true, lock.queue_len())
+                    },
+                    FreeSign::Ignore => (true, 0),
+                    _ => (false, 0)
+                }
+            };
+            self.notify(len);
             r
         }else {
             false
@@ -425,14 +463,14 @@ impl<T: 'static> TaskPool<T> {
 
     pub fn len(&self) -> usize {
         let len1 = self.sync_pool.1.lock().unwrap().0.len();
-        let len2 = self.static_sync_pool.1.lock().unwrap().len();
+        let len2 = self.static_async_pool.1.lock().unwrap().len();
         let len3 = self.async_pool.1.lock().unwrap().0.len();
         let len4 = self.static_sync_pool.1.lock().unwrap().len();
         len1 + len2 + len3 + len4
     }
 
     fn notify(&self, len: usize) {
-        if len <= self.count {
+        if len <= self.count.load(AOrd::SeqCst) {
             (self.handler)()
         }
     }
@@ -453,8 +491,8 @@ impl<T: 'static> TaskPool<T> {
     }
 }
 
-unsafe impl<T: Send> Send for TaskPool<T> {}
-unsafe impl<T: Send> Sync for TaskPool<T> {}
+unsafe impl<T: Debug + Send> Send for TaskPool<T> {}
+unsafe impl<T: Debug + Send> Sync for TaskPool<T> {}
 
 impl<T: fmt::Debug> fmt::Debug for TaskPool<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -610,9 +648,7 @@ use time::now_millis;
 
 #[test]
 fn test(){
-	let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(||{
-        //println!("notify-----------------------------------------");
-    }), 8);
+	let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(|| {}));
     
     let queue1 = task_pool.create_dyn_queue(1);
     let queue2 = task_pool.create_dyn_queue(2);
@@ -716,13 +752,14 @@ fn test(){
     task_pool.push_dyn_async(4, 4);
     task_pool.clear();
     assert_eq!(task_pool.len(), 0);
+    use std::fs::File;
+    flame::dump_text_to_writer(&mut File::create("flame.text").unwrap()).unwrap();
+    flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
 }
 
 #[test]
 fn test_effect(){
-    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Box::new(||{
-        //println!("notify-----------------------------------------");
-    }), 8);
+    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Box::new(|| {}));
 
     let time = now_millis();
     for i in 1..100001 {

@@ -11,3 +11,5 @@ fast_deque = {path="../fast_deque"}
 slab = {path="../slab"}
 time = {path="../time"}
 rand = "0.5.4"
+flame = "0.2.2"
+flamer = "0.3"

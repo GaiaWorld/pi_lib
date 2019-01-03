@@ -1,5 +1,4 @@
 // 当且仅当测试套件运行时，才条件编译 `test` 模块。
-#[cfg(test)]
 extern crate pi_lib;
 
 use pi_lib::ordmap::{OrdMap};

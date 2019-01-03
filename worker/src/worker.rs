@@ -1,3 +1,4 @@
+use std::panic;
 use std::thread::park_timeout;
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, Condvar};
@@ -6,8 +7,9 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 
 use threadpool::ThreadPool;
 
-use task_pool::TaskPool;
 use task::Task;
+use task_pool::TaskPool;
+use task_pool::enums::Task as BaseTask;
 
 /*
 * 工作者状态
@@ -51,16 +53,16 @@ impl Worker {
     }
 
     //启动
-    pub fn startup(pool: &ThreadPool, worker: Arc<Worker>, sync: Arc<(Mutex<TaskPool>, Condvar)>) -> bool {
+    pub fn startup(pool: &ThreadPool, walker: Arc<(Mutex<bool>, Condvar)>, worker: Arc<Worker>, tasks: Arc<TaskPool<Task>>) -> bool {
         pool.execute(move|| {
             let mut task = Task::new();
-            Worker::work_loop(worker, sync, &mut task);
+            Worker::work_loop(walker, worker, tasks, &mut task);
         });
         true
     }
 
     //工作循环
-    fn work_loop(worker: Arc<Worker>, sync: Arc<(Mutex<TaskPool>, Condvar)>, task: &mut Task) {
+    fn work_loop(walker: Arc<(Mutex<bool>, Condvar)>, worker: Arc<Worker>, tasks: Arc<TaskPool<Task>>, task: &mut Task) {
         let mut status: usize;
         loop {
             status = worker.get_status();
@@ -74,7 +76,7 @@ impl Worker {
                 continue;
             } else if status == WorkerStatus::Running as usize {
                 //继续工作
-                worker.work(&sync, task);
+                worker.work(&walker, &tasks, task);
             }
         }
     }
@@ -103,11 +105,11 @@ impl Worker {
         if self.get_status() == WorkerStatus::Stop as usize {
             return true;
         }
-        match self.status.compare_exchange(WorkerStatus::Running as usize, WorkerStatus::Stop as usize, 
+        match self.status.compare_exchange(WorkerStatus::Running as usize, WorkerStatus::Stop as usize,
             Ordering::Acquire, Ordering::Relaxed) {
             Ok(_) => true,
             _ => {
-                match self.status.compare_exchange(WorkerStatus::Wait as usize, WorkerStatus::Stop as usize, 
+                match self.status.compare_exchange(WorkerStatus::Wait as usize, WorkerStatus::Stop as usize,
                     Ordering::Acquire, Ordering::Relaxed) {
                     Ok(_) => true,
                     _ => false,
@@ -117,31 +119,51 @@ impl Worker {
     }
 
     //工作
-    fn work(&self, sync: &Arc<(Mutex<TaskPool>, Condvar)>, task: &mut Task) {
+    fn work(&self, walker: &Arc<(Mutex<bool>, Condvar)>, tasks: &Arc<TaskPool<Task>>, task: &mut Task) {
+        let base_task: BaseTask<Task>;
         //同步块
         {
-            let &(ref lock, ref cvar) = &**sync;
-            let mut task_pool = lock.lock().unwrap();
-            while (*task_pool).size() == 0 {
-                //等待任务
-                let (pool, wait) = cvar.wait_timeout(task_pool, Duration::from_micros(1000)).unwrap();
+            let &(ref lock, ref cvar) = &**walker;
+            let mut wake = lock.lock().unwrap();
+            while !*wake {
+                //等待任务唤醒
+                let (w, wait) = cvar.wait_timeout(wake, Duration::from_millis(100)).unwrap();
                 if wait.timed_out() {
                     return //等待超时，则立即解锁，并处理控制状态
                 }
-                task_pool = pool;
+                wake = w;
             }
-            (*task_pool).pop(task); //获取任务
+            //获取任务
+            if let Some(t) = tasks.pop() {
+                //有任务
+                base_task = t;
+            } else {
+                //没有任务，则重置唤醒状态，立即解锁，并处理控制状态
+                *wake = false;
+                return;
+            }
         }
-        check_slow_task(self, task); //执行任务
+        check_slow_task(self, task, base_task); //执行任务
         self.counter.fetch_add(1, Ordering::Acquire); //增加工作计数
     }
 }
 
-#[inline]
-fn check_slow_task(worker: &Worker, task: &mut Task) {
-    use std::panic;
+fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) {
+    let mut lock = None;
+    match base_task {
+        BaseTask::Async(t) => {
+            //填充异步任务
+            t.copy_to(task);
+        },
+        BaseTask::Sync(t, q) => {
+            //填充同步任务
+            t.copy_to(task);
+            lock = Some(q);
+        }
+    }
+    
     let time = Instant::now();
-    if let Err(e) = panic::catch_unwind(|| { task.run(); }) {
+    if let Err(e) = panic::catch_unwind(|| { task.run(lock); }) {
         //执行任务失败
         let elapsed = time.elapsed();
         println!("!!!> Task Run Error, time: {}, task: {}, e: {:?}", elapsed.as_secs() * 1000000 + (elapsed.subsec_micros() as u64), task, e);

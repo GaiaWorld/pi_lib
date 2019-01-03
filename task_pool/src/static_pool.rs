@@ -7,7 +7,7 @@ use wtree::fast_wtree;
 
 use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
 
-use enums:: IndexType;
+use enums:: {IndexType, FreeSign};
 
 pub type AsyncPool<T> = fast_wtree::WeightTree<T>;
 
@@ -74,7 +74,7 @@ impl<T: 'static> SyncPool<T>{
                         self.len -= e.2.len();
                         true
                     },
-                    _ => false
+                    _ => true
                 }
             },
             None => return false,
@@ -82,28 +82,27 @@ impl<T: 'static> SyncPool<T>{
     }
 
     #[inline]
-    pub fn free_queue(&mut self, id: usize) -> bool{
+    pub fn free_queue(&mut self, id: usize) -> FreeSign{
         let weight = match self.slab.get_mut(id) {
             Some(ref mut r) => {
                 match r.1.clone() {
                     IndexType::LockQueue => {
                         if r.2.len() == 0 {
                             r.1 = IndexType::HalfLockQueue;
-                            return true;
+                            return FreeSign::Success;
                         }
                         self.len += r.2.len();
                         r.2.get_weight()
                     }
-                    _ => return false,
+                    _ => return FreeSign::Ignore,
                 }
                 
             },
-            _ => return false,
+            _ => return FreeSign::Error,
         };
-
         self.weight_queues.push((), weight, id, &mut self.slab);
         self.slab.set_class(id, IndexType::Queue);
-        true
+        FreeSign::Success
     }
 
     //Find a queue with weight, Removes the first element from the queue and returns it, Painc if weight >= get_weight().
@@ -121,7 +120,7 @@ impl<T: 'static> SyncPool<T>{
 
     //pop elements from specified queue, and not update weight, Painc if weight >= get_weight()
     #[inline]
-    pub fn pop_front_with_lock(&mut self, weight: usize) -> Option<T>{
+    pub fn pop_front_with_lock(&mut self, weight: usize) -> (Option<T>, usize){
         let (r, index) = {
             let i = unsafe{ self.weight_queues.pop(weight, &mut self.slab).2 };
             let r = unsafe { self.slab.get_unchecked_mut(i) };
@@ -129,7 +128,7 @@ impl<T: 'static> SyncPool<T>{
         };
         self.slab.set_class(index, IndexType::LockQueue);
         self.len -= 1;
-        r
+        (r, index)
     }
 
     //Append an element to the queue of the specified ID. return index, or None if the queue is FastQueue
