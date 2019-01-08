@@ -8,3 +8,5 @@ fnv = "1.0.6"
 lazy_static = "*"
 bon = {path="../bon"}
 time = {path="../time"}
+flame = "0.2.2"
+flamer = "0.3"

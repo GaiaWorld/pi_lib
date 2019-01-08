@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[derive(Debug, Clone)]
 pub enum IndexType{
     Sync, //不可删除的同步任务
@@ -26,4 +28,17 @@ pub enum IndexType{
 pub enum Direction {
     Front,
     Back,
+}
+
+#[derive(Debug)]
+pub enum Task<T: Debug> {
+    Sync(T, isize),
+    Async(T),
+}
+
+#[derive(Debug)]
+pub enum FreeSign {
+    Success,
+    Error,
+    Ignore,
 }

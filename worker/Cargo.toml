@@ -5,7 +5,11 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 fnv = "1.0.6"
-atom = {path="../atom"}
 rand = "*"
 threadpool = "*"
 lazy_static = "*"
+flame = "0.2.2"
+flamer = "0.3"
+atom = { path = "../atom" }
+timer = { path = "../timer" }
+task_pool = { path = "../task_pool" }

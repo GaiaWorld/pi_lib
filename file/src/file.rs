@@ -25,72 +25,52 @@ const BLOCK_SIZE: usize = 8192;
 /*
 * 文件异步访问任务类型
 */
-const ASYNC_FILE_TASK_TYPE: TaskType = TaskType::Sync;
+const ASYNC_FILE_TASK_TYPE: TaskType = TaskType::Async(false);
 
 /*
 * 文件异步访问任务优先级
 */
-const OPEN_ASYNC_FILE_PRIORITY: u64 = 10;
-
-/*
-* 文件异步访问任务优先级
-*/
-const READ_ASYNC_FILE_PRIORITY: u64 = 100;
-
-/*
-* 文件异步访问任务优先级
-*/
-const WRITE_ASYNC_FILE_PRIORITY: u64 = 60;
-
-/*
-* 重命名文件优先级
-*/
-const RENAME_ASYNC_FILE_PRIORITY: u64 = 30;
-
-/*
-* 移除文件任务优先级
-*/
-const REMOVE_ASYNC_FILE_PRIORITY: u64 = 10;
+const ASYNC_FILE_PRIORITY: usize = 100;
 
 /*
 * 打开异步文件信息
 */
-const OPEN_ASYNC_FILE_INFO: &str = "open asyn file";
+const OPEN_ASYNC_FILE_INFO: &str = "open async file";
 
 /*
 * 读异步文件信息
 */
-const READ_ASYNC_FILE_INFO: &str = "read asyn file";
+const READ_ASYNC_FILE_INFO: &str = "read async file";
 
 /*
 * 共享读异步文件信息
 */
-const SHARED_READ_ASYNC_FILE_INFO: &str = "shared read asyn file";
+const SHARED_READ_ASYNC_FILE_INFO: &str = "shared read async file";
 
 /*
 * 写异步文件信息
 */
-const WRITE_ASYNC_FILE_INFO: &str = "write asyn file";
+const WRITE_ASYNC_FILE_INFO: &str = "write async file";
 
 /*
 * 共享写异步文件信息
 */
-const SHARED_WRITE_ASYNC_FILE_INFO: &str = "shared write asyn file";
+const SHARED_WRITE_ASYNC_FILE_INFO: &str = "shared write async file";
 
 /*
 * 重命名文件
 */
-const RENAME_ASYNC_FILE_INFO: &str = "rename asyn file";
+const RENAME_ASYNC_FILE_INFO: &str = "rename async file";
 
 /*
 * 移除文件信息
 */
-const REMOVE_ASYNC_FILE_INFO: &str = "remove asyn file";
+const REMOVE_ASYNC_FILE_INFO: &str = "remove async file";
 
 /*
 * 文件选项
 */
-pub enum AsynFileOptions {
+pub enum AsyncFileOptions {
     OnlyRead(u8),
     OnlyWrite(u8),
     OnlyAppend(u8),
@@ -187,7 +167,7 @@ pub struct AsyncFile{
     inner: File, 
     buffer_size: usize, 
     pos: u64, 
-    buffer: Option<Vec<u8>>,
+    buffer: Option<Vec<u8>>
 }
 
 impl Debug for AsyncFile {
@@ -215,15 +195,15 @@ impl Clone for AsyncFile {
 
 impl AsyncFile {
     //以指定方式打开指定文件
-    pub fn open<P: AsRef<Path> + Send + 'static>(path: P, options: AsynFileOptions, callback: Box<FnBox(Result<Self>)>) {
-        let func = move || {
+    pub fn open<P: AsRef<Path> + Send + 'static>(path: P, options: AsyncFileOptions, callback: Box<FnBox(Result<Self>)>) {
+        let func = move |_lock| {
             let (r, w, a, c, t, len) = match options {
-                AsynFileOptions::OnlyRead(len) => (true, false, false, false, false, len),
-                AsynFileOptions::OnlyWrite(len) => (false, true, false, true, false, len),
-                AsynFileOptions::OnlyAppend(len) => (false, false, true, true, false, len),
-                AsynFileOptions::ReadAppend(len) => (true, false, true, true, false, len),
-                AsynFileOptions::ReadWrite(len) => (true, true, false, true, false, len),
-                AsynFileOptions::TruncateWrite(len) => (false, true, false, true, true, len),
+                AsyncFileOptions::OnlyRead(len) => (true, false, false, false, false, len),
+                AsyncFileOptions::OnlyWrite(len) => (false, true, false, true, false, len),
+                AsyncFileOptions::OnlyAppend(len) => (false, false, true, true, false, len),
+                AsyncFileOptions::ReadAppend(len) => (true, false, true, true, false, len),
+                AsyncFileOptions::ReadWrite(len) => (true, true, false, true, false, len),
+                AsyncFileOptions::TruncateWrite(len) => (false, true, false, true, true, len),
             };
 
             match OpenOptions::new()
@@ -248,25 +228,25 @@ impl AsyncFile {
                 },
             }
         };
-        cast_store_task(ASYNC_FILE_TASK_TYPE, OPEN_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(OPEN_ASYNC_FILE_INFO));
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(OPEN_ASYNC_FILE_INFO));
     }
 
     //文件重命名
     pub fn rename<P: AsRef<Path> + Clone + Send + 'static>(from: P, to: P, callback: Box<FnBox(P, P, Result<()>)>) {
-        let func = move || {
+        let func = move |_lock| {
             let result = rename(from.clone(), to.clone());
             callback(from, to, result);
         };
-        cast_store_task(ASYNC_FILE_TASK_TYPE, RENAME_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(RENAME_ASYNC_FILE_INFO));
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(RENAME_ASYNC_FILE_INFO));
     }
 
     //移除指定文件
     pub fn remove<P: AsRef<Path> + Send + 'static>(path: P, callback: Box<FnBox(Result<()>)>) {
-        let func = move || {
+        let func = move |_lock| {
             let result = remove_file(path);
             callback(result);
         };
-        cast_store_task(ASYNC_FILE_TASK_TYPE, REMOVE_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(REMOVE_ASYNC_FILE_INFO));
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(REMOVE_ASYNC_FILE_INFO));
     }
 
     //检查是否是符号链接
@@ -330,7 +310,7 @@ impl AsyncFile {
 
     //从指定位置开始，读指定字节
     pub fn read(mut self, pos: u64, len: usize, callback: Box<FnBox(Self, Result<Vec<u8>>)>) {
-        let func = move || {
+        let func = move |_lock| {
             let file_size = self.get_size();
             if file_size == 0 || len == 0 {
                 let vec = self.buffer.take().unwrap();
@@ -387,20 +367,18 @@ impl AsyncFile {
                 },
             }
         };
-        cast_store_task(ASYNC_FILE_TASK_TYPE, READ_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(READ_ASYNC_FILE_INFO));
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(READ_ASYNC_FILE_INFO));
     }
 
     //从指定位置开始，写指定字节
     pub fn write(mut self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnBox(Self, Result<()>)>) {
-        let func = move || {
+        let func = move |_lock| {
             if !&bytes[self.pos as usize..].is_empty() {
                 match self.inner.seek(SeekFrom::Start(pos as u64)) {
                     Err(e) => callback(init_write_file(self), Err(e)),
                     Ok(_) => {
                         match self.inner.write(&bytes[self.pos as usize..]) {
-                            Ok(0) => {
-                                callback(init_write_file(self), Err(Error::new(ErrorKind::WriteZero, "write failed")));
-                            },
+                            Ok(0) => callback(init_write_file(self), Err(Error::new(ErrorKind::WriteZero, "write failed"))),
                             Ok(n) => {
                                 //继续写
                                 self.pos += n as u64;
@@ -410,9 +388,7 @@ impl AsyncFile {
                                 //重复写
                                 self.write(options, pos, bytes, callback);
                             },
-                            Err(e) => {
-                                callback(init_write_file(self), Err(e));
-                            },
+                            Err(e) => callback(init_write_file(self), Err(e)),
                         }
                     },
                 }
@@ -429,7 +405,7 @@ impl AsyncFile {
                 callback(init_write_file(self), result);
             }
         };
-        cast_store_task(ASYNC_FILE_TASK_TYPE, WRITE_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(WRITE_ASYNC_FILE_INFO));
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(WRITE_ASYNC_FILE_INFO));
     }
 }
 
@@ -473,7 +449,7 @@ fn get_block_size(_meta: &Metadata) -> usize {
 
 //继续读
 fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
-    let func = move || {
+    let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.read_at(&mut vec[vec_pos as usize..(vec_pos as usize + len)], pos);
         #[cfg(any(windows))]
@@ -499,12 +475,12 @@ fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, le
             Err(e) => callback(file, Err(e)),
         }
     };
-    cast_store_task(ASYNC_FILE_TASK_TYPE, READ_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
+    cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
 }
 
 //继续填充读
 fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
-    let func = move || {
+    let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.read_at(&mut vec[vec_pos as usize..(vec_pos as usize + len)], pos);
         #[cfg(any(windows))]
@@ -530,12 +506,12 @@ fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, l
             Err(e) => callback(file, Err(e)),
         }
     };
-    cast_store_task(ASYNC_FILE_TASK_TYPE, READ_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
+    cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
 }
 
 //继续写
 fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos: u64, bytes: Vec<u8>, vec_pos: u64, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<usize>)>) {
-    let func = move || {
+    let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.write_at(&bytes[vec_pos as usize..len], pos);
         #[cfg(any(windows))]
@@ -565,5 +541,5 @@ fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos:
             Err(e) => callback(file, Err(e)),
         }
     };
-    cast_store_task(ASYNC_FILE_TASK_TYPE, WRITE_ASYNC_FILE_PRIORITY, Box::new(func), Atom::from(SHARED_WRITE_ASYNC_FILE_INFO));
+    cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_WRITE_ASYNC_FILE_INFO));
 }
