@@ -5,9 +5,12 @@ use std::ops::{Deref, DerefMut};
 use std::rc::{Weak};
 use std::cell::RefCell;
 
-use slab::{Slab};
+use slab::{Slab, SlabIter, SlabIterMut};
 
 use world::{ID, ComponentMgr};
+
+type ComponentIter<'a, T> = SlabIter<'a, ComponentP<T>>;
+type ComponentIterMut<'a, T> = SlabIterMut<'a, ComponentP<T>>;
 
 pub trait ComponentGroupTree {
     type C: ComponentMgr;
@@ -19,13 +22,13 @@ pub trait ComponentHandler<P: Point, C: ComponentMgr> {
     fn handle(&self, event: EventType<P>, component_mgr: &mut C);
 }
 
-pub struct ComponentGroup<T: Component, P: Point, C: ComponentMgr>{
+pub struct ComponentGroup<T: Sized, P: Point, C: ComponentMgr>{
     components: Slab<ComponentP<T>>,
     handlers: Vec<Weak<ComponentHandler<P, C>>>,
     mgr: Weak<RefCell<C>>,
 }
 
-impl<T: Component, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
+impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
     pub fn new() -> Self{
         ComponentGroup{
             components: Slab::new(),
@@ -78,6 +81,14 @@ impl<T: Component, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
     //这是一个非安全方法
     pub fn get_mut(&mut self, id: &P) -> &mut ComponentP<T>{
         unsafe{ self.components.get_unchecked_mut(id.id()) }
+    }
+
+    pub fn iter_mut(&mut self) -> ComponentIterMut<T>{
+        self.components.iter_mut()
+    }
+
+    pub fn iter(&self) -> ComponentIter<T>{
+        self.components.iter()
     }
 
     pub fn register_handlers(&mut self, monitor: Weak<ComponentHandler<P, C>>) {
@@ -133,12 +144,6 @@ impl<'a, P: Point> Clone for EventType<'a, P>{
     }
 }
 
-
-pub trait Component: Default + Sized{
-    type Meta;
-    fn meta() -> &'static Self::Meta;
-}
-
 // pub trait Group<C: Component, P: Point>{
 //     fn set_group(&mut self, group: WeakComponentGroup<C, P>);
 // }
@@ -168,12 +173,12 @@ impl<P: Point> DerefMut for PPoint<P> {
 }
 
 #[derive(Clone, Default)]
-pub struct ComponentP<C: Component>{
-    parent: usize,
-    owner: C,
+pub struct ComponentP<C: Sized>{
+    pub parent: usize,
+    pub owner: C,
 }
 
-impl<C: Component> ComponentP<C>{
+impl<C: Sized> ComponentP<C>{
     pub fn new(component: C, parent: usize) -> ComponentP<C>{
         ComponentP{
             parent: parent,
@@ -194,7 +199,7 @@ impl<C: Component> ComponentP<C>{
     }
 }
 
-impl<C: Component> Deref for ComponentP<C> {
+impl<C: Sized> Deref for ComponentP<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
@@ -202,7 +207,7 @@ impl<C: Component> Deref for ComponentP<C> {
     }
 }
 
-impl<C: Component> DerefMut for ComponentP<C> {
+impl<C: Sized> DerefMut for ComponentP<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.owner
     }
