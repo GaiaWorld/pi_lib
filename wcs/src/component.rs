@@ -2,8 +2,8 @@
 // use std::cell::RefCell;
 use std::clone::Clone;
 use std::ops::{Deref, DerefMut};
-use std::rc::{Weak};
-use std::cell::RefCell;
+use std::rc::{Weak, Rc};
+use std::cell::{RefCell};
 
 use slab::{Slab, SlabIter, SlabIterMut};
 
@@ -15,30 +15,24 @@ type ComponentIterMut<'a, T> = SlabIterMut<'a, ComponentP<T>>;
 pub trait ComponentGroupTree {
     type C: ComponentMgr;
     fn new() -> Self;
-    fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>);
+    // fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>);
 }
 
 pub trait ComponentHandler<P: Point, C: ComponentMgr> {
-    fn handle(&self, event: EventType<P>, component_mgr: &mut C);
+    fn handle(&self, event: &Event<P>, component_mgr: &mut C);
 }
 
 pub struct ComponentGroup<T: Sized, P: Point, C: ComponentMgr>{
     components: Slab<ComponentP<T>>,
-    handlers: Vec<Weak<ComponentHandler<P, C>>>,
-    mgr: Weak<RefCell<C>>,
+    handlers: Rc<RefCell<Vec<Weak<ComponentHandler<P, C>>>>>,
 }
 
 impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
     pub fn new() -> Self{
         ComponentGroup{
             components: Slab::new(),
-            handlers: Vec::new(),
-            mgr: Weak::new(),
+            handlers: Rc::new(RefCell::new(Vec::new())),
         }
-    }
-
-    pub fn set_mgr(&mut self, mgr: Weak<RefCell<C>>){
-        self.mgr = mgr;
     }
 
     // pub fn alloc(&mut self) -> &mut ComponentP<T>{
@@ -91,8 +85,14 @@ impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
         self.components.iter()
     }
 
-    pub fn register_handlers(&mut self, monitor: Weak<ComponentHandler<P, C>>) {
-        self.handlers.push(monitor);
+    //注册处理器
+    pub fn register_handler(&self, monitor: Weak<ComponentHandler<P, C>>) {
+        self.handlers.borrow_mut().push(monitor);
+    }
+
+    //取到处理器列表
+    pub fn get_handlers(&self) -> Rc<RefCell<Vec<Weak<ComponentHandler<P, C>>>>> {
+        self.handlers.clone()
     }
 
     //moitor的容器是一个Vec, 其移除的性能并不高， 如果需要频繁的移除， 考虑使用slab
@@ -103,44 +103,44 @@ impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
     //         Some(self.monitors.remove(index))
     //     }
     // }
+}
 
-    pub fn notify(&self, event: EventType<P>){
-        let mgr = match Weak::upgrade(&self.mgr){
-            Some(m) => m,
-            None => {
-                println!("ComponentMgr has been lost");
-                return;
+//通知处理器
+pub fn notify<P: Point, C: ComponentMgr>(event: Event<P>, handlers: &Vec<Weak<ComponentHandler<P, C>>>, mgr: &mut C) {
+    for it in handlers.iter(){
+        match Weak::upgrade(it) {
+            Some(h) => {
+                h.handle(&event, mgr);
             },
-        };
-        let m_borrow = unsafe{&mut(*mgr.as_ptr())};
-        for it in self.handlers.iter(){
-            match Weak::upgrade(it) {
-                Some(h) => {
-                    h.handle(event.clone(), &mut *m_borrow);
-                },
-                None => println!("handler has been lost"),
-            }
+            None => println!("handler has been lost"),
         }
     }
 }
 
-pub enum EventType<'a, P: Point>  {
-    ModifyField(P, &'a str),
-    ModifyIndex(P, usize),
-    ModifyFieldIndex(P, &'a str, usize),
-    Create(P),
-    Delete(P)
-}
-
-impl<'a, P: Point> Clone for EventType<'a, P>{
-    fn clone (&self) -> Self {
-        match self {
-            EventType::ModifyField(t, ref s) => EventType::ModifyField(t.clone(), s),
-            EventType::ModifyIndex(t, ref u) => EventType::ModifyIndex(t.clone(), u.clone()),
-            EventType::ModifyFieldIndex(t, ref s, u) => EventType::ModifyFieldIndex(t.clone(), s, u.clone()) ,
-            EventType::Create(t) => EventType::Create(t.clone()),
-            EventType::Delete(t) => EventType::Delete(t.clone())
-        }
+pub enum Event<'a, P: Point>  {
+    ModifyField{
+        point: P,
+        parent: usize,
+        field: &'a str
+    },
+    ModifyIndex{
+        point: P,
+        parent: usize,
+        index: usize
+    },
+    ModifyFieldIndex{
+        point: P,
+        parent: usize,
+        field: &'a str,
+        index: usize
+    },
+    Create{
+        point: P,
+        parent: usize
+    },
+    Delete{
+        point: P,
+        parent: usize
     }
 }
 
@@ -211,4 +211,9 @@ impl<C: Sized> DerefMut for ComponentP<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.owner
     }
+}
+
+pub trait Create<M: ComponentMgr>{
+    type G;
+    fn create(group: &mut Self::G) -> Self;
 }

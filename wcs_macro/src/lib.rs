@@ -1,4 +1,4 @@
-#![recursion_limit="128"]
+#![recursion_limit="256"]
 extern crate slab;
 extern crate wcs;
 extern crate proc_macro;
@@ -54,9 +54,13 @@ pub fn world(input: TokenStream) -> TokenStream {
     let mut field_names = Vec::new();
     let mut field_groups = Vec::new();
     let mut field_types = Vec::new();
+    let mut field_points = Vec::new();
+    let mut field_gets = Vec::new();
+    let mut field_gets_mut = Vec::new();
     let mut mgrs = Vec::new();
-    let mut refs = Vec::new();
-    let mut adds = Vec::new();
+    let mut read_refs = Vec::new();
+    let mut write_refs = Vec::new();
+    let mut creates = Vec::new();
     for field in fields.iter(){
         let field_name_str = match &field.ident {
             Some(ref i) => i.to_string(),
@@ -66,20 +70,31 @@ pub fn world(input: TokenStream) -> TokenStream {
         field_names.push(ident(&field_name_str));
         field_groups.push(group_name(field_ty.clone()));
         field_types.push(ident(&field_ty));
+        field_points.push(point_name(field_ty.clone()));
+        field_gets.push(get_name(&field_name_str));
+        field_gets_mut.push(get_name_mut(&field_name_str));
         mgrs.push(ident(&mgr_str));
-        refs.push(ref_name(field_ty));
-        adds.push(add_name(&field_name_str));
+        read_refs.push(read_ref_name(field_ty.clone()));
+        write_refs.push(write_ref_name(field_ty));
+        creates.push(create_name(&field_name_str));
     }
 
     let field_names1 = field_names.clone();
     let field_groups1 = field_groups.clone();
-    let field_names2 = field_names.clone();
-    let field_names4 = field_names.clone();
     let field_names5 = field_names.clone();
     let field_names6 = field_names.clone();
-    let field_names7 = field_names.clone();
+    let field_names8 = field_names.clone();
+    let field_names9 = field_names.clone();
+    let field_points1 = field_points.clone();
+    let field_points2 = field_points.clone();
     let mgrs1 = mgrs.clone();
-    let refs1 = refs.clone();
+    let read_refs1 = read_refs.clone();
+    let mgrs2 = mgrs.clone();
+    let mgrs3 = mgrs.clone();
+    let read_refs2 = read_refs.clone();
+    let write_refs1 = write_refs.clone();
+    let write_refs2 = write_refs.clone();
+    let write_refs3 = write_refs.clone();
 
     let gen = quote! {
         pub struct #mgr_name{
@@ -88,23 +103,35 @@ pub fn world(input: TokenStream) -> TokenStream {
 
         impl ComponentMgr for #mgr_name{
             fn new() -> Rc<RefCell<Self>>{
-                let m = Rc::new(RefCell::new(#mgr_name{
+                // let m_weak = Rc::downgrade(&m);
+                // {
+                //     let m_borrow = m.borrow();
+                //     #(m_borrow.#field_names2.borrow_mut().set_mgr(m_weak.clone());)*
+                // }
+                // m
+                Rc::new(RefCell::new(#mgr_name{
                     #(#field_names1: Rc::new(RefCell::new(#field_groups1::new()))),*
-                }));
-                let m_weak = Rc::downgrade(&m);
-                {
-                    let m_borrow = m.borrow();
-                    #(m_borrow.#field_names2.borrow_mut().set_mgr(m_weak.clone());)*
-                }
-                m
+                }))
             }
         }
 
         impl #mgr_name {
             #(
-                pub fn #adds(&mut self, #field_names4: #field_types) -> #refs<#mgrs1>{
-                    let point = self.#field_names6.borrow_mut()._group.insert(#field_names7, 0);
-                    #refs1::new(point, self.#field_names5.clone())
+                // pub fn #adds(&mut self, #field_names4: #field_types) -> #refs<#mgrs1>{
+                //     let point = self.#field_names6.borrow_mut()._group.insert(#field_names7, 0);
+                //     #refs1::new(point, self.#field_names5.clone())
+                // }
+                pub fn #creates(&mut self) -> #write_refs<#mgrs1>{
+                    let point = #field_points::create(&mut self.#field_names6.borrow_mut());
+                    #write_refs1::new(point, self.#field_names5.clone(), self)
+                }
+
+                pub fn #field_gets(&mut self, index: usize) -> #read_refs1<#mgrs2>{
+                    #read_refs2::new(#field_points1(index), self.#field_names8.clone(), self)
+                }
+
+                pub fn #field_gets_mut(&mut self, index: usize) -> #write_refs2<#mgrs3>{
+                    #write_refs3::new(#field_points2(index), self.#field_names9.clone(), self)
                 }
             )*
         }

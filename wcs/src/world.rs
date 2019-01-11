@@ -35,7 +35,6 @@ pub trait ComponentMgr: 'static + Sized{
 
 pub trait System<E, C: ComponentMgr>{
     fn run(&self, e: &E, w: &mut C);
-    fn init(w: &mut C) -> Rc<Self> where Self: Sized;
 }
 
 pub trait ID{

@@ -8,7 +8,8 @@ pub fn impl_enum_component_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let p_name = point_name(name.clone().to_string());
     let g_name = group_name(name.clone().to_string());
-    let r_name = ref_name(name.clone().to_string());
+    let r_r_name = read_ref_name(name.clone().to_string());
+    let w_r_name = write_ref_name(name.clone().to_string());
     let gen = match &ast.data {
         syn::Data::Enum(e) => {
             let mut members: Vec<(syn::Ident, syn::punctuated::Punctuated<syn::Field, syn::token::Comma>, bool)> = Vec::new();
@@ -23,12 +24,14 @@ pub fn impl_enum_component_macro(ast: &syn::DeriveInput) -> TokenStream {
                 members.push((i, fs, is_name));
             }
             let p = impl_point_named(&p_name, &members);
-            let r = impl_ref_named(&r_name, &p_name, &g_name, &members);
+            let r_r = impl_ref_named(&r_r_name, false, &p_name, &g_name, &members);
+            let w_r = impl_ref_named(&w_r_name, true, &p_name, &g_name, &members);
             let g = impl_group_named(&g_name, &members);
 
             quote!{
                 #p
-                #r
+                #r_r
+                #w_r
                 #g
             }
         },
@@ -66,7 +69,7 @@ fn impl_point_named(p_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
     }
 }
 
-fn impl_ref_named(r_name: &syn::Ident, p_name: &syn::Ident, g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctuated::Punctuated<syn::Field, syn::token::Comma>, bool)>) -> quote::__rt::TokenStream {
+fn impl_ref_named(r_name: &syn::Ident, is_write: bool, p_name: &syn::Ident, g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctuated::Punctuated<syn::Field, syn::token::Comma>, bool)>) -> quote::__rt::TokenStream {
     let mut ref_impls = Vec::new();
     let mut match_points = Vec::new();
     let mut g_clones = Vec::new();
@@ -86,7 +89,12 @@ fn impl_ref_named(r_name: &syn::Ident, p_name: &syn::Ident, g_name: &syn::Ident,
         let mut j = 0;
         for field in member.1.iter(){
             arr_point.push(point_name(field.ty.clone().into_token_stream().to_string()));
-            arr_ref.push(ref_name(field.ty.clone().into_token_stream().to_string()));
+            if is_write {
+                arr_ref.push(write_ref_name(field.ty.clone().into_token_stream().to_string()));
+            }else {
+                arr_ref.push(read_ref_name(field.ty.clone().into_token_stream().to_string()));
+            }
+            
             if member.2 {
                 arr_name.push(field.ident.clone());
             }else {
@@ -121,38 +129,54 @@ fn impl_ref_named(r_name: &syn::Ident, p_name: &syn::Ident, g_name: &syn::Ident,
             let mut arr_index_str2 = arr_index_str.clone();
             let mut arr_ref1 = arr_ref.clone();
             ref_impls.push(quote!{
-                #name(#(#arr_ref<M>),*)
+                #name(#(#arr_ref<'a, M>),*)
             });
             match_points.push(quote! {
                 #name(#(#arr_index_str1),*)
             });
             g_clones.push(quote!{
-                #name(#(#arr_ref1::new(#arr_index_str2, (g.borrow().#arr_i).#arr_index.clone()) ),*)
+                #name(#(#arr_ref1::new(#arr_index_str2, (g.borrow().#arr_i).#arr_index.clone(), m) ),*)
             });
         }
         i += 1;
         
     }
-    
-    quote!{
-        pub enum #r_name<M: ComponentMgr>{
-            #(#ref_impls),*
-        }
+    if is_write {
+        quote!{
+            pub enum #r_name<'a, M: ComponentMgr>{
+                #(#ref_impls),*
+            }
 
-        impl<M: ComponentMgr> #r_name<M>{
-            pub fn new(p: #p_name, g: Rc<RefCell<#g_name<M>>>) -> #r_name<M>{
-                match p {
-                    #(#pns::#match_points => #rns::#g_clones),*
+            impl<'a, M: ComponentMgr> #r_name<'a, M>{
+                pub fn new(p: #p_name, g: Rc<RefCell<#g_name<M>>>, m: &mut M) -> #r_name<M>{
+                    match p {
+                        #(#pns::#match_points => #rns::#g_clones),*
+                    }
+                }
+            }
+        }
+    }else {
+        quote!{
+            pub enum #r_name<'a, M: ComponentMgr>{
+                #(#ref_impls),*
+            }
+
+            impl<'a, M: ComponentMgr> #r_name<'a, M>{
+                pub fn new(p: #p_name, g: Rc<RefCell<#g_name<M>>>, m: &M) -> #r_name<M>{
+                    match p {
+                        #(#pns::#match_points => #rns::#g_clones),*
+                    }
                 }
             }
         }
     }
+    
 }
 
 fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctuated::Punctuated<syn::Field, syn::token::Comma>, bool)>) -> quote::__rt::TokenStream {
     let mut member_impls = Vec::new();
     let mut new_impls = Vec::new();
-    let mut set_mgr_impls = Vec::new();
+    // let mut set_mgr_impls = Vec::new();
     let mut i = 0;
     let mut arr_names = Vec::new();
     for member in members.iter(){
@@ -177,7 +201,7 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
 
         if member.2{
             let mut arr_name1 = arr_name.clone();
-            let mut arr_name2 = arr_name.clone();
+            // let mut arr_name2 = arr_name.clone();
             let mut arr_group1 = arr_group.clone();
             let member_name = ident(&(name.clone().to_string() + g_name.to_string().as_str()));
             arr_names.push(member_name.clone());
@@ -189,9 +213,9 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
             new_impls.push(quote! {
                 #member_name{#(#arr_name1: Rc::new(RefCell::new(#arr_group1::new()))),*}
             });
-            set_mgr_impls.push(quote!{
-                #(self.#arr_i.#arr_name2.borrow_mut().set_mgr(mgr.clone()));*
-            });
+            // set_mgr_impls.push(quote!{
+            //     #(self.#arr_i.#arr_name2.borrow_mut().set_mgr(mgr.clone()));*
+            // });
         }else {
             let mut arr_group1 = arr_group.clone();
             let member_name = ident(&(name.clone().to_string() + g_name.to_string().as_str()));
@@ -202,9 +226,9 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
             new_impls.push(quote! {
                 #member_name(#(Rc::new(RefCell::new(#arr_group1::new()))),*)
             });
-            set_mgr_impls.push(quote!{
-                #((self.#arr_i).#arr_index.borrow_mut().set_mgr(mgr.clone()));*
-            });
+            // set_mgr_impls.push(quote!{
+            //     #((self.#arr_i).#arr_index.borrow_mut().set_mgr(mgr.clone()));*
+            // });
         }
         
         i += 1;
@@ -221,9 +245,9 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
                 #g_name(#(#new_impls),*)
             }
 
-            fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>){
-                #(#set_mgr_impls);*
-            }
+            // fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>){
+            //     #(#set_mgr_impls);*
+            // }
         }
     }
 }
