@@ -64,18 +64,17 @@ pub fn def_point(name: &syn::Ident) -> quote::__rt::TokenStream {
     let write_ref = write_ref_name(name.to_string());
     let group = group_name(name.to_string());
     quote! {
-        #[derive(Clone, Default)]
+        #[derive(Clone, Default, Debug)]
         pub struct #point(pub usize);
         
         pub struct #read_ref<'a, M: ComponentMgr>{
             point: #point,
-            groups: Rc<RefCell<#group<M>>>,
-            mgr: &'a M,
+            groups: &'a #group<M>,
         }
 
         pub struct #write_ref<'a, M: ComponentMgr>{
             point: #point,
-            groups: Rc<RefCell<#group<M>>>,
+            groups: usize,
             mgr: &'a mut M,
         }
     }
@@ -98,6 +97,19 @@ pub fn impl_point(name: &syn::Ident, point_impls: &Vec<quote::__rt::TokenStream>
 
         impl Point for #point{}
 
+        impl Deref for #point{
+            type Target = usize;
+            fn deref(&self) -> &usize{
+                &self.0
+            }
+        }
+
+        impl DerefMut for #point{
+            fn deref_mut(&mut self) -> &mut usize{
+                &mut self.0
+            }
+        }
+
         impl #point{
             #(#point_impls)*
         }
@@ -105,20 +117,26 @@ pub fn impl_point(name: &syn::Ident, point_impls: &Vec<quote::__rt::TokenStream>
         impl<'a, M: ComponentMgr> #read_reff<'a, M>{
             #(#readref_impls)*
 
-            pub fn new(p: #point, g: Rc<RefCell<#group<M>>>, m: &M) -> #read_reff<M>{
+            pub fn new(p: #point, g: &#group<M>) -> #read_reff<M>{
                 #read_reff{
                     point: p,
                     groups: g,
-                    mgr: m,
                 }
+            }
+        }
+
+        impl<'a, M: ComponentMgr> Deref for #read_reff<'a, M>{
+            type Target = #point;
+            fn deref(&self) -> &#point{
+                &self.point
             }
         }
 
         impl<'a, M: ComponentMgr> #write_reff<'a, M>{
             #(#writeref_impls)*
 
-            pub fn modify<F: FnOnce(&#name) -> bool>(&mut self, m: F) {
-                let mut groups = self.groups.borrow_mut();
+            pub fn modify<F: FnOnce(&mut #name) -> bool>(&mut self, m: F) {
+                let groups = #group::<M>::from_usize_mut(self.groups);
                 let handlers = groups._group.get_handlers();
                 let mut elem = groups._group.get_mut(&self.point);
                 if m(&mut elem) {
@@ -130,12 +148,24 @@ pub fn impl_point(name: &syn::Ident, point_impls: &Vec<quote::__rt::TokenStream>
                 }
             }
 
-            pub fn new(p: #point, g: Rc<RefCell<#group<M>>>, m: &mut M) -> #write_reff< M>{
+            pub fn new(p: #point, g: usize, m: &mut M) -> #write_reff< M>{
                 #write_reff{
                     point: p,
                     groups: g,
                     mgr: m,
                 }
+            }
+        }
+
+        impl<'a, M: ComponentMgr> Deref for #write_reff<'a, M>{
+            type Target = #point;
+            fn deref(&self) -> &#point{
+                &self.point
+            }
+        }
+        impl<'a, M: ComponentMgr> DerefMut for #write_reff<'a, M>{
+            fn deref_mut(&mut self) -> &mut #point{
+                &mut self.point
             }
         }
     }
@@ -151,8 +181,8 @@ pub fn impl_struct_point(name: &syn::Ident, fields: &syn::punctuated::Punctuated
             continue;
         }
         point_impls.push(impl_struct_point_fun(name, f));
-        readref_impls.push(impl_struct_readref_fun(f));
-        writeref_impls.push(impl_struct_writeref_fun(f));
+        readref_impls.push(impl_struct_readref_fun( f));
+        writeref_impls.push(impl_struct_writeref_fun(name, f));
     }
 
     impl_point(name, &point_impls, &readref_impls, &writeref_impls)
@@ -177,7 +207,7 @@ pub fn impl_struct_point_fun(name: &syn::Ident, field: &syn::Field) -> quote::__
         let field_ty_point = ident(&field_ty_str);
         quote! {
             pub fn #set<M: ComponentMgr>(&self, value: #field_ty, groups: &mut #group<M>) -> usize{
-                let index = groups.#field_name.borrow_mut()._group.insert(value, self.0.clone());
+                let index = groups.#field_name._group.insert(value, self.0.clone());
                 let elem = groups._group.get_mut(self);
                 elem.owner.#field_name = index;
                 elem.parent
@@ -221,26 +251,27 @@ pub fn impl_struct_readref_fun(field: &syn::Field) -> quote::__rt::TokenStream {
         let field_ty_ref = read_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
         quote! {
             pub fn #get(&self) -> #field_ty_ref<M>{
-                let p = self.point.#get(&self.groups.borrow()).clone();
-                #field_ty_ref::new(p, self.groups.borrow().#field_name.clone(), &self.mgr)
+                let p = self.point.#get(self.groups).clone();
+                #field_ty_ref::new(p, &self.groups.#field_name)
             }
         }
     }else {
         let field_ty = &field.ty;
         quote! {
             pub fn #get(&self) -> &#field_ty{
-                unsafe{&*(self.point.#get(&self.groups.borrow()) as *const #field_ty)}
+                unsafe{&*(self.point.#get(self.groups) as *const #field_ty)}
             }
         }
     }
 }
 
-pub fn impl_struct_writeref_fun(field: &syn::Field) -> quote::__rt::TokenStream {
+pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &syn::Field) -> quote::__rt::TokenStream {
     let field_ty_str = field.ty.clone().into_token_stream().to_string();
     let field_name_str = match &field.ident {
         Some(ref i) => i.to_string(),
         None => panic!("no fieldname"),
     };
+    let group = group_name(name.to_string());
     let set = set_name(&field_name_str);
     let get = get_name(&field_name_str);
     let get_mut = get_name_mut(&field_name_str);
@@ -253,8 +284,8 @@ pub fn impl_struct_writeref_fun(field: &syn::Field) -> quote::__rt::TokenStream 
         let field_ty_write_ref = write_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
         quote! {
             pub fn #set(&mut self, value: #field_ty){
-                let mut groups = self.groups.borrow_mut();
-                let parent = self.point.#set(value, &mut groups);
+                let groups = #group::<M>::from_usize_mut(self.groups);
+                let parent = self.point.#set(value, groups);
                 let handlers = groups._group.get_handlers();
                 notify(Event::ModifyField{
                     point: self.point.clone(),
@@ -264,21 +295,23 @@ pub fn impl_struct_writeref_fun(field: &syn::Field) -> quote::__rt::TokenStream 
             }
 
             pub fn #get(&self) -> #field_ty_read_ref<M>{
-                let p = self.point.#get(&self.groups.borrow()).clone();
-                #field_ty_read_ref::new(p, self.groups.borrow().#field_name.clone(), &self.mgr)
+                let groups = #group::<M>::from_usize(self.groups);
+                let p = self.point.#get(groups).clone();
+                #field_ty_read_ref::new(p, &groups.#field_name)
             }
 
             pub fn #get_mut(&mut self) -> #field_ty_write_ref<M>{
-                let p = self.point.#get(&self.groups.borrow()).clone();
-                #field_ty_write_ref::new(p, self.groups.borrow().#field_name.clone(), &mut self.mgr)
+                let groups = #group::<M>::from_usize_mut(self.groups);
+                let p = self.point.#get(groups).clone();
+                #field_ty_write_ref::new(p, groups.#field_name.to_usize(), &mut self.mgr)
             }
         }
     }else {
         let field_ty = &field.ty;
         quote! {
             pub fn #set(&mut self, value: #field_ty){
-                let mut groups = self.groups.borrow_mut();
-                let parent = self.point.#set(value, &mut groups);
+                let groups = #group::<M>::from_usize_mut(self.groups);
+                let parent = self.point.#set(value, groups);
                 let handlers = groups._group.get_handlers();
                 notify(Event::ModifyField{
                     point: self.point.clone(),
@@ -288,11 +321,13 @@ pub fn impl_struct_writeref_fun(field: &syn::Field) -> quote::__rt::TokenStream 
             }
 
             pub fn #get(&self) -> &#field_ty{
-                unsafe{&*(self.point.#get(&self.groups.borrow()) as *const #field_ty)}
+                let groups = #group::<M>::from_usize(self.groups);
+                unsafe{&*(self.point.#get(groups) as *const #field_ty)}
             }
 
             pub fn #get_mut(&self) -> &mut #field_ty{
-                unsafe{&mut *(self.point.#get_mut(&mut self.groups.borrow_mut()) as *mut #field_ty)}
+                let groups = #group::<M>::from_usize_mut(self.groups);
+                unsafe{&mut *(self.point.#get_mut(groups) as *mut #field_ty)}
             }
         }
     }
@@ -315,10 +350,10 @@ pub fn component_group_tree(name: &syn::Ident, fields: &syn::punctuated::Punctua
         let field_ty_str = field.ty.clone().into_token_stream().to_string();
         let field_ty_group: syn::Ident = group_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len() -5)}.to_string());
         field_types.push(quote! {
-            pub #field_name: Rc<RefCell<#field_ty_group<M>>>,
+            pub #field_name: #field_ty_group<M>,
         });
         field_news.push(quote! {
-            #field_name: Rc::new(RefCell::new(#field_ty_group::new())),
+            #field_name: #field_ty_group::new(),
         });
         // set_mgrs.push(quote! {
         //     self.#field_name.borrow_mut().set_mgr(mgr.clone());
@@ -348,14 +383,32 @@ pub fn component_group_tree(name: &syn::Ident, fields: &syn::punctuated::Punctua
             //     self._group.set_mgr(mgr);
             // }
         }
+
+        impl<M: ComponentMgr> #group_name<M>{
+            #[inline]
+            pub fn to_usize (&self) -> usize{
+                self as *const #group_name<M> as usize
+            }
+
+            #[inline]
+            pub fn from_usize<'a> (ptr: usize) -> &'a #group_name<M>{
+                unsafe{&*(ptr as *const #group_name<M>)}
+            }
+
+            #[inline]
+            pub fn from_usize_mut<'a>(ptr: usize) -> &'a mut #group_name<M>{
+                unsafe{&mut *(ptr as *mut #group_name<M>)}
+            }
+        }
     }
 }
 
 pub fn component_impl_create(name: &syn::Ident, fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> quote::__rt::TokenStream {
     let mut field_creates = Vec::new();
-    let mut field_point_set1 = Vec::new();
-    let mut field_point_set = Vec::new();
+    let mut field_create_notifys = Vec::new();
+    let mut field_destroys = Vec::new();
     let p_name = point_name(name.to_string());
+    let w_r_name = write_ref_name(name.to_string());
     let g_name = group_name(name.to_string());
     for field in fields.iter(){
         let field_name = match &field.ident {
@@ -364,21 +417,23 @@ pub fn component_impl_create(name: &syn::Ident, fields: &syn::punctuated::Punctu
         };
         if is_child(field){
             let field_ty_point = &field.ty;
+            let field_ty_str = field.ty.clone().into_token_stream().to_string();
+            let field_ty_write_ref = write_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
             if is_must(field) {
                 field_creates.push(quote! {
-                    #field_name: #field_name.clone()
+                    #field_name: #field_ty_point::create(&mut groups.#field_name, &p)
                 });
-                field_point_set.push(quote! {
-                    let #field_name = #field_ty_point::create(&mut group.#field_name.borrow_mut());
-                });
-                field_point_set1.push(quote! {
-                    group.#field_name.borrow_mut()._group.get_mut(&#field_name).parent = p.0;
+                field_create_notifys.push(quote! {
+                    #field_ty_write_ref::new(value.owner.#field_name.clone(), groups.#field_name.to_usize(), self.mgr).recursive_create_notify();
                 });
             }else {
                 field_creates.push(quote! {
                     #field_name: #field_ty_point(0)
                 });
             }
+            field_destroys.push(quote! {
+                #field_ty_write_ref::new(value.owner.#field_name.clone(), groups.#field_name.to_usize(), self.mgr).destroy();
+            });
         }else {
             let mut field_ty = field.ty.clone();
             match &mut field_ty {
@@ -397,17 +452,57 @@ pub fn component_impl_create(name: &syn::Ident, fields: &syn::punctuated::Punctu
         }
     }
 
+    let mut destroy1 = quote! {};
+    if field_destroys.len() > 0 {
+        destroy1 = quote! {
+            {
+                let value =  groups._group.get(&self.point);
+                #(#field_destroys)*
+            }
+        }
+    }
+
     quote! {
-        impl<M: ComponentMgr> Create<M> for #p_name{
-            type G = #g_name<M>;
-            fn create(group: &mut Self::G) -> #p_name{
-                #(#field_point_set)*
-                let v = #name {
+        impl #p_name{
+            fn create<M: ComponentMgr>(groups: &mut #g_name<M>, parent: &usize) -> #p_name{
+                let v: #name = unsafe{uninitialized()};
+                let p = groups._group.insert(v, parent.clone());
+                let v1 = #name {
                     #(#field_creates),*
                 };
-                let p = group._group.insert(v, 0);
-                #(#field_point_set1)*
+                unsafe{write(&mut groups._group.get_mut(&p).owner as *mut #name, v1)};
                 p
+            }
+        }
+
+        impl<'a, M: ComponentMgr> #w_r_name<'a, M>{
+            pub fn create(parent: &usize, group: usize, mgr: &'a mut M) -> #w_r_name<'a, M>{
+                let groups = #g_name::<M>::from_usize_mut(group);
+                let point = #p_name::create(groups, parent);
+                let mut r = #w_r_name::new(point, group, mgr);
+                r.recursive_create_notify();
+                r
+            }
+
+            pub fn recursive_create_notify(&mut self){
+                let groups = #g_name::<M>::from_usize(self.groups);
+                let parent = {
+                    let value = groups._group.get(&self.point);
+                    #(#field_create_notifys)*
+                    value.parent
+                };
+                let handlers = groups._group.get_handlers();
+                notify(Event::Create{point: self.point.clone(), parent: parent}, &handlers.borrow(), &mut self.mgr);
+            }
+
+            pub fn destroy(&mut self){
+                if self.point.0 > 0 {
+                    let groups = #g_name::<M>::from_usize_mut(self.groups);
+                    #destroy1
+                    let parent = groups._group.remove(&self.point).parent;
+                    let handlers = groups._group.get_handlers();
+                    notify(Event::Delete{point: self.point.clone(), parent: parent}, &handlers.borrow(), &mut self.mgr);
+                }
             }
         }
     }

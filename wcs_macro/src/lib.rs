@@ -82,7 +82,6 @@ pub fn world(input: TokenStream) -> TokenStream {
     let field_names1 = field_names.clone();
     let field_groups1 = field_groups.clone();
     let field_names5 = field_names.clone();
-    let field_names6 = field_names.clone();
     let field_names8 = field_names.clone();
     let field_names9 = field_names.clone();
     let field_points1 = field_points.clone();
@@ -98,20 +97,20 @@ pub fn world(input: TokenStream) -> TokenStream {
 
     let gen = quote! {
         pub struct #mgr_name{
-            #(pub #field_names: Rc<RefCell<#field_groups<#mgrs>>>),*
+            #(pub #field_names: #field_groups<#mgrs>),*
         }
 
         impl ComponentMgr for #mgr_name{
-            fn new() -> Rc<RefCell<Self>>{
+            fn new() -> Self{
                 // let m_weak = Rc::downgrade(&m);
                 // {
                 //     let m_borrow = m.borrow();
                 //     #(m_borrow.#field_names2.borrow_mut().set_mgr(m_weak.clone());)*
                 // }
                 // m
-                Rc::new(RefCell::new(#mgr_name{
-                    #(#field_names1: Rc::new(RefCell::new(#field_groups1::new()))),*
-                }))
+                #mgr_name{
+                    #(#field_names1: #field_groups1::new()),*
+                }
             }
         }
 
@@ -121,17 +120,16 @@ pub fn world(input: TokenStream) -> TokenStream {
                 //     let point = self.#field_names6.borrow_mut()._group.insert(#field_names7, 0);
                 //     #refs1::new(point, self.#field_names5.clone())
                 // }
-                pub fn #creates(&mut self) -> #write_refs<#mgrs1>{
-                    let point = #field_points::create(&mut self.#field_names6.borrow_mut());
-                    #write_refs1::new(point, self.#field_names5.clone(), self)
+                pub fn #creates(&mut self, parent: &usize) -> #write_refs<#mgrs1>{
+                    #write_refs1::create(parent, self.#field_names5.to_usize(), self)
                 }
 
-                pub fn #field_gets(&mut self, index: usize) -> #read_refs1<#mgrs2>{
-                    #read_refs2::new(#field_points1(index), self.#field_names8.clone(), self)
+                pub fn #field_gets(&mut self, index: &usize) -> #read_refs1<#mgrs2>{
+                    #read_refs2::new(#field_points1(index.clone()), &self.#field_names8)
                 }
 
-                pub fn #field_gets_mut(&mut self, index: usize) -> #write_refs2<#mgrs3>{
-                    #write_refs3::new(#field_points2(index), self.#field_names9.clone(), self)
+                pub fn #field_gets_mut(&mut self, index: &usize) -> #write_refs2<#mgrs3>{
+                    #write_refs3::new(#field_points2(index.clone()), self.#field_names9.to_usize(), self)
                 }
             )*
         }

@@ -120,9 +120,15 @@ fn impl_ref_named(r_name: &syn::Ident, is_write: bool, p_name: &syn::Ident, g_na
             match_points.push(quote! {
                 #name{#(#arr_name1),*}
             });
-            g_clones.push(quote!{
-                #name{#(#arr_name2: #arr_ref1::new(#arr_name4, g.borrow().#arr_i.#arr_name3.clone()) ),*}
-            });
+            if is_write {
+                g_clones.push(quote!{
+                    #name{#(#arr_name2: #arr_ref1::new(#arr_name4, g.#arr_i.#arr_name3.to_usize(), m) ),*}
+                });
+            }else {
+                g_clones.push(quote!{
+                    #name{#(#arr_name2: #arr_ref1::new(#arr_name4, &g.#arr_i.#arr_name3) ),*}
+                });
+            }
             
         }else {
             let mut arr_index_str1 = arr_index_str.clone();
@@ -134,9 +140,15 @@ fn impl_ref_named(r_name: &syn::Ident, is_write: bool, p_name: &syn::Ident, g_na
             match_points.push(quote! {
                 #name(#(#arr_index_str1),*)
             });
-            g_clones.push(quote!{
-                #name(#(#arr_ref1::new(#arr_index_str2, (g.borrow().#arr_i).#arr_index.clone(), m) ),*)
-            });
+            if is_write {
+                g_clones.push(quote!{
+                    #name(#(#arr_ref1::new(#arr_index_str2, (g.#arr_i).#arr_index.to_usize(), m) ),*)
+                });
+            }else {
+                g_clones.push(quote!{
+                    #name(#(#arr_ref1::new(#arr_index_str2, &(g.#arr_i).#arr_index) ),*)
+                });
+            }
         }
         i += 1;
         
@@ -148,7 +160,8 @@ fn impl_ref_named(r_name: &syn::Ident, is_write: bool, p_name: &syn::Ident, g_na
             }
 
             impl<'a, M: ComponentMgr> #r_name<'a, M>{
-                pub fn new(p: #p_name, g: Rc<RefCell<#g_name<M>>>, m: &mut M) -> #r_name<M>{
+                pub fn new(p: #p_name, g: usize, m: &mut M) -> #r_name<M>{
+                    let g = #g_name::<M>::from_usize_mut(g);
                     match p {
                         #(#pns::#match_points => #rns::#g_clones),*
                     }
@@ -162,7 +175,7 @@ fn impl_ref_named(r_name: &syn::Ident, is_write: bool, p_name: &syn::Ident, g_na
             }
 
             impl<'a, M: ComponentMgr> #r_name<'a, M>{
-                pub fn new(p: #p_name, g: Rc<RefCell<#g_name<M>>>, m: &M) -> #r_name<M>{
+                pub fn new(p: #p_name, g: &#g_name<M>) -> #r_name<M>{
                     match p {
                         #(#pns::#match_points => #rns::#g_clones),*
                     }
@@ -207,11 +220,11 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
             arr_names.push(member_name.clone());
             member_impls.push(quote!{
                 pub struct #member_name<M: ComponentMgr>{
-                    #(#arr_name: Rc<RefCell<#arr_group<M>>>),*
+                    #(#arr_name: #arr_group<M>),*
                 }
             });
             new_impls.push(quote! {
-                #member_name{#(#arr_name1: Rc::new(RefCell::new(#arr_group1::new()))),*}
+                #member_name{#(#arr_name1: #arr_group1::new()),*}
             });
             // set_mgr_impls.push(quote!{
             //     #(self.#arr_i.#arr_name2.borrow_mut().set_mgr(mgr.clone()));*
@@ -221,10 +234,10 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
             let member_name = ident(&(name.clone().to_string() + g_name.to_string().as_str()));
             arr_names.push(member_name.clone());
             member_impls.push(quote!{
-                pub struct #member_name<M: ComponentMgr>(#(Rc<RefCell<#arr_group<M>>>),*);
+                pub struct #member_name<M: ComponentMgr>(#(#arr_group<M>),*);
             });
             new_impls.push(quote! {
-                #member_name(#(Rc::new(RefCell::new(#arr_group1::new()))),*)
+                #member_name(#(#arr_group1::new()),*)
             });
             // set_mgr_impls.push(quote!{
             //     #((self.#arr_i).#arr_index.borrow_mut().set_mgr(mgr.clone()));*
@@ -248,6 +261,23 @@ fn impl_group_named(g_name: &syn::Ident, members: &Vec<(syn::Ident, syn::punctua
             // fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>){
             //     #(#set_mgr_impls);*
             // }
+        }
+
+        impl<M: ComponentMgr> #g_name<M>{
+            #[inline]
+            pub fn to_usize (&self) -> usize{
+                self as *const #g_name<M> as usize
+            }
+
+            #[inline]
+            pub fn from_usize<'a> (ptr: usize) -> &'a #g_name<M>{
+                unsafe{&*(ptr as *const #g_name<M>)}
+            }
+
+            #[inline]
+            pub fn from_usize_mut<'a>(ptr: usize) -> &'a mut #g_name<M>{
+                unsafe{&mut *(ptr as *mut #g_name<M>)}
+            }
         }
     }
 }

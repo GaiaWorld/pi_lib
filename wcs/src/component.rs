@@ -47,34 +47,33 @@ impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
         point
     }
 
-    pub fn try_remove(&mut self, point: &P) -> Option<T>{
-        let id = point.id();
-        if !self.components.contains(id){
+    pub fn try_remove(&mut self, id: &usize) -> Option<ComponentP<T>>{
+        if !self.components.contains(id.clone()){
             return None;
         }
-        Some(self.components.remove(id).unwrap())
+        Some(self.components.remove(id.clone()))
     }
 
-    pub fn remove(&mut self, id: &P) -> T {
-        self.components.remove(id.id()).unwrap()
+    pub fn remove(&mut self, id: &usize) -> ComponentP<T> {
+        self.components.remove(id.clone())
     }
 
-    pub fn try_get(&mut self, id: &P) -> Option<&ComponentP<T>>{
-        self.components.get(id.id())
-    }
-
-    //这是一个非安全方法
-    pub fn get(&self, id: &P) -> &ComponentP<T>{
-        unsafe{ self.components.get_unchecked(id.id()) }
-    }
-
-    pub fn try_get_mut(&mut self, id: &P) -> Option<&mut ComponentP<T>>{
-        self.components.get_mut(id.id())
+    pub fn try_get(&mut self, id: &usize) -> Option<&ComponentP<T>>{
+        self.components.get(id.clone())
     }
 
     //这是一个非安全方法
-    pub fn get_mut(&mut self, id: &P) -> &mut ComponentP<T>{
-        unsafe{ self.components.get_unchecked_mut(id.id()) }
+    pub fn get(&self, id: &usize) -> &ComponentP<T>{
+        unsafe{ self.components.get_unchecked(id.clone()) }
+    }
+
+    pub fn try_get_mut(&mut self, id: &usize) -> Option<&mut ComponentP<T>>{
+        self.components.get_mut(id.clone())
+    }
+
+    //这是一个非安全方法
+    pub fn get_mut(&mut self, id: &usize) -> &mut ComponentP<T>{
+        unsafe{ self.components.get_unchecked_mut(id.clone()) }
     }
 
     pub fn iter_mut(&mut self) -> ComponentIterMut<T>{
@@ -213,7 +212,12 @@ impl<C: Sized> DerefMut for ComponentP<C> {
     }
 }
 
-pub trait Create<M: ComponentMgr>{
-    type G;
-    fn create(group: &mut Self::G) -> Self;
-}
+// pub trait Create<M: ComponentMgr>{
+//     type G;
+//     fn create(group: &mut Self::G, parent: &usize) -> Self;
+// }
+
+// pub trait Destroy<M: ComponentMgr>{
+//     type G;
+//     fn destroy(group: &mut Self::G, id: &usize);
+// }
