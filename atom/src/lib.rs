@@ -1,4 +1,5 @@
 #![feature(core_intrinsics)] 
+#![feature(nll)]
 /**
  * 全局的线程安全的原子字符串池，为了移植问题，可能需要将实现部分移到其他库
  * 某些高频单次的Atom，可以在应用层增加一个cache来缓冲Atom，定期检查引用计数来判断是否缓冲。
@@ -240,7 +241,7 @@ fn read(list: &CowList, s: &str, nil_count: &mut usize) -> Option<Arc<(String, u
 #[derive(Clone)]
 struct CowList{
 	next:Option<Arc<CowList>>,
-	value:Weak<(String, u64)>,
+	pub value:Weak<(String, u64)>,
 }
 
 impl CowList{
@@ -267,29 +268,28 @@ impl CowList{
 
 	pub fn iter(&self) -> Iter{
 		Iter{
-			head: Some(Arc::new(self.clone())),
-			marker: PhantomData,
+			head: Some(&self),
 		}
 	}
 }
 
 pub struct Iter<'a> {
-    head: Option<Arc<CowList>>,
-	marker: PhantomData<&'a CowList>,
+    head: Option<&'a CowList>,
 }
 
 impl<'a> Iterator for Iter<'a>{
 	type Item = &'a Weak<(String, u64)>;
 	fn next(&mut self) -> Option<&'a Weak<(String, u64)>>{
-		let node = match self.head {
-			Some(ref node) => unsafe{
-				let node = &*(node.as_ref() as *const CowList);
-				node
-			},
+		let list = match self.head {
+			Some(list) => list,
 			None => return None,
 		};
-		self.head = node.next.clone();
-		Some(&node.value)
+
+		self.head = match list.next{
+            Some(ref list) => Some(list.as_ref()),
+            None => None,
+        };
+		Some(&list.value)
 	}
 }
 
@@ -299,6 +299,7 @@ extern crate time;
 
 #[test]
 fn test_atom() {
+
     Atom::from("abc");
 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 1);
 	Atom::from("afg");
