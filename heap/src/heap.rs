@@ -63,7 +63,7 @@ impl<T: Ord> Heap<T> {
 		let len = self.0.len();
 		let last_elem = self.0.remove(len - 1);
 		//如果需要移除的元素不是堆底元素， 需要将该元素位置设置为栈底元素并下沉, 否则直接返回堆底元素
-		if index < len {
+		if index < self.0.len() {
 			let cur_elem = transmute_copy(&mut self.0[index]);
 			self.down(index, last_elem, index_factory);
 			cur_elem
@@ -88,7 +88,7 @@ impl<T: Ord> Heap<T> {
 				if parent == 0 { break; }
 				cur = parent;
 				parent = (cur - 1) >> 1;
-				if arr[cur].0.cmp(&arr[parent].0) != self.1 { break; }
+				if elem.0.cmp(&arr[parent].0) != self.1 { break; }
 			}
 			unsafe{write(arr.as_mut_ptr().wrapping_offset(cur as isize), elem)};
 			index_factory.store(arr[cur].1, cur);
@@ -105,7 +105,7 @@ impl<T: Ord> Heap<T> {
 		let mut left = (cur << 1) + 1;
 		let mut right = left + 1;
 		let len = arr.len();
-
+        
 		while left < len {
 			// 选择左右孩子的较小值（或较大值， 根据堆的类型而定）作为比较对象
 			let (child, child_index) = if right < len && arr[right].0.cmp(&arr[left].0) == self.1 {

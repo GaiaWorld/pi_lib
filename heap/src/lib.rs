@@ -6,3 +6,4 @@ extern crate time;
 
 pub mod heap;
 pub mod slab_heap;
+pub mod sample_heap;
