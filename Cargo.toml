@@ -19,11 +19,10 @@ members = [
   "wcs",
   "wheel",
   "wtree",
-  "fast_deque",
+  "deque",
   "dyn_uint",
   "task_pool",
   "wcs_macro",
-
 
   "file",
   "worker",

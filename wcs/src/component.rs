@@ -4,6 +4,7 @@ use std::clone::Clone;
 use std::ops::{Deref, DerefMut};
 use std::rc::{Weak, Rc};
 use std::cell::{RefCell};
+use std::fmt;
 
 use slab::{Slab, SlabIter, SlabIterMut};
 
@@ -15,7 +16,6 @@ type ComponentIterMut<'a, T> = SlabIterMut<'a, ComponentP<T>>;
 pub trait ComponentGroupTree {
     type C: ComponentMgr;
     fn new() -> Self;
-    // fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>);
 }
 
 pub trait ComponentHandler<P: Point, C: ComponentMgr> {
@@ -25,6 +25,12 @@ pub trait ComponentHandler<P: Point, C: ComponentMgr> {
 pub struct ComponentGroup<T: Sized, P: Point, C: ComponentMgr>{
     components: Slab<ComponentP<T>>,
     handlers: Rc<RefCell<Vec<Weak<ComponentHandler<P, C>>>>>,
+}
+
+impl<T: Sized + fmt::Debug, P: Point, C: ComponentMgr> fmt::Debug for ComponentGroup<T, P, C>{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ComponentGroup {{ components: {:?}, handlers_len: {} }}", self.components, self.handlers.borrow().len())
+    }
 }
 
 impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
@@ -115,7 +121,7 @@ pub fn notify<P: Point, C: ComponentMgr>(event: Event<P>, handlers: &Vec<Weak<Co
         }
     }
 }
-
+#[derive(Clone, Debug)]
 pub enum Event<'a, P: Point>  {
     ModifyField{
         point: P,
@@ -143,15 +149,11 @@ pub enum Event<'a, P: Point>  {
     }
 }
 
-// pub trait Group<C: Component, P: Point>{
-//     fn set_group(&mut self, group: WeakComponentGroup<C, P>);
-// }
-
 pub trait Point: ID + Clone + Default + Sized{
 
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PPoint<P: Point>{
     pub id: P,
     pub parent: usize,
@@ -175,6 +177,12 @@ impl<P: Point> DerefMut for PPoint<P> {
 pub struct ComponentP<C: Sized>{
     pub parent: usize,
     pub owner: C,
+}
+
+impl<C: fmt::Debug + Sized> fmt::Debug for ComponentP<C>{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ComponentP {{ parent: {}, owner: {:?} }}", self.parent, self.owner)
+    }
 }
 
 impl<C: Sized> ComponentP<C>{

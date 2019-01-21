@@ -9,7 +9,7 @@ extern crate flamer;
 extern crate wtree;
 extern crate timer;
 extern crate dyn_uint;
-extern crate fast_deque;
+extern crate deque;
 extern crate slab;
 
 pub mod enums;

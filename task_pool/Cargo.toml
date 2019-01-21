@@ -7,7 +7,7 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 wtree = {path="../wtree"}
 timer = {path="../timer"}
 dyn_uint = {path="../dyn_uint"}
-fast_deque = {path="../fast_deque"}
+deque = {path="../deque"}
 slab = {path="../slab"}
 time = {path="../time"}
 rand = "0.5.4"

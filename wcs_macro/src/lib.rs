@@ -61,22 +61,45 @@ pub fn world(input: TokenStream) -> TokenStream {
     let mut read_refs = Vec::new();
     let mut write_refs = Vec::new();
     let mut creates = Vec::new();
+    let mut res = Vec::new();
+    let mut res_new = Vec::new();
     for field in fields.iter(){
-        let field_name_str = match &field.ident {
-            Some(ref i) => i.to_string(),
-            None => panic!("no fieldname"),
-        };
-        let field_ty = field.ty.clone().into_token_stream().to_string();
-        field_names.push(ident(&field_name_str));
-        field_groups.push(group_name(field_ty.clone()));
-        field_types.push(ident(&field_ty));
-        field_points.push(point_name(field_ty.clone()));
-        field_gets.push(get_name(&field_name_str));
-        field_gets_mut.push(get_name_mut(&field_name_str));
-        mgrs.push(ident(&mgr_str));
-        read_refs.push(read_ref_name(field_ty.clone()));
-        write_refs.push(write_ref_name(field_ty));
-        creates.push(create_name(&field_name_str));
+        if is_child(&field) {
+            let field_name_str = match &field.ident {
+                Some(ref i) => i.to_string(),
+                None => panic!("no fieldname"),
+            };
+            let field_ty = field.ty.clone().into_token_stream().to_string();
+            field_names.push(ident(&field_name_str));
+            field_groups.push(group_name(field_ty.clone()));
+            field_types.push(ident(&field_ty));
+            field_points.push(point_name(field_ty.clone()));
+            field_gets.push(get_name(&field_name_str));
+            field_gets_mut.push(get_name_mut(&field_name_str));
+            mgrs.push(ident(&mgr_str));
+            read_refs.push(read_ref_name(field_ty.clone()));
+            write_refs.push(write_ref_name(field_ty));
+            creates.push(create_name(&field_name_str));
+        }else {
+            let name = &field.ident;
+            let ty = &field.ty;
+            res.push(quote!{
+                pub #name: #ty,
+            });
+            let mut field_ty = field.ty.clone();
+            match &mut field_ty {
+                syn::Type::Path(ref mut p) => {
+                    for v in p.path.segments.iter_mut(){
+                        v.arguments = syn::PathArguments::None;
+                    }
+                },
+                _ => panic!("type error"),
+            }
+            res_new.push(quote!{
+                #name: #field_ty::new(),
+            })
+        }
+        
     }
 
     let field_names1 = field_names.clone();
@@ -97,18 +120,14 @@ pub fn world(input: TokenStream) -> TokenStream {
 
     let gen = quote! {
         pub struct #mgr_name{
+            #(#res)*
             #(pub #field_names: #field_groups<#mgrs>),*
         }
 
         impl ComponentMgr for #mgr_name{
             fn new() -> Self{
-                // let m_weak = Rc::downgrade(&m);
-                // {
-                //     let m_borrow = m.borrow();
-                //     #(m_borrow.#field_names2.borrow_mut().set_mgr(m_weak.clone());)*
-                // }
-                // m
                 #mgr_name{
+                    #(#res_new)*
                     #(#field_names1: #field_groups1::new()),*
                 }
             }

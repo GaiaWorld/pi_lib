@@ -4,7 +4,7 @@ use std::fmt;
 use wtree::wtree::WeightTree;
 
 use dyn_uint::{UintFactory, ClassFactory, SlabFactory};
-use fast_deque::FastDeque;
+use deque::slab_deque::SlabDeque;
 
 use enums:: {IndexType, FreeSign};
 
@@ -285,7 +285,7 @@ len: {},
 //可删除的权重队列， WeightQueue(权重, 队列)
 pub struct WeightQueue<T>{
     weight_unit: usize, //单个任务权重
-    queue: FastDeque<T>, //队列
+    queue: SlabDeque<T>, //队列
 }
 
 impl<T> WeightQueue<T>{
@@ -294,7 +294,7 @@ impl<T> WeightQueue<T>{
     fn new(weight_unit: usize) -> Self{
         WeightQueue{
             weight_unit: weight_unit,
-            queue: FastDeque::new(),
+            queue: SlabDeque::new(),
         }
     }
 

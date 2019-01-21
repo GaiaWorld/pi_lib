@@ -68,12 +68,12 @@ pub fn def_point(name: &syn::Ident) -> quote::__rt::TokenStream {
         pub struct #point(pub usize);
         
         pub struct #read_ref<'a, M: ComponentMgr>{
-            point: #point,
+            pub point: #point,
             groups: &'a #group<M>,
         }
 
         pub struct #write_ref<'a, M: ComponentMgr>{
-            point: #point,
+            pub point: #point,
             groups: usize,
             mgr: &'a mut M,
         }
