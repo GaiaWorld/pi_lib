@@ -23,16 +23,16 @@ impl UintFactory for IndexFactory {
     }
 }
 
-pub struct SampleHeap<T> {
+pub struct SimpleHeap<T> {
     index_factory: IndexFactory,
     heap: Heap<T>,
 }
 
-impl<T: Ord> SampleHeap<T> {
+impl<T: Ord> SimpleHeap<T> {
 
 	//构建一个堆, 如果ord为Ordering::Less, 将创建一个小堆, 如果为Ordering::Greater，将创建一个大堆, 不应该使用Ordering::Equal创建一个堆
 	pub fn new(ord: Ordering) -> Self{
-		SampleHeap{
+		SimpleHeap{
             index_factory: IndexFactory,
             heap: Heap::new(ord),
         }
@@ -40,7 +40,7 @@ impl<T: Ord> SampleHeap<T> {
 
 	//创建一个堆， 并初始容量
 	pub fn with_capacity(capacity: usize, ord: Ordering) -> Self{
-        SampleHeap{
+        SimpleHeap{
             index_factory: IndexFactory,
             heap: Heap::with_capacity(capacity, ord),
         }
@@ -81,10 +81,10 @@ impl<T: Ord> SampleHeap<T> {
 	}
 }
 
-impl<T: Debug> Debug for SampleHeap<T> where T: Debug {
+impl<T: Debug> Debug for SimpleHeap<T> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
         write!(fmt,
-               "SampleHeap({:?})",
+               "SimpleHeap({:?})",
                self.heap
         )
     }
@@ -92,7 +92,7 @@ impl<T: Debug> Debug for SampleHeap<T> where T: Debug {
 
 #[test]
 fn test(){
-	let mut min_heap: SampleHeap<u32> = SampleHeap::new(Ordering::Less);
+	let mut min_heap: SimpleHeap<u32> = SimpleHeap::new(Ordering::Less);
 
     min_heap.push(1);
     min_heap.push(10);
