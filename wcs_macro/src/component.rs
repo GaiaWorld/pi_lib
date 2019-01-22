@@ -282,19 +282,18 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &syn::Field) -> quote:
         let field_ty= ident(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)});
         let field_ty_read_ref = read_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
         let field_ty_write_ref = write_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
+        //let field_ty_group = group_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
         quote! {
             pub fn #set(&mut self, value: #field_ty){
                 let groups = #group::<M>::from_usize_mut(self.groups);
-                let old = self.point.#get(groups).clone();
+                {
+                    let old = self.point.#get(groups).clone();
+                    let mut old_ref = #field_ty_write_ref::<M>::new(old, groups.#field_name.to_usize(), &mut self.mgr);
+                    old_ref.destroy();
+                }
                 let parent = self.point.#set(value, groups);
                 let handlers = groups._group.get_handlers();
                 let handlers1 = groups.#field_name._group.get_handlers();
-                //删除事件
-                notify(Event::Delete{
-                    point: old,
-                    parent: parent,
-                }, &handlers1.borrow(), &mut self.mgr);
-
                 let new_point = self.point.#get(groups).clone();
                 //创建事件
                 notify(Event::Create{
@@ -514,10 +513,11 @@ pub fn component_impl_create(name: &syn::Ident, fields: &syn::punctuated::Punctu
             pub fn destroy(&mut self){
                 if self.point.0 > 0 {
                     let groups = #g_name::<M>::from_usize_mut(self.groups);
-                    #destroy1
-                    let parent = groups._group.remove(&self.point).parent;
+                    let parent = groups._group.get(&self.point).parent.clone();
                     let handlers = groups._group.get_handlers();
                     notify(Event::Delete{point: self.point.clone(), parent: parent}, &handlers.borrow(), &mut self.mgr);
+                    #destroy1
+                    groups._group.remove(&self.point);
                 }
             }
         }
