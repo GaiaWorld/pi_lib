@@ -285,8 +285,24 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &syn::Field) -> quote:
         quote! {
             pub fn #set(&mut self, value: #field_ty){
                 let groups = #group::<M>::from_usize_mut(self.groups);
+                let old = self.point.#get(groups).clone();
                 let parent = self.point.#set(value, groups);
                 let handlers = groups._group.get_handlers();
+                let handlers1 = groups.#field_name._group.get_handlers();
+                //删除事件
+                notify(Event::Delete{
+                    point: old,
+                    parent: parent,
+                }, &handlers1.borrow(), &mut self.mgr);
+
+                let new_point = self.point.#get(groups).clone();
+                //创建事件
+                notify(Event::Create{
+                    point: new_point,
+                    parent: parent,
+                }, &handlers1.borrow(), &mut self.mgr);
+
+                //修改事件
                 notify(Event::ModifyField{
                     point: self.point.clone(),
                     parent: parent,
