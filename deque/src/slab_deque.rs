@@ -72,8 +72,7 @@ impl<T> SlabDeque<T> {
 
     pub fn iter(&mut self) -> Iter<T> {
         Iter{
-            d_iter: self.deque.iter(),
-            container: &self.slab
+            d_iter: self.deque.iter(&self.slab),
         }
     }
 }
@@ -89,7 +88,6 @@ impl<T: Debug> Debug for SlabDeque<T> {
 
 pub struct Iter<'a, T: 'a> {
     d_iter: DIter<'a, T, Slab<Node<T>>>,
-    container: &'a Slab<Node<T>>,
 }
 
 
@@ -97,7 +95,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        self.d_iter.next(&mut self.container)
+        self.d_iter.next()
     }
 }
 

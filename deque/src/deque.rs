@@ -8,6 +8,7 @@
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::marker::PhantomData;
 use std::mem::replace;
+use std::iter::Iterator;
 
 use slab::IndexMap;
 
@@ -187,10 +188,11 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         self.len
     }
 
-    pub fn iter(&mut self) -> Iter<T, C> {
+    pub fn iter<'a>(&mut self, container: &'a C) -> Iter<'a, T, C> {
         Iter{
             next: self.first,
-            mark: PhantomData
+            container: container,
+            mark: PhantomData,
         }
     }
 
@@ -208,18 +210,21 @@ impl<T, C: IndexMap<Node<T>>> Clone for Deque<T, C>{
 }
 
 
-pub struct Iter<'a, T: 'a, C: IndexMap<Node<T>>> {
+pub struct Iter<'a, T: 'a, C: 'a + IndexMap<Node<T>>> {
     next: usize,
-    mark: PhantomData< (&'a T , C)>,
+    container: &'a C,
+    mark: PhantomData<T>
 }
 
-impl<'a, T, C: IndexMap<Node<T>>> Iter<'a, T, C> {
-    pub fn next(&mut self, container: &'a C) -> Option<&'a T> {
+impl<'a, T, C: IndexMap<Node<T>>> Iterator for Iter<'a, T, C> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<&'a T> {
         if self.next == 0 {
             return None;
         }
         
-        let node = unsafe{container.get_unchecked(self.next)};
+        let node = unsafe{self.container.get_unchecked(self.next)};
         self.next = node.next;
         Some(&node.elem)
     }
