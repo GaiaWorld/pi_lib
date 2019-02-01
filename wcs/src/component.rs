@@ -33,7 +33,7 @@ impl<T: Sized + fmt::Debug, P: Point, C: ComponentMgr> fmt::Debug for ComponentG
     }
 }
 
-impl<T: Sized, P: Point, C: ComponentMgr> ComponentGroup<T, P, C>{
+impl<T: Sized, P: Point + ID, C: ComponentMgr> ComponentGroup<T, P, C>{
     pub fn new() -> Self{
         ComponentGroup{
             components: Slab::new(),
@@ -149,7 +149,7 @@ pub enum Event<'a, P: Point>  {
     }
 }
 
-pub trait Point: ID + Clone + Default + Sized{
+pub trait Point: Clone + Default + Sized{
 
 }
 
