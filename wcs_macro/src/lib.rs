@@ -5,7 +5,7 @@ extern crate proc_macro;
 extern crate quote;
 extern crate syn;
 
-mod util;
+mod data;
 mod enum_component;
 mod component;
 
@@ -14,7 +14,7 @@ use quote::quote;
 use quote::ToTokens;
 use enum_component::*;
 use component::*;
-use util::*;
+use data::*;
 
 #[proc_macro_derive(Component)]
 pub fn component_macro_derive(input: TokenStream) -> TokenStream {
@@ -30,8 +30,11 @@ pub fn out_component(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(EnumComponent)]
 pub fn ennum_component_macro_derive(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    impl_enum_component_macro(&ast)
+    let ast: syn::DeriveInput = syn::parse(input).unwrap();
+    match ast.data {
+        syn::Data::Enum(data) => impl_enum_component_macro(&EnumData::from(&data, &ast.ident)),
+        _ => panic!("enum errorQ"),
+    }
 }
 
 #[proc_macro]
@@ -64,7 +67,7 @@ pub fn world(input: TokenStream) -> TokenStream {
     let mut res = Vec::new();
     let mut res_new = Vec::new();
     for field in fields.iter(){
-        if is_child(&field) {
+        if is_component(&field) || is_enum_component(&field)  {
             let field_name_str = match &field.ident {
                 Some(ref i) => i.to_string(),
                 None => panic!("no fieldname"),

@@ -1,8 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use quote::ToTokens;
 
-use util::*;
+use data::*;
 
 pub fn impl_component_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
@@ -22,17 +21,29 @@ pub fn impl_component_macro(ast: &syn::DeriveInput) -> TokenStream {
 pub fn impl_struct(name: &syn::Ident, s: &syn::DataStruct) -> quote::__rt::TokenStream {
     match &s.fields {
         syn::Fields::Named(f) => {
+            let fields = Fields::from(&f.named, FieldsType::Named);
             let mut arr = Vec::new();
-            let fields = &f.named;
+            // let fields = &f.named;
             arr.push(def_point(name));
-            arr.push(impl_struct_point(name, fields));
-            arr.push(component_group_tree(name, fields));
-            arr.push(component_impl_create(name, fields));
+            arr.push(impl_struct_point(name, &fields));
+            arr.push(component_group_tree(name, &fields));
+            arr.push(component_impl_create(name, &fields));
             quote! {
                 #(#arr)*
             }
         },
-        syn::Fields::Unnamed(_) => panic!("xxxx"),
+        syn::Fields::Unnamed(f) => {
+            let fields = Fields::from(&f.unnamed, FieldsType::Named);
+            let mut arr = Vec::new();
+            // let fields = &f.named;
+            arr.push(def_point(name));
+            arr.push(impl_struct_point(name, &fields));
+            arr.push(component_group_tree(name, &fields));
+            arr.push(component_impl_create(name, &fields));
+            quote! {
+                #(#arr)*
+            }
+        },
         syn::Fields::Unit => panic!("xxxx")
     }
 }
@@ -171,15 +182,12 @@ pub fn impl_point(name: &syn::Ident, point_impls: &Vec<quote::__rt::TokenStream>
     }
 }
 
-pub fn impl_struct_point(name: &syn::Ident, fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> quote::__rt::TokenStream {
+pub fn impl_struct_point(name: &syn::Ident, fields: &Fields) -> quote::__rt::TokenStream {
     let mut point_impls = Vec::new();
     let mut readref_impls = Vec::new();
     let mut writeref_impls = Vec::new();
     
-    for f in fields.iter(){
-        if is_ignore(f){
-            continue;
-        }
+    for f in fields.data.iter(){
         point_impls.push(impl_struct_point_fun(name, f));
         readref_impls.push(impl_struct_readref_fun( f));
         writeref_impls.push(impl_struct_writeref_fun(name, f));
@@ -188,191 +196,220 @@ pub fn impl_struct_point(name: &syn::Ident, fields: &syn::punctuated::Punctuated
     impl_point(name, &point_impls, &readref_impls, &writeref_impls)
 }
 
-pub fn impl_struct_point_fun(name: &syn::Ident, field: &syn::Field) -> quote::__rt::TokenStream {
+pub fn impl_struct_point_fun(name: &syn::Ident, field: &Field) -> quote::__rt::TokenStream {
     let group = group_name(name.to_string());
-    let field_name_str = match &field.ident {
-        Some(ref i) => i.to_string(),
-        None => panic!("no fieldname"),
-    };
-    let set = set_name(&field_name_str);
-    let get = get_name(&field_name_str);
-    let get_mut = get_name_mut(&field_name_str);
-    let field_ty_str = field.ty.clone().into_token_stream().to_string();
-    //let field_ty_point = point_name(field_ty.clone());
-    let field_name = ident(&field_name_str);
-    let is_child = is_child(field);
-
-    if is_child {
-        let field_ty= ident(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)});
-        let field_ty_point = ident(&field_ty_str);
-        quote! {
-            pub fn #set<M: ComponentMgr>(&self, value: #field_ty, groups: &mut #group<M>) -> usize{
-                let index = groups.#field_name._group.insert(value, self.0.clone());
-                let elem = groups._group.get_mut(self);
-                elem.owner.#field_name = index;
-                elem.parent
-            }
-
-            pub fn #get<M: ComponentMgr>(&self, groups: &#group<M>) -> #field_ty_point{
-                groups._group.get(self).#field_name.clone()
-            }
-        }
-    }else {
-        let field_ty = &field.ty;
-        quote! {
-            pub fn #set<M: ComponentMgr>(&self, value: #field_ty, groups: &mut #group<M>) -> usize{
-                let elem = groups._group.get_mut(self);
-                elem.owner.#field_name = value;
-                elem.parent
-            }
-
-            pub fn #get<'a, M: ComponentMgr>(&self, groups: &'a #group<M>) -> &'a #field_ty{
-                &(groups._group.get(self).#field_name)
-            }
-
-            pub fn #get_mut<'a, M: ComponentMgr>(&self, groups: &'a mut #group<M>) -> &'a mut #field_ty{
-                &mut (groups._group.get_mut(self).#field_name)
-            }
-        }
-    }
-}
-
-pub fn impl_struct_readref_fun(field: &syn::Field) -> quote::__rt::TokenStream {
-    let field_ty_str = field.ty.clone().into_token_stream().to_string();
-    let field_name_str = match &field.ident {
-        Some(ref i) => i.to_string(),
-        None => panic!("no fieldname"),
-    };
-    let get = get_name(&field_name_str);
-    let field_name = ident(&field_name_str);
-    let is_child = is_child(field);
-
-    if is_child {
-        let field_ty_ref = read_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
-        quote! {
-            pub fn #get(&self) -> #field_ty_ref<M>{
-                let p = self.point.#get(self.groups).clone();
-                #field_ty_ref::new(p, &self.groups.#field_name)
-            }
-        }
-    }else {
-        let field_ty = &field.ty;
-        quote! {
-            pub fn #get(&self) -> &#field_ty{
-                unsafe{&*(self.point.#get(self.groups) as *const #field_ty)}
-            }
-        }
-    }
-}
-
-pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &syn::Field) -> quote::__rt::TokenStream {
-    let field_ty_str = field.ty.clone().into_token_stream().to_string();
-    let field_name_str = match &field.ident {
-        Some(ref i) => i.to_string(),
-        None => panic!("no fieldname"),
-    };
-    let group = group_name(name.to_string());
-    let set = set_name(&field_name_str);
-    let get = get_name(&field_name_str);
-    let get_mut = get_name_mut(&field_name_str);
-    let field_name = ident(&field_name_str);
-    let is_child = is_child(field);
-
-    if is_child {
-        let field_ty= ident(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)});
-        let field_ty_read_ref = read_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
-        let field_ty_write_ref = write_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
-        //let field_ty_group = group_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
-        quote! {
-            pub fn #set(&mut self, value: #field_ty){
-                let groups = #group::<M>::from_usize_mut(self.groups);
-                {
-                    let old = self.point.#get(groups).clone();
-                    let mut old_ref = #field_ty_write_ref::<M>::new(old, groups.#field_name.to_usize(), &mut self.mgr);
-                    old_ref.destroy();
+    let Field{key, ty, set_name, get_name, get_mut_name, ty_name:_, mark, key_str:_} = field;
+    match mark {
+        FieldMark::Component(data) => {
+            let ComponentData {group_name:_, point_name, write_ref_name:_, read_ref_name:_, is_must:_, c_type} = data;
+            quote! {
+                pub fn #set_name<M: ComponentMgr>(&self, value: #c_type, groups: &mut #group<M>) -> usize{
+                    let index = groups.#key._group.insert(value, self.0.clone());
+                    let elem = groups._group.get_mut(self);
+                    elem.owner.#key = index;
+                    elem.parent
                 }
-                let parent = self.point.#set(value, groups);
-                let handlers = groups._group.get_handlers();
-                let handlers1 = groups.#field_name._group.get_handlers();
-                let new_point = self.point.#get(groups).clone();
-                //创建事件
-                notify(Event::Create{
-                    point: new_point,
-                    parent: parent,
-                }, &handlers1.borrow(), &mut self.mgr);
 
-                //修改事件
-                notify(Event::ModifyField{
-                    point: self.point.clone(),
-                    parent: parent,
-                    field: #field_name_str
-                }, &handlers.borrow(), &mut self.mgr);
+                pub fn #get_name<M: ComponentMgr>(&self, groups: &#group<M>) -> #point_name{
+                    groups._group.get(self).#key.clone()
+                }
             }
+        },
+        FieldMark::EnumComponent(data) => {
+            let ComponentData {group_name:_, point_name, write_ref_name:_, read_ref_name:_, is_must:_, c_type} = data;
+            quote! {
+                pub fn #set_name<M: ComponentMgr>(&self, value: #c_type, groups: &mut #group<M>) -> usize{
+                    let index = #point_name::_set(&mut groups.#key, value, &self.0);
+                    let elem = groups._group.get_mut(self);
+                    elem.owner.#key = index;
+                    elem.parent
+                }
 
-            pub fn #get(&self) -> #field_ty_read_ref<M>{
-                let groups = #group::<M>::from_usize(self.groups);
-                let p = self.point.#get(groups).clone();
-                #field_ty_read_ref::new(p, &groups.#field_name)
+                pub fn #get_name<M: ComponentMgr>(&self, groups: &#group<M>) -> #point_name{
+                    groups._group.get(self).#key.clone()
+                }
             }
+        },
+        FieldMark::Data => {
+            quote! {
+                pub fn #set_name<M: ComponentMgr>(&self, value: #ty, groups: &mut #group<M>) -> usize{
+                    let elem = groups._group.get_mut(self);
+                    elem.owner.#key = value;
+                    elem.parent
+                }
 
-            pub fn #get_mut(&mut self) -> #field_ty_write_ref<M>{
-                let groups = #group::<M>::from_usize_mut(self.groups);
-                let p = self.point.#get(groups).clone();
-                #field_ty_write_ref::new(p, groups.#field_name.to_usize(), &mut self.mgr)
-            }
-        }
-    }else {
-        let field_ty = &field.ty;
-        quote! {
-            pub fn #set(&mut self, value: #field_ty){
-                let groups = #group::<M>::from_usize_mut(self.groups);
-                let parent = self.point.#set(value, groups);
-                let handlers = groups._group.get_handlers();
-                notify(Event::ModifyField{
-                    point: self.point.clone(),
-                    parent: parent,
-                    field: #field_name_str
-                }, &handlers.borrow(), &mut self.mgr);
-            }
+                pub fn #get_name<'a, M: ComponentMgr>(&self, groups: &'a #group<M>) -> &'a #ty{
+                    &(groups._group.get(self).#key)
+                }
 
-            pub fn #get(&self) -> &#field_ty{
-                let groups = #group::<M>::from_usize(self.groups);
-                unsafe{&*(self.point.#get(groups) as *const #field_ty)}
-            }
-
-            pub fn #get_mut(&self) -> &mut #field_ty{
-                let groups = #group::<M>::from_usize_mut(self.groups);
-                unsafe{&mut *(self.point.#get_mut(groups) as *mut #field_ty)}
+                pub fn #get_mut_name<'a, M: ComponentMgr>(&self, groups: &'a mut #group<M>) -> &'a mut #ty{
+                    &mut (groups._group.get_mut(self).#key)
+                }
             }
         }
     }
 }
 
-pub fn component_group_tree(name: &syn::Ident, fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> quote::__rt::TokenStream {
+pub fn impl_struct_readref_fun(field: &Field) -> quote::__rt::TokenStream {
+    let Field{key, ty, set_name:_, get_name, get_mut_name:_, ty_name:_, mark, key_str:_} = field;
+    match mark {
+        FieldMark::Component(data) => {
+            let ComponentData {group_name:_, point_name:_, write_ref_name:_, read_ref_name, is_must:_,c_type:_} = data;
+            quote! {
+            pub fn #get_name(&self) -> #read_ref_name<M>{
+                    let p = self.point.#get_name(self.groups).clone();
+                    #read_ref_name::new(p, &self.groups.#key)
+                }
+            }
+        },
+        FieldMark::EnumComponent(data) => {
+            let ComponentData {group_name:_, point_name:_, write_ref_name:_, read_ref_name, is_must:_, c_type:_} = data;
+            quote! {
+                pub fn #get_name(&self) -> #read_ref_name<M>{
+                    let p = self.point.#get_name(self.groups).clone();
+                    #read_ref_name::new(p, &self.groups.#key)
+                }
+            }
+        },
+        FieldMark::Data => {
+            quote! {
+                pub fn #get_name(&self) -> &#ty{
+                    unsafe{&*(self.point.#get_name(self.groups) as *const #ty)}
+                }
+            }
+        }
+    }
+}
+
+pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt::TokenStream {
+    let group = group_name(name.to_string());
+    let Field{key, ty, set_name, get_name, get_mut_name, ty_name:_, mark, key_str} = field;
+    match mark {
+        FieldMark::Component(data) => {
+            let ComponentData {group_name:_, point_name:_, write_ref_name, read_ref_name, is_must:_, c_type} = data;
+            quote! {
+                pub fn #set_name(&mut self, value: #c_type){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    {
+                        let old = self.point.#get_name(groups).clone();
+                        let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
+                        old_ref.destroy(); //销毁
+                    }
+                    let parent = self.point.#set_name(value, groups);
+                    let handlers = groups._group.get_handlers();
+                    let handlers1 = groups.#key._group.get_handlers();
+                    let new_point = self.point.#get_name(groups).clone();
+                    //创建事件
+                    notify(Event::Create{
+                        point: new_point,
+                        parent: parent,
+                    }, &handlers1.borrow(), &mut self.mgr);
+
+                    //修改事件
+                    notify(Event::ModifyField{
+                        point: self.point.clone(),
+                        parent: parent,
+                        field: #key_str
+                    }, &handlers.borrow(), &mut self.mgr);
+                }
+
+                pub fn #get_name(&self) -> #read_ref_name<M>{
+                    let groups = #group::<M>::from_usize(self.groups);
+                    let p = self.point.#get_name(groups).clone();
+                    #read_ref_name::new(p, &groups.#key)
+                }
+
+                pub fn #get_mut_name(&mut self) -> #write_ref_name<M>{
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    let p = self.point.#get_name(groups).clone();
+                    #write_ref_name::new(p, groups.#key.to_usize(), &mut self.mgr)
+                }
+            }
+        },
+        FieldMark::EnumComponent(data) => {
+            let ComponentData {group_name:_, point_name:_, write_ref_name, read_ref_name, is_must:_, c_type} = data;
+            quote! {
+                pub fn #set_name(&mut self, value: #c_type){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    {
+                        let old = self.point.#get_name(groups).clone();
+                        let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
+                        old_ref.destroy(); //销毁
+                    }
+                    let parent = self.point.#set_name(value, groups);
+                    {
+                        let new_point = self.point.#get_name(groups).clone();
+                        let mut new_write = #write_ref_name::<M>::new(new_point, groups.#key.to_usize(), &mut self.mgr);
+                        new_write._set_notify(&parent);
+                    }
+
+                    let handlers = groups._group.get_handlers();
+                    //修改事件
+                    notify(Event::ModifyField{
+                        point: self.point.clone(),
+                        parent: parent,
+                        field: #key_str
+                    }, &handlers.borrow(), &mut self.mgr);
+                }
+
+                pub fn #get_name(&self) -> #read_ref_name<M>{
+                    let groups = #group::<M>::from_usize(self.groups);
+                    let p = self.point.#get_name(groups).clone();
+                    #read_ref_name::new(p, &groups.#key)
+                }
+
+                pub fn #get_mut_name(&mut self) -> #write_ref_name<M>{
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    let p = self.point.#get_name(groups).clone();
+                    #write_ref_name::new(p, groups.#key.to_usize(), &mut self.mgr)
+                }
+            }
+        },
+        FieldMark::Data => {
+            quote! {
+                pub fn #set_name(&mut self, value: #ty){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    let parent = self.point.#set_name(value, groups);
+                    let handlers = groups._group.get_handlers();
+                    notify(Event::ModifyField{
+                        point: self.point.clone(),
+                        parent: parent,
+                        field: #key_str
+                    }, &handlers.borrow(), &mut self.mgr);
+                }
+
+                pub fn #get_name(&self) -> &#ty{
+                    let groups = #group::<M>::from_usize(self.groups);
+                    unsafe{&*(self.point.#get_name(groups) as *const #ty)}
+                }
+
+                pub fn #get_mut_name(&self) -> &mut #ty{
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    unsafe{&mut *(self.point.#get_mut_name(groups) as *mut #ty)}
+                }
+            }
+        }
+    }
+}
+
+pub fn component_group_tree(name: &syn::Ident, fields: &Fields) -> quote::__rt::TokenStream {
     let mut field_types = Vec::new();
     let mut field_news = Vec::new();
+    let Fields {ty:_, data} = fields;
     // let mut set_mgrs = Vec::new();
-    for field in fields.iter(){
-
-        if !is_child(field) || is_ignore(field){
-            continue;
-        }
-
-        let field_name = match &field.ident {
-            Some(ref i) => ident(&i.to_string()),
-            None => panic!("no fieldname"),
+    for field in data.iter(){
+        let Field{key, ty:_, set_name:_, get_name:_, get_mut_name:_, ty_name:_, mark, key_str:_} = field;
+        let ComponentData {group_name, point_name:_, write_ref_name:_, read_ref_name:_, is_must:_, c_type:_} = match mark {
+            FieldMark::Component(data)  => data,
+            FieldMark::EnumComponent(data)  => data,
+            _ => continue,
         };
-        let field_ty_str = field.ty.clone().into_token_stream().to_string();
-        let field_ty_group: syn::Ident = group_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len() -5)}.to_string());
         field_types.push(quote! {
-            pub #field_name: #field_ty_group<M>,
+            pub #key: #group_name<M>,
         });
         field_news.push(quote! {
-            #field_name: #field_ty_group::new(),
+            #key: #group_name::new(),
         });
-        // set_mgrs.push(quote! {
-        //     self.#field_name.borrow_mut().set_mgr(mgr.clone());
-        // });
     }
 
     let group_name = group_name(name.to_string());
@@ -392,11 +429,6 @@ pub fn component_group_tree(name: &syn::Ident, fields: &syn::punctuated::Punctua
                     _group: ComponentGroup::new(),
                 }
             }
-
-            // fn set_mgr(&mut self, mgr: Weak<RefCell<Self::C>>){
-            //     #(#set_mgrs)*
-            //     self._group.set_mgr(mgr);
-            // }
         }
 
         impl<M: ComponentMgr> #group_name<M>{
@@ -418,53 +450,41 @@ pub fn component_group_tree(name: &syn::Ident, fields: &syn::punctuated::Punctua
     }
 }
 
-pub fn component_impl_create(name: &syn::Ident, fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> quote::__rt::TokenStream {
+pub fn component_impl_create(name: &syn::Ident, fields: &Fields) -> quote::__rt::TokenStream {
     let mut field_creates = Vec::new();
     let mut field_create_notifys = Vec::new();
     let mut field_destroys = Vec::new();
     let p_name = point_name(name.to_string());
     let w_r_name = write_ref_name(name.to_string());
     let g_name = group_name(name.to_string());
-    for field in fields.iter(){
-        let field_name = match &field.ident {
-            Some(ref i) => ident(&i.to_string()),
-            None => panic!("no fieldname"),
+    let Fields {ty:_, data} = fields;
+    for field in data.iter(){
+        let Field{key, ty, set_name:_, get_name:_, get_mut_name:_, ty_name: _, mark, key_str:_} = field;
+        let ComponentData {group_name:_, point_name, write_ref_name, read_ref_name:_, is_must, c_type:_} = match mark {
+            FieldMark::Component(data)  => data,
+            _ => {
+                field_creates.push(quote! {
+                    #key: <#ty>::default()
+                });
+                continue;
+            },
         };
-        if is_child(field){
-            let field_ty_point = &field.ty;
-            let field_ty_str = field.ty.clone().into_token_stream().to_string();
-            let field_ty_write_ref = write_ref_name(unsafe{field_ty_str.get_unchecked(0..field_ty_str.len()-5)}.to_string());
-            if is_must(field) {
-                field_creates.push(quote! {
-                    #field_name: #field_ty_point::create(&mut groups.#field_name, &p)
-                });
-                field_create_notifys.push(quote! {
-                    #field_ty_write_ref::new(value.owner.#field_name.clone(), groups.#field_name.to_usize(), self.mgr).recursive_create_notify();
-                });
-            }else {
-                field_creates.push(quote! {
-                    #field_name: #field_ty_point(0)
-                });
-            }
-            field_destroys.push(quote! {
-                #field_ty_write_ref::new(value.owner.#field_name.clone(), groups.#field_name.to_usize(), self.mgr).destroy();
+        if is_must == &true {
+            field_creates.push(quote! {
+                #key: #point_name::create(&mut groups.#key, &p)
+            });
+            field_create_notifys.push(quote! {
+                #write_ref_name::new(value.owner.#key.clone(), groups.#key.to_usize(), self.mgr).recursive_create_notify();
             });
         }else {
-            let mut field_ty = field.ty.clone();
-            match &mut field_ty {
-                syn::Type::Path(ref mut p) => {
-                    for v in p.path.segments.iter_mut(){
-                        v.arguments = syn::PathArguments::None;
-                    }
-                },
-                _ => panic!("type error"),
-            }
-
             field_creates.push(quote! {
-                #field_name: #field_ty::default()
+                #key: #point_name(0)
             });
-            
         }
+        field_destroys.push(quote! {
+            #write_ref_name::new(value.owner.#key.clone(), groups.#key.to_usize(), self.mgr).destroy();
+        });
+       
     }
 
     let mut destroy1 = quote! {};
