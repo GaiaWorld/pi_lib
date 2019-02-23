@@ -1,24 +1,24 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt::{Debug, Formatter, Result as FResult};
 
-use dyn_uint::{ SlabFactory, UintFactory };
+use dyn_uint::{ UintFactory };
 use heap::Heap;
 
 pub struct IndexFactory;
 
 impl UintFactory for IndexFactory {
     #[inline]
-    fn load(&self, index: usize) -> usize{
+    fn load(&self, _index: usize) -> usize{
         0
     }
     #[inline]
-    fn try_load(&self, index: usize) -> Option<usize>{
+    fn try_load(&self, _index: usize) -> Option<usize>{
         None
     }
     #[inline]
-	fn store(&mut self, index: usize, value: usize){}
+	fn store(&mut self, _index: usize, _value: usize){}
     #[inline]
-    fn try_store(&mut self, index: usize, value: usize) -> bool{
+    fn try_store(&mut self, _index: usize, _value: usize) -> bool{
         false
     }
 }
