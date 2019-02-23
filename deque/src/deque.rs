@@ -174,7 +174,6 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
     pub fn try_remove(&mut self, index: usize, index_map: &mut C) -> Option<T> {
         match index_map.contains(index){
             true => {
-                self.len += 1;
                 Some(self.remove(index, index_map))
             },
             false => None,
@@ -186,7 +185,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         loop {
             if self.first == 0 {
                 self.last = 0;
-                return;
+                break;
             }
             let node = index_map.remove(self.first);
             self.first = node.next;
