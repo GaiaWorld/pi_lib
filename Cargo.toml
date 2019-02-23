@@ -23,7 +23,7 @@ members = [
   "dyn_uint",
   "task_pool",
   "wcs_macro",
-
+  "pref",
   "file",
   "worker",
   "future",
