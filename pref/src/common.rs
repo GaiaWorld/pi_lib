@@ -134,13 +134,35 @@ impl GenSysStat {
     }
 
     //获取当前进程id
+    #[cfg(any(windows))]
     pub fn current_pid(&self) -> usize {
-        sysinfo::get_current_pid() as usize
+        sysinfo::get_current_pid()
+    }
+    #[cfg(any(unix))]
+    pub fn current_pid(&self) -> i32 {
+        sysinfo::get_current_pid()
     }
 
     //获取当前进程的基础状态
+    #[cfg(any(windows))]
     pub fn current_process_info(&self) -> (usize, String, PathBuf, Vec<String>, f32, u64, u64, ProcessState) {
-        let pid = sysinfo::get_current_pid() as usize;
+        let pid = sysinfo::get_current_pid();
+        self.inner.borrow_mut().refresh_process(pid);
+
+        let inner = self.inner.borrow();
+        let process = inner.get_process(pid).unwrap();
+        (pid,                           //当前进程id
+         process.name().to_string(),    //当前进程名
+         process.cwd().to_owned(),      //当前进程工作目录
+         Vec::from(process.cmd()),   //当前进程指令行
+         process.cpu_usage(),           //当前进程cpu占用率
+         process.memory(),              //当前进程内存占用，单位KB
+         process.start_time(),          //当前进程启动时间，单位秒
+         process.status())              //当前进程运行状态
+    }
+    #[cfg(any(unix))]
+    pub fn current_process_info(&self) -> (i32, String, PathBuf, Vec<String>, f32, u64, u64, ProcessState) {
+        let pid = sysinfo::get_current_pid();
         self.inner.borrow_mut().refresh_process(pid);
 
         let inner = self.inner.borrow();
