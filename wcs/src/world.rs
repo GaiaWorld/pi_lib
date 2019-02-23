@@ -22,7 +22,6 @@ impl<C: ComponentMgr, E> World<C, E> {
     }
 }
 
-
 pub struct World<C: ComponentMgr, E>{
     pub component_mgr : C,
     systems: Vec<Rc<System<E, C>>>,
@@ -36,7 +35,7 @@ pub trait System<E, C: ComponentMgr>{
     fn run(&self, e: &E, w: &mut C);
 }
 
-pub trait ID{
-    fn id(&self) -> usize;
-    fn set_id(&mut self, id: usize);
-}
+// pub trait ID{
+//     fn id(&self) -> usize;
+//     fn set_id(&mut self, id: usize);
+// }

@@ -1,3 +1,4 @@
+#![feature(custom_attribute)]
 #![recursion_limit="256"]
 extern crate slab;
 extern crate wcs;
@@ -8,24 +9,49 @@ extern crate syn;
 mod data;
 mod enum_component;
 mod component;
+mod getter_setter;
+mod builder;
 
 use crate::proc_macro::TokenStream;
+
 use quote::quote;
 use quote::ToTokens;
 use enum_component::*;
 use component::*;
 use data::*;
+use getter_setter::*;
+use builder::*;
 
 #[proc_macro_derive(Component)]
 pub fn component_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
-    impl_component_macro(&ast)
+    let mut arr = Vec::new();
+    arr.push(impl_getter_setter_macro(&ast));
+    arr.push(impl_component_macro(&ast)); 
+    let gen = quote! {
+        #(#arr)*
+    };
+    gen.into()
 }
 
 #[proc_macro]
-pub fn out_component(input: TokenStream) -> TokenStream {
+pub fn getter_setter(input: TokenStream) -> TokenStream {
+    let ast: syn::DeriveInput = syn::parse(input).unwrap();
+    let gen = impl_getter_setter_macro(&ast);
+    gen.into()
+}
+
+#[proc_macro]
+// #[proc_macro_derive(Component)]
+pub fn component(input: TokenStream) -> TokenStream {
+    // let attr_str = attrs.to_string();
+    // et mut attrs = HashMap::new();
+    // for s in attr_str.split(","){
+    //     attrs.insert(s.to_string(), true);
+    // }
+    
     let ast = syn::parse(input).unwrap();
-    impl_component_macro(&ast)
+    impl_component_macro(&ast).into()
 }
 
 #[proc_macro_derive(EnumComponent)]
@@ -56,14 +82,17 @@ pub fn world(input: TokenStream) -> TokenStream {
 
     let mut field_names = Vec::new();
     let mut field_groups = Vec::new();
-    let mut field_types = Vec::new();
-    let mut field_points = Vec::new();
+    let mut field_types_c = Vec::new();
+    let mut field_names_c = Vec::new();
+    let mut field_types_enum_c = Vec::new();
+    let mut field_names_enum_c = Vec::new();
+    let mut field_ids = Vec::new();
     let mut field_gets = Vec::new();
     let mut field_gets_mut = Vec::new();
     let mut mgrs = Vec::new();
     let mut read_refs = Vec::new();
     let mut write_refs = Vec::new();
-    let mut creates = Vec::new();
+    let mut adds = Vec::new();
     let mut res = Vec::new();
     let mut res_new = Vec::new();
     for field in fields.iter(){
@@ -75,14 +104,21 @@ pub fn world(input: TokenStream) -> TokenStream {
             let field_ty = field.ty.clone().into_token_stream().to_string();
             field_names.push(ident(&field_name_str));
             field_groups.push(group_name(field_ty.clone()));
-            field_types.push(ident(&field_ty));
-            field_points.push(point_name(field_ty.clone()));
+            if is_component(&field){
+                field_types_c.push(ident(&field_ty));
+                field_names_c.push(ident(&field_name_str));
+            }else {
+                field_types_enum_c.push(ident(&field_ty));
+                field_names_enum_c.push(ident(&field_name_str));
+            }
+            
+            field_ids.push(id_name(field_ty.clone()));
             field_gets.push(get_name(&field_name_str));
             field_gets_mut.push(get_name_mut(&field_name_str));
             mgrs.push(ident(&mgr_str));
             read_refs.push(read_ref_name(field_ty.clone()));
             write_refs.push(write_ref_name(field_ty));
-            creates.push(create_name(&field_name_str));
+            adds.push(add_name(&field_name_str));
         }else {
             let name = &field.ident;
             let ty = &field.ty;
@@ -106,12 +142,10 @@ pub fn world(input: TokenStream) -> TokenStream {
     }
 
     let field_names1 = field_names.clone();
+    let field_names2 = field_names.clone();
     let field_groups1 = field_groups.clone();
-    let field_names5 = field_names.clone();
     let field_names8 = field_names.clone();
     let field_names9 = field_names.clone();
-    let field_points1 = field_points.clone();
-    let field_points2 = field_points.clone();
     let mgrs1 = mgrs.clone();
     let read_refs1 = read_refs.clone();
     let mgrs2 = mgrs.clone();
@@ -139,24 +173,41 @@ pub fn world(input: TokenStream) -> TokenStream {
         impl #mgr_name {
             #(
                 // pub fn #adds(&mut self, #field_names4: #field_types) -> #refs<#mgrs1>{
-                //     let point = self.#field_names6.borrow_mut()._group.insert(#field_names7, 0);
-                //     #refs1::new(point, self.#field_names5.clone())
+                //     let id = self.#field_names6.borrow_mut()._group.insert(#field_names7, 0);
+                //     #refs1::new(id, self.#field_names5.clone())
                 // }
-                pub fn #creates(&mut self, parent: &usize) -> #write_refs<#mgrs1>{
-                    #write_refs1::create(parent, self.#field_names5.to_usize(), self)
+                pub fn #adds(&mut self, value: #field_types_c) -> #write_refs<#mgrs1>{
+                    let id = self.#field_names_c._group.insert(value, 0);
+                    let mut r = #write_refs1::new(id, self.#field_names2.to_usize(), self);
+                    r.set_parent(0);
+                    r.create_notify();
+                    r
+                    // #write_refs1::create(parent, self.#field_names5.to_usize(), self)
                 }
 
-                pub fn #field_gets(&mut self, index: &usize) -> #read_refs1<#mgrs2>{
-                    #read_refs2::new(#field_points1(index.clone()), &self.#field_names8)
+                pub fn #field_gets(&mut self, index: usize) -> #read_refs1<#mgrs2>{
+                    #read_refs2::new(index, &self.#field_names8)
                 }
 
-                pub fn #field_gets_mut(&mut self, index: &usize) -> #write_refs2<#mgrs3>{
-                    #write_refs3::new(#field_points2(index.clone()), self.#field_names9.to_usize(), self)
+                pub fn #field_gets_mut(&mut self, index: usize) -> #write_refs2<#mgrs3>{
+                    #write_refs3::new(index.clone(), self.#field_names9.to_usize(), self)
                 }
             )*
         }
     };
     gen.into()
+}
+
+#[proc_macro_derive(Builder)]
+pub fn builder_macro_derive(item: TokenStream) -> TokenStream {
+    let ast = syn::parse(item).unwrap();
+    impl_builder_macro(&ast).into()
+}
+
+#[proc_macro]
+pub fn out_component(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_component_macro(&ast).into()
 }
 
 // fn impl_enum_component_macro(ast: &syn::DeriveInput) -> TokenStream {
