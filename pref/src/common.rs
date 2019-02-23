@@ -268,7 +268,7 @@ impl GenSysStat {
 
     //获取当前进程的网络连接状态
     pub fn current_process_sockets_info(&self, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
-        self.process_sockets_info(self.current_pid(), ip_type, protocol_type)
+        self.process_sockets_info(self.current_pid() as usize, ip_type, protocol_type)
     }
 
     //获取系统正常运行时间，单位秒
