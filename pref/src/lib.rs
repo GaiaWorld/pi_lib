@@ -4,6 +4,8 @@ extern crate netstat;
 #[cfg(any(unix))]
 extern crate psutil;
 
+use std::path::PathBuf
+
 /*
 * 系统特定平台状态
 */
