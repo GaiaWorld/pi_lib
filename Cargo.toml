@@ -24,8 +24,8 @@ members = [
   "task_pool",
   "wcs_macro",
   "pref",
-  "enum_default_macro"
   "file",
   "worker",
   "future",
+  "enum_default_macro",
 ]
