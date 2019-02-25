@@ -104,7 +104,8 @@ fn test_psutil_() {
 
     //预热
     sys.sys_cpu_usage();
-    for _ in 0..100000000 {}
+    let mut count = 0;
+    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.sys_cpu_usage() {
         println!("cpu usage: {}", info);
@@ -112,7 +113,8 @@ fn test_psutil_() {
 
     //预热
     sys.sys_processores_usage();
-    for _ in 0..100000000 {}
+    let mut count = 0;
+    for _ in 0..100000000 { count += 1; }
 
     let mut n = 0;
     if let Some(infos) = sys.sys_processores_usage() {
@@ -124,7 +126,8 @@ fn test_psutil_() {
 
     //预热
     sys.sys_cpu_detal();
-    for _ in 0..100000000 {}
+    let mut count = 0;
+    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.sys_cpu_detal() {
         println!("cpu user usage: {}", info.0);
@@ -141,7 +144,8 @@ fn test_psutil_() {
 
     //预热
     sys.sys_processores_detal();
-    for _ in 0..100000000 {}
+    let mut count = 0;
+    for _ in 0..100000000 { count += 1; }
 
     n = 0;
     if let Some(infos) = sys.sys_processores_detal() {
@@ -192,7 +196,8 @@ fn test_psutil_() {
     println!("current process: {}", sys.process_current_pid());
 
     //预热
-    for _ in 0..100000000 {}
+    let mut count = 0;
+    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.process_current_detal() {
         println!("process uid: {}", info.0);
