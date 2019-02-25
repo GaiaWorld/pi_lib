@@ -164,16 +164,16 @@ fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<p
             let total_user = end_total_user - start_total_user;
             if total_system <= 0 {
                 if total_user <= 0 {
-                    return (0.0, 0.0, info);
+                    return (0.0, 0.0, Some(info));
                 } else {
-                    return (0.0, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, info);
+                    return (0.0, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, Some(info));
                 }
             } else {
                 let system = (100.0 * (end_process_system - start_process_system) as f64) / total_system as f64;
                 if total_user <= 0 {
-                    return (system, 0.0, info);
+                    return (system, 0.0, Some(info));
                 } else {
-                    return (system, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, info);
+                    return (system, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, Some(info));
                 }
             }
         }
