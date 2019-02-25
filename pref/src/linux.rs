@@ -125,8 +125,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String)> {
-        let (sys_usage, user_usage) = get_cpu_usage_by_process(self, self.process_current_pid());
-        if let Ok(info) = process::Process::new(self.process_current_pid()) {
+        if let (sys_usage, user_usage, Some(info)) = get_cpu_usage_by_process(self, self.process_current_pid()) {
             return Some((info.uid,                  //进程所属用户id
                          info.gid,                  //进程所属组id
                          info.nice,                 //进程静态优先级，数字越小，优先级越高
@@ -152,12 +151,11 @@ impl SysSpecialStat for LinuxSysStat {
 }
 
 //获取进程在内核态和用户态的cpu占用率
-fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64) {
+fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<Process>) {
     if let Ok(info) = process::Process::new(sys.process_current_pid()) {
         let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
-        //    thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
-        let mut count = 0;
-        for _ in 0..100000000 { count += 1; }
+
+        thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
 
         if let Ok(info) = process::Process::new(sys.process_current_pid()) {
             let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(&info);
@@ -166,22 +164,22 @@ fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64) {
             let total_user = end_total_user - start_total_user;
             if total_system <= 0 {
                 if total_user <= 0 {
-                    return (0.0, 0.0);
+                    return (0.0, 0.0, info);
                 } else {
-                    return (0.0, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64);
+                    return (0.0, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, info);
                 }
             } else {
                 let system = (100.0 * (end_process_system - start_process_system) as f64) / total_system as f64;
                 if total_user <= 0 {
-                    return (system, 0.0);
+                    return (system, 0.0, info);
                 } else {
-                    return (system, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64);
+                    return (system, (100.0 * (end_process_user - start_process_user) as f64) / total_user as f64, info);
                 }
             }
         }
     }
 
-    (0.0, 0.0)
+    (0.0, 0.0, None)
 }
 
 //获取系统和进程在内核态和用户态的cpu占用时间
