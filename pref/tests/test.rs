@@ -206,6 +206,8 @@ fn test_psutil_() {
         println!("process start time: {}", info.15);
         println!("process command: {}", info.16);
         println!("process status: {}", info.17);
+        println!("process cwd: {}", info.19);
+        println!("process cmd: {}", info.18);
     }
 
     if let Some(info) = sys.process_current_memory() {
