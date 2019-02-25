@@ -154,13 +154,13 @@ impl SysSpecialStat for LinuxSysStat {
 //获取进程在内核态和用户态的cpu占用率
 fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64) {
     if let Ok(info) = process::Process::new(sys.process_current_pid()) {
-        let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(process);
+        let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
         //    thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
         let mut count = 0;
         for _ in 0..100000000 { count += 1; }
 
         if let Ok(info) = process::Process::new(sys.process_current_pid()) {
-            let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(process);
+            let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(&info);
 
             let total_system = end_total_system - start_total_system;
             let total_user = end_total_user - start_total_user;
