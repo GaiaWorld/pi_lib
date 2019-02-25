@@ -190,6 +190,6 @@ fn test_psutil_() {
     println!("process processor: {}", info.13);
     println!("process threads: {}", info.14);
     println!("process start time: {}", info.15);
-    println!("process command: {:?}", info.16);
-    println!("process status: {:?}", info.17);
+    println!("process command: {}", info.16);
+    println!("process status: {}", info.17);
 }

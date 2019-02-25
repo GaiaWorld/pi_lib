@@ -94,6 +94,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_virtual_memory_detal(&self) -> (u64, u64, u64, u64, u64, u64, u64, u64, u64, f32) {
+        println!("!!!!!!memory detal: {:?}", system::virtual_memory());
         if let Ok(info) = system::virtual_memory() {
             return (info.total,     //虚拟内存总大小，单位KB
                     info.free,      //虚拟内存空闲大小，单位KB
@@ -111,6 +112,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_swap_detal(&self) -> (u64, u64, u64, u64, u64, f32) {
+        println!("!!!!!!memory detal: {:?}", system::swap_memory());
         if let Ok(info) = system::swap_memory() {
             return (info.total,     //交换区总大小，单位KB
                     info.free,      //交换区空闲大小，单位KB
@@ -151,7 +153,7 @@ impl SysSpecialStat for LinuxSysStat {
                     info.num_threads,           //进程的当前线程数
                     info.starttime,             //进程启动时间，单位秒
                     info.comm,                  //进程启动指令
-                    info.state.to_string());    //进程当前状态
+                    info.state.into());         //进程当前状态
         }
 
         (0, 0, 0, 0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, "".to_string(), "".to_string())
@@ -163,8 +165,8 @@ fn get_cpu_usage_by_process(process: &process::Process) -> (f64, f64) {
     let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(process);
     thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
     let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(process);
-    (100.0 * (end_process_system - start_process_system) / (end_total_system - start_total_system) as f64,
-     100.0 * (end_process_user - start_process_user) / (end_total_user - start_total_user) as f64)
+    ((end_process_system - start_process_system) / (end_total_system - start_total_system) as f64,
+     (end_process_user - start_process_user) / (end_total_user - start_total_user) as f64)
 }
 
 //获取系统和进程在内核态和用户态的cpu占用时间
