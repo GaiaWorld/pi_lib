@@ -13,7 +13,7 @@ use linux::LinuxSysStat;
 /*
 * 默认采样间隔时长，单位秒
 */
-const DEFAULT_INTERVAL: f64 = 0.01;
+const DEFAULT_INTERVAL: f64 = 0.1;
 
 /*
 * 进程状态
