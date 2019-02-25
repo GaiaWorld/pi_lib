@@ -100,7 +100,7 @@ fn test_psutil_() {
         for _ in 0..1000000000 { count += 1; }
     });
 
-    let sys = LinuxSysStat::new(0.5);
+    let sys = LinuxSysStat::new(0.2);
 
     //预热
     sys.sys_cpu_usage();
