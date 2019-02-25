@@ -1,6 +1,7 @@
 extern crate psutil;
 
 use std::thread;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use psutil::{system, process};
@@ -124,8 +125,17 @@ impl SysSpecialStat for LinuxSysStat {
         psutil::getpid()
     }
 
-    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String)> {
+    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
         if let (sys_usage, user_usage, Some(info)) = get_cpu_usage_by_process(self, self.process_current_pid()) {
+            let mut cmd = "".to_string();
+            let mut cwd = PathBuf::new();
+            if let Ok(Some(r)) = info.cmdline() {
+                cmd = r;
+            }
+            if let Ok(r) = info.cwd() {
+                cwd = r;
+            }
+
             return Some((info.uid,                  //进程所属用户id
                          info.gid,                  //进程所属组id
                          info.nice,                 //进程静态优先级，数字越小，优先级越高
@@ -143,19 +153,20 @@ impl SysSpecialStat for LinuxSysStat {
                          info.num_threads,          //进程的当前线程数
                          info.starttime,            //进程启动时间，单位秒
                          info.comm,                 //进程启动指令
-                         info.state.to_string()));  //进程当前状态
+                         info.state.to_string(),    //进程当前状态
+                         cmd,                       //进程启动指令行
+                         cwd));                     //进程当前工作目录
         }
 
         None
     }
 
-    fn process_current_memory(&self) -> Option<(i64, u64, u64, u64, u64, u64, u64)> {
+    fn process_current_memory(&self) -> Option<(u64, u64, u64, u64, u64, u64)> {
         if let Ok(process) = process::Process::new(self.process_current_pid()) {
             if let Ok(memory) = process.memory() {
-                return Some((process.rss,       //进程占用内存大小，单位B
-                             process.vsize,     //进程虚拟内存大小，单位B
+                return Some((process.vsize,     //进程虚拟内存大小，单位B
                              memory.size,       //进程总内存大小，单位B
-                             memory.resident,   //进程驻留内存大小，单位B
+                             memory.resident,   //进程占用内存大小，单位B
                              memory.share,      //进程共享页内存大小，单位B
                              memory.text,       //进程代码段内存大小，单位B
                              memory.data));     //进程数据段内存大小，单位B

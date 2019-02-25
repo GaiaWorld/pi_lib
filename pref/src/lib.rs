@@ -36,10 +36,10 @@ pub trait SysSpecialStat {
     fn process_current_pid(&self) -> i32;
 
     //获取当前进程详细信息
-    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String)>;
+    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)>;
 
     //获取当前进程内存信息
-    fn process_current_memory(&self) -> Option<(i64, u64, u64, u64, u64, u64, u64)>;
+    fn process_current_memory(&self) -> Option<(u64, u64, u64, u64, u64, u64)>;
 }
 
 pub mod common;
