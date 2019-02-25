@@ -95,9 +95,8 @@ fn test_psutil() {
 #[cfg(any(unix))]
 fn test_psutil_() {
     thread::Builder::new().name("psutil001".to_string()).spawn(move || {
-        loop {
-            thread::sleep_ms(10000);
-        }
+        let mut count = 0;
+        for _ in 0..1000000000 { count += 1; }
     });
 
     let sys = LinuxSysStat::new(0.01);
