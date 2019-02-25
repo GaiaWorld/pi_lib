@@ -8,7 +8,7 @@ use sysinfo::{NetworkExt, System, SystemExt, ProcessorExt, ProcessExt, ProcessSt
 
 use ::SysSpecialStat;
 #[cfg(any(unix))]
-use common::linux::LinuxSysStat;
+use linux::LinuxSysStat;
 
 /*
 * 进程状态
