@@ -1,5 +1,5 @@
 [package]
-name = "wcs_macro"
+name = "enum_default_macro"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
@@ -8,8 +8,6 @@ proc-macro = true
 
 [dependencies]
 quote = "0.6.3"
-slab = {path="../slab"}
-wcs = {path="../wcs"}
 
 [dependencies.syn]
 version = "0.15.26"

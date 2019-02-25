@@ -45,6 +45,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
 
     /// Append an element to the Deque. return a index
     pub fn push_back(&mut self, elem: T, index_map: &mut C) -> usize {
+        self.len += 1;
         if self.last == 0 {
             let index = index_map.insert(Node::new(elem, 0, 0));
             self.last = index;
@@ -60,6 +61,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
 
     /// Prepend an element to the Deque. return a index
     pub fn push_front(&mut self, elem: T, index_map: &mut C) -> usize{
+        self.len += 1;
         if self.first == 0 {
             let index = index_map.insert(Node::new(elem, 0, 0));
             self.last = index;
@@ -75,6 +77,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
 
     /// Prepend an element to the Deque. return a index
     pub unsafe fn push_to_back(&mut self, elem: T, index: usize, index_map: &mut C) -> usize{
+        self.len += 1;
         let i = index_map.insert(Node::new(elem, index, 0));
 
         let next = {
@@ -91,6 +94,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
 
     /// Prepend an element to the Deque. return a index
     pub unsafe fn push_to_front(&mut self, elem: T, index: usize, index_map: &mut C) -> usize{
+        self.len += 1;
         let i = index_map.insert(Node::new(elem, index, 0));
 
         let pre = {
@@ -110,6 +114,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         if self.first == 0{
             None
         } else {
+            self.len -= 1;
             let node = index_map.remove(self.first);
             self.first = node.next;
             if self.first == 0 {
@@ -124,6 +129,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         if self.last == 0{
             None
         } else {
+            self.len -= 1;
             let node = index_map.remove(self.last);
             self.last = node.pre;
             if self.last == 0 {
@@ -160,13 +166,16 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
             },
             
         }
+        self.len -= 1;
         node.elem
     }
 
     ///Removes and returns the element at index from the Deque.
     pub fn try_remove(&mut self, index: usize, index_map: &mut C) -> Option<T> {
         match index_map.contains(index){
-            true => Some(self.remove(index, index_map)),
+            true => {
+                Some(self.remove(index, index_map))
+            },
             false => None,
         }
     }
@@ -176,11 +185,12 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         loop {
             if self.first == 0 {
                 self.last = 0;
-                return;
+                break;
             }
             let node = index_map.remove(self.first);
             self.first = node.next;
         }
+        self.len = 0;
     }
 
     //clear Deque

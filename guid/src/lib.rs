@@ -87,18 +87,6 @@ impl GuidGen {
 	// 分配全局唯一Guid
 	#[inline]
 	pub fn gen(&self, ctrl_id: u16) -> Guid {
-		let now = now_nanos();
-		loop {
-			let t = self.time.load(Ordering::Relaxed);
-			if t < now {
-				match self.time.compare_exchange(t, now, Ordering::SeqCst, Ordering::SeqCst) {
-					Ok(_) => return Guid((now as u128) << 64 | (self.node_time << 32 | (self.node_id as u64) << 16 | ctrl_id as u64) as u128),
-					Err(_) => ()
-				}
-			}else {
-				let n = self.time.fetch_add(1, Ordering::SeqCst) + 1;
-				return Guid((n as u128) << 64 | (self.node_time << 32 | (self.node_id as u64) << 16 | ctrl_id as u64) as u128)
-			}
-		}
+		Guid((self.time() as u128) << 64 | (self.node_time << 32 | (self.node_id as u64) << 16 | ctrl_id as u64) as u128)
 	}
 }
