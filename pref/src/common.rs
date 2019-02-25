@@ -11,6 +11,11 @@ use ::SysSpecialStat;
 use linux::LinuxSysStat;
 
 /*
+* 默认采样间隔时长，单位秒
+*/
+const DEFAULT_INTERVAL: f64 = 0.01;
+
+/*
 * 进程状态
 */
 pub type ProcessState = ProcessStatus;
@@ -72,7 +77,7 @@ impl SysStat {
     pub fn new() -> Self {
         SysStat {
             inner: Arc::new(RefCell::new(System::new())),
-            special: Arc::new(LinuxSysStat::new()),
+            special: Arc::new(LinuxSysStat::new(DEFAULT_INTERVAL)),
         }
     }
 
