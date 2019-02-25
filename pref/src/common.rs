@@ -6,6 +6,10 @@ use std::cell::RefCell;
 use netstat::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, SocketInfo, get_sockets_info, iterate_sockets_info};
 use sysinfo::{NetworkExt, System, SystemExt, ProcessorExt, ProcessExt, ProcessStatus, DiskExt};
 
+use ::SysSpecialStat;
+#[cfg(any(unix))]
+use common::linux::LinuxSysStat;
+
 /*
 * 进程状态
 */
@@ -49,15 +53,26 @@ pub enum NetProtocolType {
 * 通用系统状态
 */
 #[derive(Clone)]
-pub struct GenSysStat {
-    inner: Arc<RefCell<System>>,
+pub struct SysStat {
+    inner: Arc<RefCell<System>>,            //通用内部系统状态
+    special: Option<Arc<SysSpecialStat>>,   //特定平台系统状态
 }
 
-impl GenSysStat {
+impl SysStat {
     //构建通用系统状态
+    #[cfg(any(windows))]
     pub fn new() -> Self {
-        GenSysStat {
+        SysStat {
             inner: Arc::new(RefCell::new(System::new())),
+            special: None,
+        }
+    }
+
+    #[cfg(any(unix))]
+    pub fn new() -> Self {
+        SysStat {
+            inner: Arc::new(RefCell::new(System::new())),
+            special: Arc::new(LinuxSysStat::new()),
         }
     }
 

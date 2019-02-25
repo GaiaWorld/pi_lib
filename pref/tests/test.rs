@@ -1,15 +1,15 @@
 extern crate pref;
-#[cfg(any(unix))]
-extern crate psutil;
 
 use std::time;
 use std::thread;
 
-use pref::common::{NetIPType, NetProtocolType, GenSysStat};
+use pref::common::{NetIPType, NetProtocolType, SysStat};
+#[cfg(any(unix))]
+use pref::linux::LinuxSysStat;
 
 #[test]
 fn test_common() {
-    let sys = GenSysStat::new();
+    let sys = SysStat::new();
 
     println!("processor count: {}", sys.processor_count());
 
@@ -98,20 +98,91 @@ fn test_psutil_() {
         }
     });
 
-    for proc in psutil::process::all().unwrap() {
-        println!("pid: {:?}, name: {:?}, threads: {}", proc.pid, proc.comm, proc.num_threads);
+    let sys = LinuxSysStat::new(0.01);
+
+    let info = sys.sys_cpu_runnable();
+    println!("current processor: {}", info.0);
+    println!("total processor: {}", info.1);
+
+    println!("cpu usage: {}", sys.sys_cpu_usage());
+
+    let mut n = 0;
+    for usage in sys.sys_processores_usage() {
+        println!("processor #{} usage: {}", n, usage);
+        n += 1;
     }
 
-    let pid = psutil::getpid();
-    println!("cur pid: {:?}", pid);
+    let info = sys.sys_cpu_detal();
+    println!("cpu user usage: {}", info.0);
+    println!("cpu nice usage: {}", info.1);
+    println!("cpu system usage: {}", info.2);
+    println!("cpu idle usage: {}", info.3);
+    println!("cpu iowait usage: {}", info.4);
+    println!("cpu irq usage: {}", info.5);
+    println!("cpu soft irq usage: {}", info.6);
+    println!("cpu steal usage: {}", info.7);
+    println!("cpu guest usage: {}", info.8);
+    println!("cpu guest nice usage: {}", info.9);
 
-    for n in 1..psutil::process::Process::new(pid).unwrap().num_threads as usize {
-        if let Ok(thread) = psutil::process::Process::new(pid + n as i32) {
-            println!("!!!!!!thread {:?}, info: {:?}", pid + n as i32, thread);
-        }
-
-        if let Ok(mem) = psutil::process::Memory::new(pid + n as i32) {
-            println!("!!!!!!thread {:?}, mem: {:?}", pid + n as i32, mem);
-        }
+    n = 0;
+    for info in sys.sys_processores_detal() {
+        println!("processor #{}", n);
+        println!("\tuser usage: {}", info.0);
+        println!("\tnice usage: {}", info.1);
+        println!("\tsystem usage: {}", info.2);
+        println!("\tidle usage: {}", info.3);
+        println!("\tiowait usage: {}", info.4);
+        println!("\tirq usage: {}", info.5);
+        println!("\tsoft irq usage: {}", info.6);
+        println!("\tsteal usage: {}", info.7);
+        println!("\tguest usage: {}", info.8);
+        println!("\tguest nice usage: {}", info.9);
     }
+
+    let info = sys.sys_loadavg();
+    println!("load avg: {}, {}, {}", info.0, info.1, info.2);
+
+    let info = sys.sys_virtual_memory_detal();
+    println!("sys total memory: {}", info.0);
+    println!("sys free memory: {}", info.1);
+    println!("sys used memory: {}", info.2);
+    println!("sys available memory: {}", info.3);
+    println!("sys active memory: {}", info.4);
+    println!("sys inactive memory: {}", info.5);
+    println!("sys buffers memory: {}", info.6);
+    println!("sys cached memory: {}", info.7);
+    println!("sys shared memory: {}", info.8);
+    println!("sys memory usage: {}", info.9);
+
+    let info = sys.sys_swap_detal();
+    println!("sys total swap: {}", info.0);
+    println!("sys free swap: {}", info.1);
+    println!("sys used swap: {}", info.2);
+    println!("sys sin swap: {}", info.3);
+    println!("sys sout swap: {}", info.4);
+    println!("sys swap usage: {}", info.5);
+
+    println!("system uptime: {}", sys.sys_uptime());
+
+    println!("current process: {}", sys.process_current_pid());
+
+    let info = sys.process_current_detal();
+    println!("process uid: {}", info.0);
+    println!("process gid: {}", info.1);
+    println!("process nice: {}", info.2);
+    println!("process priority: {}", info.3);
+    println!("process system cpu usage: {}", info.4);
+    println!("process user cpu usage: {}", info.5);
+    println!("process vm: {}", info.6);
+    println!("process rss: {}", info.7);
+    println!("process rss limit: {}", info.8);
+    println!("process minflt: {}", info.9);
+    println!("process cminflt: {}", info.10);
+    println!("process majflt: {}", info.11);
+    println!("process cmajflt: {}", info.12);
+    println!("process processor: {}", info.13);
+    println!("process threads: {}", info.14);
+    println!("process start time: {}", info.15);
+    println!("process command: {}", info.16);
+    println!("process status: {}", info.17);
 }
