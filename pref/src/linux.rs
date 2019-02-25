@@ -153,7 +153,7 @@ impl SysSpecialStat for LinuxSysStat {
                     info.num_threads,           //进程的当前线程数
                     info.starttime,             //进程启动时间，单位秒
                     info.comm,                  //进程启动指令
-                    info.state.into());         //进程当前状态
+                    info.state.to_string());    //进程当前状态
         }
 
         (0, 0, 0, 0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, "".to_string(), "".to_string())
