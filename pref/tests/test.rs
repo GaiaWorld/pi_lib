@@ -209,12 +209,11 @@ fn test_psutil_() {
     }
 
     if let Some(info) = sys.process_current_memory() {
-        println!("process rss: {}", info.0);
-        println!("process vm: {}", info.1);
-        println!("process total: {}", info.2);
-        println!("process res: {}", info.3);
-        println!("process share: {}", info.4);
-        println!("process text: {}", info.5);
-        println!("process data: {}", info.6);
+        println!("process vm: {}", info.0);
+        println!("process total: {}", info.1);
+        println!("process res: {}", info.2);
+        println!("process share: {}", info.3);
+        println!("process text: {}", info.4);
+        println!("process data: {}", info.5);
     }
 }
