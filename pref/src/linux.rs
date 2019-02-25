@@ -155,7 +155,7 @@ fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<p
     if let Ok(info) = process::Process::new(sys.process_current_pid()) {
         let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
 
-        thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
+        thread::sleep(Duration::from_millis(sys.interval * 1000));    //间隔指定时间，再次获取cpu占用时间
 
         if let Ok(info) = process::Process::new(sys.process_current_pid()) {
             let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(&info);
