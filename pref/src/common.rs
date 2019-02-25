@@ -77,7 +77,7 @@ impl SysStat {
     pub fn new() -> Self {
         SysStat {
             inner: Arc::new(RefCell::new(System::new())),
-            special: Arc::new(LinuxSysStat::new(DEFAULT_INTERVAL)),
+            special: Some(Arc::new(LinuxSysStat::new(DEFAULT_INTERVAL))),
         }
     }
 
