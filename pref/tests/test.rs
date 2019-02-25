@@ -102,11 +102,6 @@ fn test_psutil_() {
 
     let sys = LinuxSysStat::new(0.01);
 
-    if let Some(info) = sys.sys_cpu_runnable() {
-        println!("current processor: {}", info.0);
-        println!("total processor: {}", info.1);
-    }
-
     sys.sys_cpu_usage(); //预热
     if let Some(info) = sys.sys_cpu_usage() {
         println!("cpu usage: {}", info);

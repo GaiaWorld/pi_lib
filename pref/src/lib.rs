@@ -8,9 +8,6 @@ extern crate psutil;
 * 系统特定平台状态
 */
 pub trait SysSpecialStat {
-    //获取系统可用cpu逻辑核心数
-    fn sys_cpu_runnable(&self) -> Option<(i32, i32)>;
-
     //获取系统cpu占用率
     fn sys_cpu_usage(&self) -> Option<f64>;
 
