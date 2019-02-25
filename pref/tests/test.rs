@@ -106,14 +106,17 @@ fn test_psutil_() {
     println!("current processor: {}", info.0);
     println!("total processor: {}", info.1);
 
+    sys.sys_cpu_usage(); //预热
     println!("cpu usage: {}", sys.sys_cpu_usage());
 
     let mut n = 0;
+    sys.sys_processores_usage(); //预热
     for usage in sys.sys_processores_usage() {
         println!("processor #{} usage: {}", n, usage);
         n += 1;
     }
 
+    sys.sys_cpu_detal(); //预热
     let info = sys.sys_cpu_detal();
     println!("cpu user usage: {}", info.0);
     println!("cpu nice usage: {}", info.1);
@@ -127,6 +130,7 @@ fn test_psutil_() {
     println!("cpu guest nice usage: {}", info.9);
 
     n = 0;
+    sys.sys_processores_detal(); //预热
     for info in sys.sys_processores_detal() {
         println!("processor #{}", n);
         println!("\tuser usage: {}", info.0);
@@ -139,6 +143,7 @@ fn test_psutil_() {
         println!("\tsteal usage: {}", info.7);
         println!("\tguest usage: {}", info.8);
         println!("\tguest nice usage: {}", info.9);
+        n += 1;
     }
 
     let info = sys.sys_loadavg();
