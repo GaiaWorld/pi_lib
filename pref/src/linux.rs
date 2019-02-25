@@ -3,6 +3,7 @@ extern crate psutil;
 use std::thread;
 use std::path::PathBuf;
 use std::time::Duration;
+use std::collections::HashMap;
 
 use psutil::{system, process};
 
@@ -161,6 +162,16 @@ impl SysSpecialStat for LinuxSysStat {
         None
     }
 
+    fn process_current_env(&self) -> Option<HashMap<String, String>> {
+        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+            if let Ok(env) = process.environ() {
+                return Some(env);
+            }
+        }
+
+        None
+    }
+
     fn process_current_memory(&self) -> Option<(u64, u64, u64, u64, u64, u64)> {
         if let Ok(process) = process::Process::new(self.process_current_pid()) {
             if let Ok(memory) = process.memory() {
@@ -170,6 +181,19 @@ impl SysSpecialStat for LinuxSysStat {
                              memory.share,      //进程共享页内存大小，单位B
                              memory.text,       //进程代码段内存大小，单位B
                              memory.data));     //进程数据段内存大小，单位B
+            }
+        }
+
+        None
+    }
+
+    fn process_current_fd(&self) -> Option<Vec<(i32, PathBuf)>> {
+        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+            if let Ok(fds) = process.open_fds() {
+                let mut vec = Vec::with_capacity(fds.len());
+                for fd in fds {
+                    vec.push((fd.number, fd.path));
+                }
             }
         }
 

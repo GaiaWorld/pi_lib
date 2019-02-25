@@ -210,6 +210,12 @@ fn test_psutil_() {
         println!("process cmd: {}", info.18);
     }
 
+    if let Some(info) = sys.process_current_env() {
+        for (key, value) in info.iter() {
+            println!("{}: {}", key, value);
+        }
+    }
+
     if let Some(info) = sys.process_current_memory() {
         println!("process vm: {}", info.0);
         println!("process total: {}", info.1);
@@ -217,5 +223,12 @@ fn test_psutil_() {
         println!("process share: {}", info.3);
         println!("process text: {}", info.4);
         println!("process data: {}", info.5);
+    }
+
+    if let Some(infos) = sys.process_current_fd() {
+        for info in infos {
+            println!("fd: {}", info.0);
+            println!("\tfile: {}", info.1);
+        }
     }
 }
