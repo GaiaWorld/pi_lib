@@ -102,13 +102,19 @@ fn test_psutil_() {
 
     let sys = LinuxSysStat::new(0.01);
 
-    sys.sys_cpu_usage(); //预热
+    //预热
+    sys.sys_cpu_usage();
+    for _ in 0..100000000 {}
+
     if let Some(info) = sys.sys_cpu_usage() {
         println!("cpu usage: {}", info);
     }
 
+    //预热
+    sys.sys_processores_usage();
+    for _ in 0..100000000 {}
+
     let mut n = 0;
-    sys.sys_processores_usage(); //预热
     if let Some(infos) = sys.sys_processores_usage() {
         for info in infos {
             println!("processor #{} usage: {}", n, info);
@@ -116,7 +122,10 @@ fn test_psutil_() {
         }
     }
 
-    sys.sys_cpu_detal(); //预热
+    //预热
+    sys.sys_cpu_detal();
+    for _ in 0..100000000 {}
+
     if let Some(info) = sys.sys_cpu_detal() {
         println!("cpu user usage: {}", info.0);
         println!("cpu nice usage: {}", info.1);
@@ -130,8 +139,11 @@ fn test_psutil_() {
         println!("cpu guest nice usage: {}", info.9);
     }
 
+    //预热
+    sys.sys_processores_detal();
+    for _ in 0..100000000 {}
+
     n = 0;
-    sys.sys_processores_detal(); //预热
     if let Some(infos) = sys.sys_processores_detal() {
         for info in infos {
             println!("processor #{}", n);
@@ -178,6 +190,9 @@ fn test_psutil_() {
     println!("system uptime: {}", sys.sys_uptime());
 
     println!("current process: {}", sys.process_current_pid());
+
+    //预热
+    for _ in 0..100000000 {}
 
     if let Some(info) = sys.process_current_detal() {
         println!("process uid: {}", info.0);
