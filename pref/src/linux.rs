@@ -162,7 +162,7 @@ fn get_cpu_usage_by_process(process: &process::Process) -> (f64, f64) {
 }
 
 //获取系统和进程在内核态和用户态的cpu占用时间
-fn get_cpu_args(process: &process::Process) -> (u64, u64, u64, u64) {
+fn get_cpu_args(process: &process::Process) -> (u64, u64, i64, i64) {
     if let Ok(sys) = system::cpu_times() {
         return (sys.system,                                 //系统内核态cpu占用时间，单位秒
                 sys.user + sys.nice,                        //系统用户态cpu占用时间，单位秒
@@ -170,7 +170,7 @@ fn get_cpu_args(process: &process::Process) -> (u64, u64, u64, u64) {
                 process.utime_ticks + process.cutime_ticks) //进程用户态cpu占用时间，单位秒
     }
 
-    (0, 0, 0.0, 0.0)
+    (0, 0, 0, 0)
 }
 
 impl LinuxSysStat {
