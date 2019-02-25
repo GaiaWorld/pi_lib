@@ -37,6 +37,9 @@ pub trait SysSpecialStat {
 
     //获取当前进程详细信息
     fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String)>;
+
+    //获取当前进程内存信息
+    fn process_current_memory(&self) -> Option<(i64, u64, u64, u64, u64, u64, u64)>;
 }
 
 pub mod common;

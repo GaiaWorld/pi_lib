@@ -148,6 +148,22 @@ impl SysSpecialStat for LinuxSysStat {
 
         None
     }
+
+    fn process_current_memory(&self) -> Option<(i64, u64, u64, u64, u64, u64, u64)> {
+        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+            if let Ok(memory) = process.memory() {
+                return Some((process.rss,       //进程占用内存大小，单位B
+                             process.vsize,     //进程虚拟内存大小，单位B
+                             memory.size,       //进程总内存大小，单位B
+                             memory.resident,   //进程驻留内存大小，单位B
+                             memory.share,      //进程共享页内存大小，单位B
+                             memory.text,       //进程代码段内存大小，单位B
+                             memory.data));     //进程数据段内存大小，单位B
+            }
+        }
+
+        None
+    }
 }
 
 //获取进程在内核态和用户态的cpu占用率
