@@ -155,9 +155,9 @@ impl SysSpecialStat for LinuxSysStat {
 fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64) {
     if let Ok(info) = process::Process::new(sys.process_current_pid()) {
         let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
-        //    thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
-        let mut count = 0;
-        for _ in 0..100000000 { count += 1; }
+        thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
+//        let mut count = 0;
+//        for _ in 0..100000000 { count += 1; }
 
         if let Ok(info) = process::Process::new(sys.process_current_pid()) {
             let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(&info);
@@ -187,10 +187,10 @@ fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64) {
 //获取系统和进程在内核态和用户态的cpu占用时间
 fn get_cpu_args(process: &process::Process) -> (u64, u64, i64, i64) {
     if let Ok(sys) = system::cpu_times() {
-        return (sys.system,                                 //系统内核态cpu占用时间，单位秒
-                sys.user + sys.nice,                        //系统用户态cpu占用时间，单位秒
-                process.stime_ticks as i64 + process.cstime_ticks, //进程内核态cpu占用时间，单位秒
-                process.utime_ticks as i64 + process.cutime_ticks) //进程用户态cpu占用时间，单位秒
+        return (sys.system,                                         //系统内核态cpu占用时间，单位tick
+                sys.user + sys.nice,                                //系统用户态cpu占用时间，单位tick
+                process.stime_ticks as i64 + process.cstime_ticks,  //进程内核态cpu占用时间，单位tick
+                process.utime_ticks as i64 + process.cutime_ticks)  //进程用户态cpu占用时间，单位tick
     }
 
     (0, 0, 0, 0)
