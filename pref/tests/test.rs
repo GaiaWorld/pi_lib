@@ -95,6 +95,7 @@ fn test_psutil() {
 #[cfg(any(unix))]
 fn test_psutil_() {
     thread::Builder::new().name("psutil001".to_string()).spawn(move || {
+        //负载
         let mut count = 0;
         for _ in 0..1000000000 { count += 1; }
     });
@@ -103,8 +104,6 @@ fn test_psutil_() {
 
     //预热
     sys.sys_cpu_usage();
-    let mut count = 0;
-    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.sys_cpu_usage() {
         println!("cpu usage: {}", info);
@@ -112,8 +111,6 @@ fn test_psutil_() {
 
     //预热
     sys.sys_processores_usage();
-    let mut count = 0;
-    for _ in 0..100000000 { count += 1; }
 
     let mut n = 0;
     if let Some(infos) = sys.sys_processores_usage() {
@@ -125,8 +122,6 @@ fn test_psutil_() {
 
     //预热
     sys.sys_cpu_detal();
-    let mut count = 0;
-    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.sys_cpu_detal() {
         println!("cpu user usage: {}", info.0);
@@ -143,8 +138,6 @@ fn test_psutil_() {
 
     //预热
     sys.sys_processores_detal();
-    let mut count = 0;
-    for _ in 0..100000000 { count += 1; }
 
     n = 0;
     if let Some(infos) = sys.sys_processores_detal() {
@@ -193,10 +186,6 @@ fn test_psutil_() {
     println!("system uptime: {}", sys.sys_uptime());
 
     println!("current process: {}", sys.process_current_pid());
-
-    //预热
-    let mut count = 0;
-    for _ in 0..100000000 { count += 1; }
 
     if let Some(info) = sys.process_current_detal() {
         println!("process uid: {}", info.0);
