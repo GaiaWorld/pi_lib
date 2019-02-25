@@ -6,7 +6,6 @@ use std::time::Duration;
 use psutil::{system, process};
 
 use ::SysSpecialStat;
-use common::SysStatExt;
 
 /*
 * 默认间隔时长
@@ -20,7 +19,7 @@ pub struct LinuxSysStat {
     interval: f64,  //采集间隔时长，单位秒
 }
 
-impl SysStatExt for LinuxSysStat {
+impl SysSpecialStat for LinuxSysStat {
     fn sys_cpu_runnable(&self) -> (i32, i32) {
         if let Ok(info) = system::loadavg() {
             return (info.runnable,          //当前可用cpu逻辑核心数
