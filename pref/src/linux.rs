@@ -157,8 +157,8 @@ fn get_cpu_usage_by_process(process: &process::Process) -> (f64, f64) {
     thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
     let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(process);
     println!("!!!!!!{}, {}, {}, {}", end_total_system, end_total_user, end_process_system, end_process_user);
-    (100.0* (end_process_system - start_process_system) / (end_total_system - start_total_system),
-     100.0 * (end_process_user - start_process_user) / (end_total_user - start_total_user))
+    ((end_process_system - start_process_system) / (end_total_system - start_total_system),
+     (end_process_user - start_process_user) / (end_total_user - start_total_user))
 }
 
 //获取系统和进程在内核态和用户态的cpu占用时间
