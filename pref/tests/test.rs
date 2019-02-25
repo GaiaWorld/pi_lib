@@ -228,7 +228,7 @@ fn test_psutil_() {
     if let Some(infos) = sys.process_current_fd() {
         for info in infos {
             println!("fd: {}", info.0);
-            println!("\tfile: {}", info.1);
+            println!("\tfile: {:?}", info.1);
         }
     }
 }
