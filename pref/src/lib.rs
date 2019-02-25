@@ -1,6 +1,9 @@
 extern crate sysinfo;
 extern crate netstat;
 
+#[cfg(any(unix))]
+extern crate psutil;
+
 /*
 * 系统特定平台状态
 */
