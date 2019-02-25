@@ -151,7 +151,7 @@ impl SysSpecialStat for LinuxSysStat {
 }
 
 //获取进程在内核态和用户态的cpu占用率
-fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<Process>) {
+fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<process::Process>) {
     if let Ok(info) = process::Process::new(sys.process_current_pid()) {
         let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
 
