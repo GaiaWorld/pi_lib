@@ -5,6 +5,8 @@ use std::thread;
 
 use pref::common::{NetIPType, NetProtocolType, SysStat};
 #[cfg(any(unix))]
+use pref::SysSpecialStat;
+#[cfg(any(unix))]
 use pref::linux::LinuxSysStat;
 
 #[test]
