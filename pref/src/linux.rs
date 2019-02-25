@@ -155,9 +155,11 @@ impl SysSpecialStat for LinuxSysStat {
 fn get_cpu_usage_by_process(process: &process::Process) -> (f64, f64) {
     let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(process);
 //    thread::sleep(Duration::from_micros(10000));    //间隔10ms再次获取cpu占用时间
+    println!("!!!!!!start, {}, {}, {}, {}", start_total_system, start_total_user, start_process_system, start_process_user);
     let mut count = 0;
     for _ in 0..100000000 { count += 1; }
     let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(process);
+    println!("!!!!!!end, {}, {}, {}, {}", end_total_system, end_total_user, end_process_system, end_process_user);
 
     let total_system = end_total_system - start_total_system;
     let total_user = end_total_user - start_total_user;
