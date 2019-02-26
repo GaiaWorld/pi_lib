@@ -1,11 +1,16 @@
 extern crate psutil;
 
+use std::cmp;
 use std::thread;
-use std::path::PathBuf;
+use std::sync::Arc;
+use std::ffi::OsString;
+use std::cell::RefCell;
 use std::time::Duration;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
-use psutil::{system, process};
+use psutil::{system, process, disk, network};
+use walkdir::{DirEntry, WalkDir};
 
 use ::SysSpecialStat;
 
@@ -15,10 +20,22 @@ use ::SysSpecialStat;
 const DEFAULT_INTERVAL: f64 = 1.0;
 
 /*
+* 系统进程根路径
+*/
+const PROCESS_ROOT_PATH: &'static str = "/proc/";
+
+/*
+* 系统线程目录
+*/
+const THREADS_DIR: &'static str = "/task";
+
+/*
 * linux系统状态
 */
 pub struct LinuxSysStat {
-    interval: f64,  //采集间隔时长，单位秒
+    interval: f64,                                              //采集间隔时长，单位秒
+    disk_counter: Arc<RefCell<disk::DiskIOCountersCollector>>,  //硬盘io计数器
+    net_counter: Arc<RefCell<network::NetIOCountersCollector>>, //网络io计数器
 }
 
 impl SysSpecialStat for LinuxSysStat {
@@ -126,8 +143,8 @@ impl SysSpecialStat for LinuxSysStat {
         psutil::getpid()
     }
 
-    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
-        if let (sys_usage, user_usage, Some(info)) = get_cpu_usage_by_process(self, self.process_current_pid()) {
+    fn process_detal(&self, pid: i32) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
+        if let (sys_usage, user_usage, Some(info)) = get_cpu_usage_by_process(self, pid) {
             let mut cmd = "".to_string();
             let mut cwd = PathBuf::new();
             if let Ok(Some(r)) = info.cmdline() {
@@ -162,8 +179,8 @@ impl SysSpecialStat for LinuxSysStat {
         None
     }
 
-    fn process_current_env(&self) -> Option<HashMap<String, String>> {
-        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+    fn process_env(&self, pid: i32) -> Option<HashMap<String, String>> {
+        if let Ok(process) = process::Process::new(pid) {
             if let Ok(env) = process.environ() {
                 return Some(env);
             }
@@ -172,8 +189,8 @@ impl SysSpecialStat for LinuxSysStat {
         None
     }
 
-    fn process_current_memory(&self) -> Option<(u64, u64, u64, u64, u64, u64)> {
-        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+    fn process_memory(&self, pid: i32) -> Option<(u64, u64, u64, u64, u64, u64)> {
+        if let Ok(process) = process::Process::new(pid) {
             if let Ok(memory) = process.memory() {
                 return Some((process.vsize,     //进程虚拟内存大小，单位B
                              memory.size,       //进程总内存大小，单位B
@@ -187,14 +204,83 @@ impl SysSpecialStat for LinuxSysStat {
         None
     }
 
-    fn process_current_fd(&self) -> Option<Vec<(i32, PathBuf)>> {
-        if let Ok(process) = process::Process::new(self.process_current_pid()) {
+    fn process_fd_size(&self, pid: i32) -> Option<usize> {
+        if let Ok(process) = process::Process::new(pid) {
+            if let Ok(fds) = process.open_fds() {
+                return Some(fds.len());
+            }
+        }
+
+        None
+    }
+
+    fn process_fd(&self, pid: i32) -> Option<Vec<(i32, PathBuf)>> {
+        if let Ok(process) = process::Process::new(pid) {
             if let Ok(fds) = process.open_fds() {
                 let mut vec = Vec::with_capacity(fds.len());
                 for fd in fds {
-                    vec.push((fd.number, fd.path));
+                    vec.push((fd.number,    //文件句柄
+                              fd.path));          //文件路径
                 }
             }
+        }
+
+        None
+    }
+
+    fn process_threads(&self, pid: i32) -> Option<Vec<i32>> {
+        threads(pid)
+    }
+
+    fn disk_part(&self, all: bool) -> Option<Vec<(String, String, String, String)>> {
+        if let Ok(parts) = disk::disk_partitions(all) {
+            let mut vec = Vec::with_capacity(parts.len());
+
+            for part in parts {
+                vec.push((part.device,  //硬盘驱动器
+                          part.mountpoint,  //挂载点
+                          part.fstype,      //文件系统类型
+                          part.opts));      //选项
+            }
+
+            return Some(vec);
+        }
+
+        None
+    }
+
+    fn disk_usage(&self, path: &str) -> Option<(u64, u64, u64, u64, u64, u64, f64)> {
+        if let Ok(usage) = disk::disk_usage(path) {
+            return Some((usage.total,               //硬盘总大小，单位B
+                         usage.free,                //硬盘空闲大小，单位B
+                         usage.used,                //硬盘占用大小，单位B
+                         usage.disk_inodes_total,   //硬盘文件节点总数
+                         usage.disk_inodes_free,    //硬盘文件节点空闲数
+                         usage.disk_inodes_used,    //硬盘文件节点占用数
+                         usage.percent));           //硬盘占用率
+        }
+
+        None
+    }
+
+    fn disk_io(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>> {
+        if let Ok(map) = self.disk_counter.borrow_mut().disk_io_counters_perdisk(true) {
+            let mut vec = Vec::with_capacity(map.len());
+
+            for (key, value) in map {
+                vec.push((key,                  //硬盘名
+                          value.read_count,         //硬盘累计读取次数
+                          value.write_count,        //硬盘累计写入次数
+                          value.read_bytes,         //硬盘累计读取字节数，单位B
+                          value.write_bytes,        //硬盘累计写入字节数，单位B
+                          value.read_time,          //硬盘累计读取时间，单位毫秒
+                          value.write_time,         //硬盘累计写入时间，单位毫秒
+                          value.read_merged_count,  //硬盘累计读取合并次数
+                          value.write_merged_count, //硬盘累计写入合并次数
+                          value.busy_time));        //硬盘繁忙时间，单位毫秒
+            }
+
+            return Some(vec);
         }
 
         None
@@ -203,12 +289,12 @@ impl SysSpecialStat for LinuxSysStat {
 
 //获取进程在内核态和用户态的cpu占用率
 fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<process::Process>) {
-    if let Ok(info) = process::Process::new(sys.process_current_pid()) {
+    if let Ok(info) = process::Process::new(pid) {
         let (start_total_system, start_total_user, start_process_system, start_process_user) = get_cpu_args(&info);
 
         thread::sleep(Duration::from_millis((sys.interval * 1000.0) as u64));    //间隔指定时间，再次获取cpu占用时间
 
-        if let Ok(info) = process::Process::new(sys.process_current_pid()) {
+        if let Ok(info) = process::Process::new(pid) {
             let (end_total_system, end_total_user, end_process_system, end_process_user) = get_cpu_args(&info);
 
             let total_system = end_total_system - start_total_system;
@@ -245,11 +331,58 @@ fn get_cpu_args(process: &process::Process) -> (u64, u64, i64, i64) {
     (0, 0, 0, 0)
 }
 
+//构建指定pid的线程路径
+fn threads_path(pid: i32) -> Option<PathBuf> {
+    let p = PROCESS_ROOT_PATH.to_string() + &pid.to_string() + THREADS_DIR;
+    let path = PathBuf::from(p);
+    if !path.exists() {
+        //指定路径不存在
+        return None;
+    }
+
+    Some(path)
+}
+
+//访问指定pid的线程列表
+fn threads(pid: i32) -> Option<Vec<i32>> {
+    if let Some(path) = threads_path(pid) {
+        let mut wd = WalkDir::new(path)
+            .min_depth(1)
+            .max_depth(1)
+            .same_file_system(true)
+            .into_iter()
+            .filter_entry(|dir| {
+                !is_hidden(dir) //过滤掉隐藏目录
+            });
+
+        let mut vec = Vec::new();
+        for entry in wd {
+            if let Ok(dir) = entry {
+                vec.push(dir.file_name().to_str().unwrap().parse::<i32>().unwrap());
+            }
+        }
+
+        return Some(vec);
+    }
+
+    None
+}
+
+//判断目录是否是隐藏目录
+fn is_hidden(entry: &DirEntry) -> bool {
+    entry.file_name()
+        .to_str()
+        .map(|s| s.starts_with("."))
+        .unwrap_or(false)
+}
+
 impl LinuxSysStat {
     //构建linux系统状态
     pub fn new(interval: f64) -> Self {
         LinuxSysStat {
             interval,
+            disk_counter: Arc::new(RefCell::new(disk::DiskIOCountersCollector::default())),
+            net_counter: Arc::new(RefCell::new(network::NetIOCountersCollector::default())),
         }
     }
 }

@@ -3,6 +3,8 @@ extern crate netstat;
 
 #[cfg(any(unix))]
 extern crate psutil;
+#[cfg(any(unix))]
+extern crate walkdir;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -38,17 +40,32 @@ pub trait SysSpecialStat {
     //获取当前进程号
     fn process_current_pid(&self) -> i32;
 
-    //获取当前进程详细信息
-    fn process_current_detal(&self) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)>;
+    //获取指定进程详细信息
+    fn process_detal(&self, i32) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)>;
 
-    //获取当前进程环境
-    fn process_current_env(&self) -> Option<HashMap<String, String>>;
+    //获取指定进程环境
+    fn process_env(&self, i32) -> Option<HashMap<String, String>>;
 
-    //获取当前进程内存信息
-    fn process_current_memory(&self) -> Option<(u64, u64, u64, u64, u64, u64)>;
+    //获取指定进程内存信息
+    fn process_memory(&self, i32) -> Option<(u64, u64, u64, u64, u64, u64)>;
 
-    //获取当前进程文件句柄信息
-    fn process_current_fd(&self) -> Option<Vec<(i32, PathBuf)>>;
+    //获取指定进程文件句柄数量
+    fn process_fd_size(&self, i32) -> Option<usize>;
+
+    //获取指定进程文件句柄信息
+    fn process_fd(&self, i32) -> Option<Vec<(i32, PathBuf)>>;
+
+    //获取指定进程的线程id列表
+    fn process_threads(&self, i32) -> Option<Vec<i32>>;
+
+    //获取硬盘分区信息
+    fn disk_part(&self, bool) -> Option<Vec<(String, String, String, String)>>;
+
+    //获取硬盘占用信息
+    fn disk_usage(&self, path: &str) -> Option<(u64, u64, u64, u64, u64, u64, f64)>;
+
+    //获取硬盘IO信息
+    fn disk_io(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>>;
 }
 
 pub mod common;

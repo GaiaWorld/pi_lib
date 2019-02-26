@@ -162,41 +162,42 @@ fn test_psutil_() {
     }
 
     if let Some(info) = sys.sys_virtual_memory_detal() {
-        println!("sys total memory: {}", info.0);
-        println!("sys free memory: {}", info.1);
-        println!("sys used memory: {}", info.2);
-        println!("sys available memory: {}", info.3);
-        println!("sys active memory: {}", info.4);
-        println!("sys inactive memory: {}", info.5);
-        println!("sys buffers memory: {}", info.6);
-        println!("sys cached memory: {}", info.7);
-        println!("sys shared memory: {}", info.8);
+        println!("sys total memory: {}KB", info.0 / 1024);
+        println!("sys free memory: {}KB", info.1 / 1024);
+        println!("sys used memory: {}KB", info.2 / 1024);
+        println!("sys available memory: {}KB", info.3 / 1024);
+        println!("sys active memory: {}KB", info.4 / 1024);
+        println!("sys inactive memory: {}KB", info.5 / 1024);
+        println!("sys buffers memory: {}KB", info.6 / 1024);
+        println!("sys cached memory: {}KB", info.7 / 1024);
+        println!("sys shared memory: {}KB", info.8 / 1024);
         println!("sys memory usage: {}", info.9);
     }
 
     if let Some(info) = sys.sys_swap_detal() {
-        println!("sys total swap: {}", info.0);
-        println!("sys free swap: {}", info.1);
-        println!("sys used swap: {}", info.2);
-        println!("sys sin swap: {}", info.3);
-        println!("sys sout swap: {}", info.4);
+        println!("sys total swap: {}KB", info.0 / 1024);
+        println!("sys free swap: {}KB", info.1 / 1024);
+        println!("sys used swap: {}KB", info.2 / 1024);
+        println!("sys sin swap: {}KB", info.3 / 1024);
+        println!("sys sout swap: {}KB", info.4 / 1024);
         println!("sys swap usage: {}", info.5);
     }
 
     println!("system uptime: {}", sys.sys_uptime());
 
-    println!("current process: {}", sys.process_current_pid());
+    let pid = sys.process_current_pid();
+    println!("current process: {}", pid);
 
-    if let Some(info) = sys.process_current_detal() {
+    if let Some(info) = sys.process_detal(pid) {
         println!("process uid: {}", info.0);
         println!("process gid: {}", info.1);
         println!("process nice: {}", info.2);
         println!("process priority: {}", info.3);
         println!("process system cpu usage: {}", info.4);
         println!("process user cpu usage: {}", info.5);
-        println!("process vm: {}", info.6);
-        println!("process rss: {}", info.7);
-        println!("process rss limit: {}", info.8);
+        println!("process vm: {}KB", info.6 / 1024);
+        println!("process rss: {}KB", info.7 / 1024);
+        println!("process rss limit: {}KB", info.8 / 1024);
         println!("process minflt: {}", info.9);
         println!("process cminflt: {}", info.10);
         println!("process majflt: {}", info.11);
@@ -210,25 +211,112 @@ fn test_psutil_() {
         println!("process cmd: {}", info.18);
     }
 
-    if let Some(info) = sys.process_current_env() {
+    if let Some(info) = sys.process_env(pid) {
         for (key, value) in info.iter() {
             println!("{}: {}", key, value);
         }
     }
 
-    if let Some(info) = sys.process_current_memory() {
-        println!("process vm: {}", info.0);
-        println!("process total: {}", info.1);
-        println!("process res: {}", info.2);
-        println!("process share: {}", info.3);
-        println!("process text: {}", info.4);
-        println!("process data: {}", info.5);
+    if let Some(info) = sys.process_memory(pid) {
+        println!("process vm: {}KB", info.0 / 1024);
+        println!("process total: {}KB", info.1 / 1024);
+        println!("process res: {}KB", info.2 / 1024);
+        println!("process share: {}KB", info.3 / 1024);
+        println!("process text: {}KB", info.4 / 1024);
+        println!("process data: {}KB", info.5 / 1024);
     }
 
-    if let Some(infos) = sys.process_current_fd() {
+    if let Some(size) = sys.process_fd_size(pid) {
+        println!("process fd size: {}", size);
+    }
+
+    if let Some(infos) = sys.process_fd(pid) {
         for info in infos {
             println!("fd: {}", info.0);
             println!("\tfile: {:?}", info.1);
+        }
+    }
+
+    if let Some(threads) = sys.process_threads(pid) {
+        for thread in threads {
+            println!("thread: {}", thread);
+            if let Some(info) = sys.process_detal(thread) {
+                println!("\tthread uid: {}", info.0);
+                println!("\tthread gid: {}", info.1);
+                println!("\tthread nice: {}", info.2);
+                println!("\tthread priority: {}", info.3);
+                println!("\tthread system cpu usage: {}", info.4);
+                println!("\tthread user cpu usage: {}", info.5);
+                println!("\tthread vm: {}KB", info.6 / 1024);
+                println!("\tthread rss: {}KB", info.7 / 1024);
+                println!("\tthread rss limit: {}KB", info.8 / 1024);
+                println!("\tthread minflt: {}", info.9);
+                println!("\tthread cminflt: {}", info.10);
+                println!("\tthread majflt: {}", info.11);
+                println!("\tthread cmajflt: {}", info.12);
+                println!("\tthread processor: {}", info.13);
+                println!("\tthread threads: {}", info.14);
+                println!("\tthread start time: {}", info.15);
+                println!("\tthread command: {}", info.16);
+                println!("\tthread status: {}", info.17);
+                println!("\tthread cwd: {:?}", info.19);
+                println!("\tthread cmd: {}", info.18);
+            }
+
+            if let Some(info) = sys.process_memory(thread) {
+                println!("\tthread vm: {}KB", info.0 / 1024);
+                println!("\tthread total: {}KB", info.1 / 1024);
+                println!("\tthread res: {}KB", info.2 / 1024);
+                println!("\tthread share: {}KB", info.3 / 1024);
+                println!("\tthread text: {}KB", info.4 / 1024);
+                println!("\tthread data: {}KB", info.5 / 1024);
+            }
+
+            if let Some(size) = sys.process_fd_size(thread) {
+                println!("\tthread fd size: {}", size);
+            }
+
+            if let Some(infos) = sys.process_fd(thread) {
+                for info in infos {
+                    println!("\tfd: {}", info.0);
+                    println!("\t\tfile: {:?}", info.1);
+                }
+            }
+        }
+
+        if let Some(infos) = sys.disk_part(true) {
+            for info in infos {
+                println!("device: {}", info.0);
+                println!("\tmount: {}", info.1);
+                println!("\tfile system: {}", info.2);
+                println!("\topts: {}", info.3);
+                if let Some(usage) = sys.disk_usage(&info.1) {
+                    println!("\tusage: {}", usage.6);
+                    println!("\ttotal: {}KB", usage.0 / 1000);
+                    println!("\tfree: {}KB", usage.1 / 1000);
+                    println!("\tused: {}KB", usage.2 / 1000);
+                    println!("\tinode total: {}", usage.3);
+                    println!("\tindoe free: {}", usage.4);
+                    println!("\tinode used: {}", usage.5);
+                }
+            }
+        }
+
+        sys.disk_io();
+        thread::sleep(time::Duration::from_millis(1000));
+        if let Some(infos) = sys.disk_io() {
+            for info in infos {
+                println!("disk: {}", info.0);
+                println!("\trc: {}", info.1);
+                println!("\twc: {}", info.2);
+                println!("\trb: {}B", info.3);
+                println!("\twb: {}B", info.4);
+                println!("\trt: {}ms", info.5);
+                println!("\twt: {}ms", info.6);
+                println!("\trmc: {}", info.7);
+                println!("\twmc: {}", info.8);
+                println!("\tbusy: {}ms", info.9);
+            }
         }
     }
 }
