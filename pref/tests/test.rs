@@ -302,8 +302,6 @@ fn test_psutil_() {
             }
         }
 
-        sys.disk_io();
-        thread::sleep(time::Duration::from_millis(1000));
         if let Some(infos) = sys.disk_io() {
             for info in infos {
                 println!("disk: {}", info.0);
