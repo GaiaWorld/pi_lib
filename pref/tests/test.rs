@@ -9,6 +9,11 @@ use pref::SysSpecialStat;
 #[cfg(any(unix))]
 use pref::linux::LinuxSysStat;
 
+use pref::allocator::{CounterSystemAllocator, alloced_size};
+
+#[global_allocator]
+static ALLOCATOR: CounterSystemAllocator = CounterSystemAllocator;
+
 #[test]
 fn test_common() {
     let sys = SysStat::new();
@@ -95,16 +100,18 @@ fn test_common() {
     }
 
     println!("system uptime: {}", sys.uptime());
+
+    println!("rust alloced size: {}B", alloced_size());
 }
 
 #[test]
-fn test_psutil() {
+fn test_linux() {
     #[cfg(any(unix))]
-    test_psutil_();
+    test_linux_();
 }
 
 #[cfg(any(unix))]
-fn test_psutil_() {
+fn test_linux_() {
     thread::Builder::new().name("psutil001".to_string()).spawn(move || {
         //负载
         let mut count = 0;
@@ -297,52 +304,54 @@ fn test_psutil_() {
                 }
             }
         }
+    }
 
-        if let Some(infos) = sys.disk_part(true) {
-            for info in infos {
-                println!("device: {}", info.0);
-                println!("\tmount: {}", info.1);
-                println!("\tfile system: {}", info.2);
-                println!("\topts: {}", info.3);
-                if let Some(usage) = sys.disk_usage(&info.1) {
-                    println!("\tusage: {}", usage.6);
-                    println!("\ttotal: {}KB", usage.0 / 1024);
-                    println!("\tfree: {}KB", usage.1 / 1024);
-                    println!("\tused: {}KB", usage.2 / 1024);
-                    println!("\tinode total: {}", usage.3);
-                    println!("\tindoe free: {}", usage.4);
-                    println!("\tinode used: {}", usage.5);
-                }
-            }
-        }
-
-        if let Some(infos) = sys.disk_io_detal() {
-            for info in infos {
-                println!("disk: {}", info.0);
-                println!("\trc: {}", info.1);
-                println!("\twc: {}", info.2);
-                println!("\trb: {}B", info.3);
-                println!("\twb: {}B", info.4);
-                println!("\trt: {}ms", info.5);
-                println!("\twt: {}ms", info.6);
-                println!("\trmc: {}", info.7);
-                println!("\twmc: {}", info.8);
-                println!("\tbusy: {}ms", info.9);
-            }
-        }
-
-        if let Some(infos) = sys.network_io_detal() {
-            for info in infos {
-                println!("network interface: {}", info.0);
-                println!("\tbs: {}B", info.1);
-                println!("\tbr: {}B", info.2);
-                println!("\tps: {}", info.3);
-                println!("\tpr: {}", info.4);
-                println!("\ter: {}", info.5);
-                println!("\tes: {}", info.6);
-                println!("\tdr: {}", info.7);
-                println!("\tds: {}", info.8);
+    if let Some(infos) = sys.disk_part(true) {
+        for info in infos {
+            println!("device: {}", info.0);
+            println!("\tmount: {}", info.1);
+            println!("\tfile system: {}", info.2);
+            println!("\topts: {}", info.3);
+            if let Some(usage) = sys.disk_usage(&info.1) {
+                println!("\tusage: {}", usage.6);
+                println!("\ttotal: {}KB", usage.0 / 1024);
+                println!("\tfree: {}KB", usage.1 / 1024);
+                println!("\tused: {}KB", usage.2 / 1024);
+                println!("\tinode total: {}", usage.3);
+                println!("\tindoe free: {}", usage.4);
+                println!("\tinode used: {}", usage.5);
             }
         }
     }
+
+    if let Some(infos) = sys.disk_io_detal() {
+        for info in infos {
+            println!("disk: {}", info.0);
+            println!("\trc: {}", info.1);
+            println!("\twc: {}", info.2);
+            println!("\trb: {}B", info.3);
+            println!("\twb: {}B", info.4);
+            println!("\trt: {}ms", info.5);
+            println!("\twt: {}ms", info.6);
+            println!("\trmc: {}", info.7);
+            println!("\twmc: {}", info.8);
+            println!("\tbusy: {}ms", info.9);
+        }
+    }
+
+    if let Some(infos) = sys.network_io_detal() {
+        for info in infos {
+            println!("network interface: {}", info.0);
+            println!("\tbs: {}B", info.1);
+            println!("\tbr: {}B", info.2);
+            println!("\tps: {}", info.3);
+            println!("\tpr: {}", info.4);
+            println!("\ter: {}", info.5);
+            println!("\tes: {}", info.6);
+            println!("\tdr: {}", info.7);
+            println!("\tds: {}", info.8);
+        }
+    }
+
+    println!("rust alloced size: {}B", alloced_size());
 }
