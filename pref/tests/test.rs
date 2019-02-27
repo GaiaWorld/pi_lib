@@ -320,8 +320,8 @@ fn test_psutil_() {
         if let Some(infos) = sys.network_io_detal() {
             for info in infos {
                 println!("network interface: {}", info.0);
-                println!("\tbs: {}KB", info.1 / 1024);
-                println!("\tbr: {}KB", info.2 / 1024);
+                println!("\tbs: {}B", info.1);
+                println!("\tbr: {}B", info.2);
                 println!("\tps: {}", info.3);
                 println!("\tpr: {}", info.4);
                 println!("\ter: {}", info.5);
