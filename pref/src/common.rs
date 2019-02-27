@@ -81,6 +81,15 @@ impl SysStat {
         }
     }
 
+    //获取指定平台详细状态
+    pub fn special_platform(&self) -> Option<Arc<SysSpecialStat>> {
+        if let Some(detal) = &self.special {
+            return Some(detal.clone());
+        }
+
+        None
+    }
+
     //获取cpu逻辑核心数
     pub fn processor_count(&self) -> usize {
         self.inner.borrow_mut().refresh_system();
@@ -158,30 +167,10 @@ impl SysStat {
     pub fn current_pid(&self) -> usize {
         sysinfo::get_current_pid()
     }
-    #[cfg(any(unix))]
-    pub fn current_pid(&self) -> i32 {
-        sysinfo::get_current_pid()
-    }
 
     //获取当前进程的基础状态
     #[cfg(any(windows))]
     pub fn current_process_info(&self) -> (usize, String, PathBuf, Vec<String>, f32, u64, u64, ProcessState) {
-        let pid = sysinfo::get_current_pid();
-        self.inner.borrow_mut().refresh_process(pid);
-
-        let inner = self.inner.borrow();
-        let process = inner.get_process(pid).unwrap();
-        (pid,                           //当前进程id
-         process.name().to_string(),    //当前进程名
-         process.cwd().to_owned(),      //当前进程工作目录
-         Vec::from(process.cmd()),   //当前进程指令行
-         process.cpu_usage(),           //当前进程cpu占用率
-         process.memory(),              //当前进程内存占用，单位KB
-         process.start_time(),          //当前进程启动时间，单位秒
-         process.status())              //当前进程运行状态
-    }
-    #[cfg(any(unix))]
-    pub fn current_process_info(&self) -> (i32, String, PathBuf, Vec<String>, f32, u64, u64, ProcessState) {
         let pid = sysinfo::get_current_pid();
         self.inner.borrow_mut().refresh_process(pid);
 
@@ -263,7 +252,7 @@ impl SysStat {
     }
 
     //获取指定进程的网络连接状态
-    pub fn process_sockets_info(&self, pid: usize, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
+    pub fn process_sockets_info(&self, pid: i32, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
         let mut vec = Vec::new();
         let (address_flag, protocol_flag) = filter_sockets_args(ip_type, protocol_type);
 
@@ -286,9 +275,9 @@ impl SysStat {
         vec
     }
 
-    //获取当前进程的网络连接状态
-    pub fn current_process_sockets_info(&self, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
-        self.process_sockets_info(self.current_pid() as usize, ip_type, protocol_type)
+    //获取指定进程的网络连接状态
+    pub fn current_process_sockets_info(&self, pid: i32, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
+        self.process_sockets_info(pid, ip_type, protocol_type)
     }
 
     //获取系统正常运行时间，单位秒
@@ -330,7 +319,7 @@ fn filter_sockets_args(ip_type: NetIPType, protocol_type: NetProtocolType) -> (A
 }
 
 //检查网络连接的关联进程中是否有指定的pid
-fn contains_pid_sockets(pid: usize, socket: &SocketInfo) -> bool {
+fn contains_pid_sockets(pid: i32, socket: &SocketInfo) -> bool {
     socket.associated_pids.binary_search(&(pid as u32)).is_ok()
 }
 

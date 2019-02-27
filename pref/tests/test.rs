@@ -35,17 +35,23 @@ fn test_common() {
     println!("free swap: {}KB", usage.4);
     println!("used swap: {}KB", usage.5);
 
+    #[cfg(any(windows))]
     println!("cuurent pid: {}", sys.current_pid());
+    #[cfg(any(unix))]
+    println!("current pid: {}", sys.special_platform().unwrap().process_current_pid());
 
-    let info = sys.current_process_info();
-    println!("current pid: {}", info.0);
-    println!("process name: {}", info.1);
-    println!("cwd: {:?}", info.2);
-    println!("exe: {:?}", info.3);
-    println!("cpu usage: {}", info.4);
-    println!("memory: {}KB", info.5);
-    println!("start time: {}", info.6);
-    println!("status: {:?}", info.7);
+    #[cfg(any(windows))]
+    {
+        let info = sys.current_process_info();
+        println!("current pid: {}", info.0);
+        println!("process name: {}", info.1);
+        println!("cwd: {:?}", info.2);
+        println!("exe: {:?}", info.3);
+        println!("cpu usage: {}", info.4);
+        println!("memory: {}KB", info.5);
+        println!("start time: {}", info.6);
+        println!("status: {:?}", info.7);
+    }
 
     for disk in sys.disk_usage() {
         println!("mount: {:?}", disk.3);
@@ -72,8 +78,13 @@ fn test_common() {
         println!("\tprocesses: {:?}", socket.6);
     }
 
-    println!("cuurent pid: {}", sys.current_pid());
-    for socket in sys.current_process_sockets_info(NetIPType::All, NetProtocolType::All) {
+    #[cfg(any(windows))]
+    let pid = sys.current_pid();
+    #[cfg(any(unix))]
+    let pid = sys.special_platform().unwrap().process_current_pid();
+
+    println!("cuurent pid: {}", pid);
+    for socket in sys.current_process_sockets_info(pid as i32, NetIPType::All, NetProtocolType::All) {
         println!("\tlocal port: {}", socket.2);
         println!("\t\ttype: {:?}", socket.0);
         println!("\t\tlocal address: {:?}", socket.1);
@@ -100,7 +111,10 @@ fn test_psutil_() {
         for _ in 0..1000000000 { count += 1; }
     });
 
-    let sys = LinuxSysStat::new(0.2);
+    let sys_stat = SysStat::new();
+    println!("processor count: {}", sys_stat.processor_count());
+
+    let sys = sys_stat.special_platform().unwrap();
 
     //预热
     sys.sys_cpu_usage();
