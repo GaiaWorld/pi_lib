@@ -64,8 +64,11 @@ pub trait SysSpecialStat {
     //获取硬盘占用信息
     fn disk_usage(&self, path: &str) -> Option<(u64, u64, u64, u64, u64, u64, f64)>;
 
-    //获取硬盘IO信息
-    fn disk_io(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>>;
+    //获取硬盘IO详细信息
+    fn disk_io_detal(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>>;
+
+    //获取网络IO详细信息
+    fn network_io_detal(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64)>>;
 }
 
 pub mod common;

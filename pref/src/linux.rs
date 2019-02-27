@@ -263,7 +263,7 @@ impl SysSpecialStat for LinuxSysStat {
         None
     }
 
-    fn disk_io(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>> {
+    fn disk_io_detal(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64, u64)>> {
         if let Ok(map) = self.disk_counter.borrow_mut().disk_io_counters_perdisk(true) {
             let mut vec = Vec::with_capacity(map.len());
 
@@ -278,6 +278,28 @@ impl SysSpecialStat for LinuxSysStat {
                           value.read_merged_count,  //硬盘累计读取合并次数
                           value.write_merged_count, //硬盘累计写入合并次数
                           value.busy_time));        //硬盘繁忙时间，单位毫秒
+            }
+
+            return Some(vec);
+        }
+
+        None
+    }
+
+    fn network_io_detal(&self) -> Option<Vec<(String, u64, u64, u64, u64, u64, u64, u64, u64)>> {
+        if let Ok(map) = self.net_counter.borrow_mut().net_io_counters_pernic(true) {
+            let mut vec = Vec::with_capacity(map.len());
+
+            for (key, value) in map {
+                vec.push((key,              //网络接口名
+                          value.bytes_send,     //网络接口累计发送字节数
+                          value.bytes_recv,     //网络接口累计接收字节数
+                          value.packets_send,   //网络接口累计发送数据包数
+                          value.packets_recv,   //网络接口累计接收数据包数
+                          value.errin,          //网络接口累计接收错误次数
+                          value.errout,         //网络接口累计发送错误次数
+                          value.dropin,         //网络接口累计丢弃的接收数据包数
+                          value.dropout));      //网络接口累计丢弃的发送数据包数
             }
 
             return Some(vec);
