@@ -292,9 +292,9 @@ fn test_psutil_() {
                 println!("\topts: {}", info.3);
                 if let Some(usage) = sys.disk_usage(&info.1) {
                     println!("\tusage: {}", usage.6);
-                    println!("\ttotal: {}KB", usage.0 / 1000);
-                    println!("\tfree: {}KB", usage.1 / 1000);
-                    println!("\tused: {}KB", usage.2 / 1000);
+                    println!("\ttotal: {}KB", usage.0 / 1024);
+                    println!("\tfree: {}KB", usage.1 / 1024);
+                    println!("\tused: {}KB", usage.2 / 1024);
                     println!("\tinode total: {}", usage.3);
                     println!("\tindoe free: {}", usage.4);
                     println!("\tinode used: {}", usage.5);
@@ -320,8 +320,8 @@ fn test_psutil_() {
         if let Some(infos) = sys.network_io_detal() {
             for info in infos {
                 println!("network interface: {}", info.0);
-                println!("\tbs: {}", info.1);
-                println!("\tbr: {}", info.2);
+                println!("\tbs: {}KB", info.1 / 1024);
+                println!("\tbr: {}KB", info.2 / 1024);
                 println!("\tps: {}", info.3);
                 println!("\tpr: {}", info.4);
                 println!("\ter: {}", info.5);
