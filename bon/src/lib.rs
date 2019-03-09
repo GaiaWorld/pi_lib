@@ -1788,15 +1788,23 @@ pub fn base_type_len(bb: &ReadBuffer, t: u8) -> usize {
 
 fn compare_number<'a>(rb: &mut ReadBuffer<'a>, v1: f64, t2: u8) -> Option<Ordering> {
 	let err = "compare_number err";
-	match t2{
-		3..8 => v1.partial_cmp(&rb.read_f64().expect(err)),
-		9..14 => v1.partial_cmp(&(rb.read_i64().expect(err) as f64)),
-		14 => {rb.head += 17; Some(Ordering::Greater)},
-		15 => {rb.head += 1; v1.partial_cmp(&-1.0)},
-		16..41 => v1.partial_cmp(&(rb.read_u64().expect(err) as f64)),
-		41 => {rb.head += 17; Some(Ordering::Less)},
-		_ => panic!("t2 is not number:{}", t2),
-	}
+    let v2 = match t2 {
+        3..8 => rb.read_f64().expect(err),
+		9..14 => rb.read_i64().expect(err) as f64,
+		14 => {rb.head += 17; return Some(Ordering::Greater)},
+		15 => {rb.head += 1; -1.0},
+		16..41 => rb.read_u64().expect(err) as f64,
+		41 => {rb.head += 17; return Some(Ordering::Less)},
+        _ => panic!("t2 is not number:{}", t2),
+    };
+    if v1.is_nan(){
+        if v2.is_nan(){
+            return Some(Ordering::Equal);
+        }else {
+            return Some(Ordering::Less);
+        }
+    }
+    v1.partial_cmp(&v2)
 }
 
 fn compare_int<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t: u8) -> Option<Ordering> {
