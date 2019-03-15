@@ -440,7 +440,7 @@ fn paser_builder_attrs(field: &syn::Field) -> BuilderAttrs{
         build_ty: BuildType::None,
     };
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "Builder" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "builder" {
             let meta = a.parse_meta().unwrap();
             match meta {
                 syn::Meta::List(list) => {
@@ -449,7 +449,7 @@ fn paser_builder_attrs(field: &syn::Field) -> BuilderAttrs{
                             syn::NestedMeta::Meta(meta) => {
                                 match meta {
                                     syn::Meta::List(list) => {
-                                        if list.ident.to_string() == "Build" {
+                                        if list.ident.to_string() == "build" {
                                             for nested in list.nested.iter() {
                                                 match nested {
                                                     syn::NestedMeta::Meta(meta) => {
@@ -474,7 +474,7 @@ fn paser_builder_attrs(field: &syn::Field) -> BuilderAttrs{
                                         }
                                     },
                                     syn::Meta::Word(word) => {
-                                        if word.to_string() == "Export" {
+                                        if word.to_string() == "export" {
                                             b_attrs.is_export = true;
                                         }else {
                                             panic!("error attr : {}", word.to_string());

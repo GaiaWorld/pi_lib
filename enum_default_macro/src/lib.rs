@@ -39,12 +39,40 @@ fn enum_default(name: &syn::Ident, variants: &syn::punctuated::Punctuated<syn::V
         None => panic!("enum variants len is 0"),
     };
     let first_variant_name = &first_variant.ident;
+    let f = variant_default(&first_variant.fields);
     quote!{
         impl std::default::Default for #name {
             fn default() -> #name{
-                #name::#first_variant_name
+                #name::#first_variant_name#f
             }
         }
+    }
+}
+
+fn variant_default(fields: &syn::Fields) -> quote::__rt::TokenStream{
+    let mut is_named = false;
+    let fields = match fields {
+        syn::Fields::Named(named) => {is_named = true; &named.named},
+        syn::Fields::Unnamed(unnamed) => &unnamed.unnamed,
+        syn::Fields::Unit => return quote!{},
+    };
+
+    let mut arr = Vec::new();
+    
+    if is_named {
+        for field in fields.iter(){
+            let name = field.ident.clone().unwrap();
+            let ty = &field.ty;
+            arr.push(quote!{#name: <#ty>::default()});
+        }
+        return quote!{{#(#arr),*};
+        };
+    }else {
+        for field in fields.iter(){
+            let ty = &field.ty;
+            arr.push(quote!{<#ty>::default()});
+        }
+        return quote!{(#(#arr),*)};
     }
 }
 

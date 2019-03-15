@@ -3,7 +3,7 @@ use quote::ToTokens;
 pub fn is_component(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "Component" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "component" {
             return true;
         }
     }
@@ -13,7 +13,7 @@ pub fn is_component(field: &syn::Field) -> bool{
 pub fn is_enum_component(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "EnumComponent" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "enum_component" {
             return true;
         }
     }
@@ -23,7 +23,7 @@ pub fn is_enum_component(field: &syn::Field) -> bool{
 pub fn component_name(field: &syn::Field) -> String{
     let attrs = &field.attrs;
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "EnumComponent" || a.path.clone().into_token_stream().to_string().as_str() == "Component" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "enum_component" || a.path.clone().into_token_stream().to_string().as_str() == "component" {
             let inner = a.tts.to_string();
             match inner.get(1..inner.len() - 1) {
                 Some(r) => return r.trim().to_string(),
@@ -37,7 +37,7 @@ pub fn component_name(field: &syn::Field) -> String{
 pub fn is_ignore(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "Ignore" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "ignore" {
             return true;
         }
     }
@@ -47,7 +47,7 @@ pub fn is_ignore(field: &syn::Field) -> bool{
 pub fn is_must(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
-        if a.path.clone().into_token_stream().to_string().as_str() == "Must" {
+        if a.path.clone().into_token_stream().to_string().as_str() == "must" {
             return true;
         }
     }

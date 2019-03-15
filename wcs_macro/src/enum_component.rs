@@ -229,7 +229,7 @@ pub fn impl_create_destroy(enum_data: &EnumData) -> quote::__rt::TokenStream {
 
     quote! {
         impl #id_name{
-            fn _set<M: ComponentMgr>(groups: &mut #group_name<M>, v: #name, parent: usize) -> #id_name{
+            pub fn _set<M: ComponentMgr>(groups: &mut #group_name<M>, v: #name, parent: usize) -> #id_name{
                 match v {
                     #(#inserts),*
                 }

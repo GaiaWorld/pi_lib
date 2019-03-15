@@ -1,0 +1,8 @@
+[package]
+name = "pointer"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+slab = {path="../slab"}
+lazy_static = "*"

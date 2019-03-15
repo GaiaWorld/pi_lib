@@ -1,5 +1,5 @@
 
-use std::mem::{size_of, transmute_copy, needs_drop};
+use std::mem::{size_of, transmute_copy, needs_drop, replace};
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ops::{Index, IndexMut};
 use std::iter::IntoIterator;
@@ -197,6 +197,10 @@ impl<T> Slab<T> {
         self.zero2one(key1);
         self.len -= 1;
         r
+    }
+
+    pub unsafe fn replace(&mut self, key: usize, value: T) -> T {
+        replace(&mut self.entries[key - 1], value)
     }
 
     pub fn contains(&self, key: usize) -> bool {

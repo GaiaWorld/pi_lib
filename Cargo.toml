@@ -28,4 +28,5 @@ members = [
   "worker",
   "future",
   "enum_default_macro",
+  "pointer",
 ]
