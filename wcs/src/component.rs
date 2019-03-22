@@ -1,6 +1,7 @@
 // use std::rc::{Rc, Weak};
 // use std::cell::RefCell;
 use std::clone::Clone;
+use std::default::Default;
 use std::ops::{Deref, DerefMut};
 use std::rc::{Weak, Rc};
 use std::cell::{RefCell};
@@ -14,8 +15,8 @@ type ComponentIter<'a, T> = SlabIter<'a, ComponentP<T>>;
 type ComponentIterMut<'a, T> = SlabIterMut<'a, ComponentP<T>>;
 
 pub trait ComponentGroupTree {
-    type C: ComponentMgr;
-    fn new() -> Self;
+    // type C: ComponentMgr;
+    // fn new() -> Self;
 }
 
 pub trait ComponentHandler<T, C: ComponentMgr> {
@@ -25,6 +26,15 @@ pub trait ComponentHandler<T, C: ComponentMgr> {
 pub struct ComponentGroup<T: Sized, C: ComponentMgr>{
     components: Slab<ComponentP<T>>,
     handlers: Rc<RefCell<Vec<Weak<ComponentHandler<T, C>>>>>,
+}
+
+impl<T: Sized, C: ComponentMgr> Default for ComponentGroup<T, C> {
+    fn default() -> Self{
+        ComponentGroup {
+            components: Slab::new(),
+            handlers: Rc::new(RefCell::new(Vec::new())),
+        }
+    }
 }
 
 impl<T: Sized + fmt::Debug, C: ComponentMgr> fmt::Debug for ComponentGroup<T, C>{

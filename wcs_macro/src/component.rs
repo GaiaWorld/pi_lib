@@ -329,7 +329,7 @@ pub fn component_group_tree(name: &syn::Ident, fields: &Fields) -> quote::__rt::
             pub #key: #group_name<M>,
         });
         field_news.push(quote! {
-            #key: #group_name::new(),
+            #key: #group_name::default(),
         });
     }
 
@@ -343,11 +343,20 @@ pub fn component_group_tree(name: &syn::Ident, fields: &Fields) -> quote::__rt::
         }
 
         impl<M: ComponentMgr> ComponentGroupTree for #group_name<M>{
-            type C = M;
-            fn new () -> #group_name<M>{
+            // type C = M;
+            // fn new () -> #group_name<M>{
+            //     #group_name{
+            //         #(#field_news)*
+            //         _group: ComponentGroup::new(),
+            //     }
+            // }
+        }
+
+        impl<M: ComponentMgr> std::default::Default for #group_name<M>{
+            fn default() -> Self {
                 #group_name{
                     #(#field_news)*
-                    _group: ComponentGroup::new(),
+                    _group: ComponentGroup::default(),
                 }
             }
         }
@@ -461,6 +470,9 @@ pub fn component_impl_create(name: &syn::Ident, fields: &Fields) -> quote::__rt:
 
             //递归设置parent
             pub fn set_parent(&mut self, parent: usize){
+                if self.id == 0 {
+                    return;
+                }
                 let mut groups = #g_name::<M>::from_usize_mut(self.groups);
                 {
                     let mut value = groups._group.get_mut(self.id);

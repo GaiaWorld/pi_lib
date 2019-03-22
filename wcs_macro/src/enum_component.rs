@@ -141,9 +141,15 @@ fn group_unnamed(enum_data: &EnumData) -> quote::__rt::TokenStream {
         }
 
         impl<M: ComponentMgr> ComponentGroupTree for #group_name<M>{
-            type C = M;
-            fn new () -> #group_name<M>{
-                #group_name{#(#arr_name1: #arr_group1::<M>::new()),*}
+            // type C = M;
+            // fn new () -> #group_name<M>{
+            //     #group_name{#(#arr_name1: #arr_group1::<M>::new()),*}
+            // }
+        }
+
+        impl<M: ComponentMgr> std::default::Default for #group_name<M>{
+            fn default() -> Self {
+                #group_name{#(#arr_name1: #arr_group1::<M>::default()),*}
             }
         }
 
@@ -179,7 +185,7 @@ fn variant_insert(variant: &Variant, name: &syn::Ident, id_name: &syn::Ident) ->
 fn variant_set_notify(variant: &Variant, pre: &syn::Ident) -> quote::__rt::TokenStream {
     let Variant{key, fields} = variant;
     let field = &fields.data[0];
-    let ComponentData {group_name, id_name: _, write_ref_name: _, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
+    let ComponentData {group_name: _, id_name: _, write_ref_name: _, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
 
     quote!{
         #pre::#key(w_ref) => {
@@ -195,7 +201,7 @@ fn variant_set_notify(variant: &Variant, pre: &syn::Ident) -> quote::__rt::Token
 fn variant_recursive_destroy(variant: &Variant, pre: &syn::Ident,) -> quote::__rt::TokenStream {
     let Variant{key, fields} = variant;
     let field = &fields.data[0];
-    let ComponentData {group_name:_, id_name: _, write_ref_name, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
+    let ComponentData {group_name:_, id_name: _, write_ref_name: _, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
     quote!{
         #pre::#key(w_ref) => w_ref.destroy()
     }
@@ -204,7 +210,7 @@ fn variant_recursive_destroy(variant: &Variant, pre: &syn::Ident,) -> quote::__r
 fn variant_recursive_setparent(variant: &Variant, pre: &syn::Ident,) -> quote::__rt::TokenStream {
     let Variant{key, fields} = variant;
     let field = &fields.data[0];
-    let ComponentData {group_name:_, id_name: _, write_ref_name, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
+    let ComponentData {group_name:_, id_name: _, write_ref_name: _, read_ref_name: _, is_must:_, c_type:_} = c_data(&field);
     quote!{
         #pre::#key(w_ref) => w_ref.set_parent(parent)
     }

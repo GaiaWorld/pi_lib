@@ -141,9 +141,9 @@ pub fn world(input: TokenStream) -> TokenStream {
         
     }
 
-    let field_names1 = field_names.clone();
+    // let field_names1 = field_names.clone();
     let field_names2 = field_names.clone();
-    let field_groups1 = field_groups.clone();
+    // let field_groups1 = field_groups.clone();
     let field_names8 = field_names.clone();
     let field_names9 = field_names.clone();
     let mgrs1 = mgrs.clone();
@@ -162,12 +162,12 @@ pub fn world(input: TokenStream) -> TokenStream {
         }
 
         impl ComponentMgr for #mgr_name{
-            fn new() -> Self{
-                #mgr_name{
-                    #(#res_new)*
-                    #(#field_names1: #field_groups1::new()),*
-                }
-            }
+            // fn new() -> Self{
+            //     #mgr_name{
+            //         #(#res_new)*
+            //         #(#field_names1: #field_groups1::new()),*
+            //     }
+            // }
         }
 
         impl #mgr_name {
