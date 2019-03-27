@@ -10,6 +10,16 @@ pub fn is_component(field: &syn::Field) -> bool{
     false
 }
 
+pub fn is_listen(field: &syn::Field) -> bool{
+    let attrs = &field.attrs;
+    for a in attrs.iter(){
+        if a.path.clone().into_token_stream().to_string().as_str() == "listen" {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn is_enum_component(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
@@ -150,6 +160,8 @@ impl Field {
             }else {
                 FieldMark::EnumComponent(c_n)
             }
+        }else if is_listen(&field){
+            FieldMark::ListenProperty
         }else {
             (FieldMark::Data)
         };
@@ -287,6 +299,7 @@ impl Fields {
 pub enum FieldMark{
     Component(ComponentData),
     EnumComponent(ComponentData),
+    ListenProperty,
     Data,
 }
 

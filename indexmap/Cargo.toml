@@ -1,0 +1,7 @@
+[package]
+name = "indexmap"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+time = {path="../time"}

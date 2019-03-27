@@ -15,7 +15,7 @@ pub fn impl_getter_setter_macro(ast: &syn::DeriveInput) -> quote::__rt::TokenStr
                 syn::Fields::Unnamed(f) => {
                     Fields::from(&f.unnamed, FieldsType::Unnamed, field_filter)
                 },
-                syn::Fields::Unit => panic!("xxxx")
+                syn::Fields::Unit => return quote! {},
             };
             impl_struct_set_get(name, &fields)
         },

@@ -14,7 +14,7 @@ pub fn impl_builder_macro(ast: &syn::DeriveInput) -> quote::__rt::TokenStream {
         syn::Data::Enum(e) => {
             enum_builder(name, &e.variants)
         },
-        syn::Data::Union(_) => panic!("xxxx"),
+        syn::Data::Union(_) => panic!("Union is not suported in builder"),
     }
 }
 
@@ -69,9 +69,15 @@ fn impl_struct_builder_new(name: &syn::Ident, fields: &syn::punctuated::Punctuat
         let name = field.ident.clone().unwrap();
         if !is_component(field) && !is_enum_component(field) && is_base_type(&field.ty){
             let ty = &field.ty;
-            field_init.push(quote!{#name: <#ty as std::default::Default>::default()});
+            match builder_attrs.build_ty {
+                BuildType::Value(v) => field_init.push(quote!{#name: #v}),
+                _ => field_init.push(quote!{#name: <#ty as std::default::Default>::default()}),
+            }
         }else {
-            field_init.push(quote!{#name: None});
+            match builder_attrs.build_ty {
+                BuildType::Value(v) => field_init.push(quote!{#name: #v}),
+                _ =>  field_init.push(quote!{#name: None}),
+            }
         }
     }
     quote!{
@@ -93,64 +99,83 @@ fn impl_struct_build(name: &syn::Ident, fields: &syn::punctuated::Punctuated<syn
         if !builder_attrs.is_export{
             if is_component(field){
                 let name = field.ident.clone().unwrap();
-                if builder_attrs.build_ty == BuildType::Builder {
-                    let ty = ident(&component_name(field));
-                    let field_builder_name = builder_name(ty.to_string());
-                    field_init.push(quote!{#name: {
-                        let v = Builder::build(#field_builder_name::new(), &mut group.#name);
-                        group.#name._group.insert(v, 0)
-                    }});
-                }else if builder_attrs.build_ty == BuildType::Default {
-                    let ty = ident(&component_name(field));
-                    field_init.push(quote!{#name: {
-                        let v = <#ty as std::default::Default>::default();
-                        group.#name._group.insert(v, 0)
-                    }});
-                }else {
-                    field_init.push(quote!{#name: 0});
+                match builder_attrs.build_ty {
+                    BuildType::Builder => {
+                        let ty = ident(&component_name(field));
+                        let field_builder_name = builder_name(ty.to_string());
+                        field_init.push(quote!{#name: {
+                            let v = Builder::build(#field_builder_name::new(), &mut group.#name);
+                            group.#name._group.insert(v, 0)
+                        }});
+                    },
+                    BuildType::Default => {
+                        let ty = ident(&component_name(field));
+                        field_init.push(quote!{#name: {
+                            let v = <#ty as std::default::Default>::default();
+                            group.#name._group.insert(v, 0)
+                        }});
+                    },
+                    BuildType::Value(v) => {
+                        field_init.push(quote!{#name: {
+                            let v = #v;
+                            group.#name._group.insert(v, 0)
+                        }});
+                    },
+                    BuildType::None => field_init.push(quote!{#name: 0}),
                 }
             }else if is_enum_component(field){
                 let name = field.ident.clone().unwrap();
                 let ty_id_name = id_name(component_name(field));
-                if builder_attrs.build_ty == BuildType::Builder {
-                    let ty = ident(&component_name(field));
-                    let field_builder_name = builder_name(ty.to_string());
-                    field_init.push(quote!{#name: {
-                        let v = Builder::build(#field_builder_name::new(), &mut group.#name);
-                        #ty_id_name::_set(&mut group.#name, v, 0)
-                    }});
-                }else if builder_attrs.build_ty == BuildType::Default{
-                    let ty = ident(&component_name(field));
-                    field_init.push(quote!{#name: {
-                        let v = <#ty as std::default::Default>::default();
-                        group.#name._group.insert(v, 0)
-                    }});
-                }else {
-                    field_init.push(quote!{#name: #ty_id_name::None});
+                match builder_attrs.build_ty {
+                    BuildType::Builder => {
+                        let ty = ident(&component_name(field));
+                        let field_builder_name = builder_name(ty.to_string());
+                        field_init.push(quote!{#name: {
+                            let v = Builder::build(#field_builder_name::new(), &mut group.#name);
+                            #ty_id_name::_set(&mut group.#name, v, 0)
+                        }});
+                    },
+                    BuildType::Default => {
+                        let ty = ident(&component_name(field));
+                        field_init.push(quote!{#name: {
+                            let v = <#ty as std::default::Default>::default();
+                            group.#name._group.insert(v, 0)
+                        }});
+                    },
+                    BuildType::Value(v) => {
+                        field_init.push(quote!{#name: {
+                            let v = #v;
+                            group.#name._group.insert(v, 0)
+                        }});
+                    },
+                    BuildType::None => field_init.push(quote!{#name: #ty_id_name::None}),
                 }
             }else {
                 let name = field.ident.clone().unwrap();
                 let ty = &field.ty;
-                field_init.push(quote!{#name: <#ty as std::default::Default>::default()});
+                match builder_attrs.build_ty {
+                    BuildType::Value(v) => {
+                        field_init.push(quote!{#name: #v});
+                    },
+                    _ => {
+                        field_init.push(quote!{#name: <#ty as std::default::Default>::default()});
+                    }
+                }
             }
             continue;
         }
         if is_component(field){
-            if builder_attrs.build_ty == BuildType::Builder {
-                field_init.push(struct_builder_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field))))
-            }else if builder_attrs.build_ty == BuildType::Default{
-                field_init.push(struct_default_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field))))
-            }else {
-                field_init.push(struct_c_field_builder(&field.ident.clone().unwrap()))
-            }
+            match builder_attrs.build_ty {
+                BuildType::Builder => field_init.push(struct_builder_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field)))),
+                BuildType::Default => field_init.push(struct_default_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field)))),
+                _ => field_init.push(struct_c_field_builder(&field.ident.clone().unwrap())),
+            };
         }else if is_enum_component(field){
-            if builder_attrs.build_ty == BuildType::Builder {
-                field_init.push(struct_builder_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field))))
-            }else if builder_attrs.build_ty == BuildType::Default{
-                field_init.push(struct_defualt_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field))))
-            }else {
-                field_init.push(struct_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field))))
-            }
+            match builder_attrs.build_ty {
+                BuildType::Builder => field_init.push(struct_builder_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field)))),
+                BuildType::Default => field_init.push(struct_defualt_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field)))),
+                _ => field_init.push(struct_enum_c_field_builder(&field.ident.clone().unwrap(), &ident(&component_name(field)))),
+            };
         }else if is_base_type(&field.ty) {
             let name = field.ident.clone().unwrap();
             field_init.push(quote!{#name: self.#name});
@@ -463,6 +488,11 @@ fn paser_builder_attrs(field: &syn::Field) -> BuilderAttrs{
                                                                     panic!("error attr : {}", word.to_string());
                                                                 }
                                                             },
+                                                            syn::Meta::NameValue(name_value) => {
+                                                                if name_value.ident.clone().to_string() == "value" {
+                                                                    b_attrs.build_ty = BuildType::Value(name_value.lit.clone());
+                                                                }
+                                                            },
                                                             _ => panic!("Builder inner attr is not meta"),
                                                         }
                                                     }
@@ -503,6 +533,7 @@ struct BuilderAttrs{
 enum BuildType{
     Builder,
     Default,
+    Value(syn::Lit),
     None
 }
 

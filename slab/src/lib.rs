@@ -6,16 +6,16 @@ use std::iter::IntoIterator;
 use std::ops::Drop;
 use std::ptr::write;
 
-pub trait IndexMap<T>{
-    fn len(&self) -> usize;
-    fn get(&self, key: usize) -> Option<&T>;
-    fn get_mut(&mut self, key: usize) -> Option<&mut T>;
-    fn contains(&self, key: usize) -> bool;
-    unsafe fn get_unchecked(&self, key: usize) -> &T;
-    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
-    fn insert(&mut self, val: T) -> usize;
-    fn remove(&mut self, key: usize) -> T;
-}
+// pub trait IndexMap<T>{
+//     fn len(&self) -> usize;
+//     fn get(&self, key: usize) -> Option<&T>;
+//     fn get_mut(&mut self, key: usize) -> Option<&mut T>;
+//     fn contains(&self, key: usize) -> bool;
+//     unsafe fn get_unchecked(&self, key: usize) -> &T;
+//     unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
+//     fn insert(&mut self, val: T) -> usize;
+//     fn remove(&mut self, key: usize) -> T;
+// }
 
 pub struct Slab<T> {
     entries: Vec<T>,// Chunk of memory
@@ -133,13 +133,14 @@ impl<T> Slab<T> {
     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
         return &mut self.entries[key - 1];
     }
+
     pub fn alloc(&mut self) -> (usize, &mut T){
-        let key = self.next;
-        (key +1, self.alloc_at(key))
+        let key = self.next + 1;
+        (key, self.alloc_at(key))
     }
 
-    #[inline]
-    fn alloc_at(&mut self, key: usize) -> &mut T {
+    pub fn alloc_at(&mut self, key: usize) -> &mut T {
+        let key = key - 1;
         let len = self.entries.len();
         self.len += 1;
         let t = if key == len {
@@ -164,13 +165,13 @@ impl<T> Slab<T> {
     }
 
     pub fn insert(&mut self, val: T) -> usize {
-        let key = self.next;
+        let key = self.next + 1;
         self.insert_at(key, val);
-        key + 1
+        key
     }
 
-    #[inline]
-    fn insert_at(&mut self, key: usize, val: T) {
+    pub fn insert_at(&mut self, key: usize, val: T) {
+        let key = key - 1;
         if key == self.entries.len() {
             self.entries.push(val);
             self.next = key + 1;
@@ -278,40 +279,40 @@ impl<T> Slab<T> {
     }
 }
 
-impl<T> IndexMap<T> for Slab<T>{
-    #[inline]
-    fn len(&self) -> usize{
-        self.len()
-    }
-    #[inline]
-    fn get(&self, key: usize) -> Option<&T> {
-        self.get(key)
-    }
-    #[inline]
-    fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        self.get_mut(key)
-    }
-    #[inline]
-    fn contains(&self, key: usize) -> bool{
-        self.contains(key)
-    }
-    #[inline]
-    unsafe fn get_unchecked(&self, key: usize) -> &T{
-        self.get_unchecked(key)
-    }
-    #[inline]
-    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T{
-        self.get_unchecked_mut(key)
-    }
-    #[inline]
-    fn insert(&mut self, val: T) -> usize{
-        self.insert(val)
-    }
-    #[inline]
-    fn remove(&mut self, key: usize) -> T{
-        self.remove(key)
-    }
-}
+// impl<T> IndexMap<T> for Slab<T>{
+//     #[inline]
+//     fn len(&self) -> usize{
+//         self.len()
+//     }
+//     #[inline]
+//     fn get(&self, key: usize) -> Option<&T> {
+//         self.get(key)
+//     }
+//     #[inline]
+//     fn get_mut(&mut self, key: usize) -> Option<&mut T> {
+//         self.get_mut(key)
+//     }
+//     #[inline]
+//     fn contains(&self, key: usize) -> bool{
+//         self.contains(key)
+//     }
+//     #[inline]
+//     unsafe fn get_unchecked(&self, key: usize) -> &T{
+//         self.get_unchecked(key)
+//     }
+//     #[inline]
+//     unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T{
+//         self.get_unchecked_mut(key)
+//     }
+//     #[inline]
+//     fn insert(&mut self, val: T) -> usize{
+//         self.insert(val)
+//     }
+//     #[inline]
+//     fn remove(&mut self, key: usize) -> T{
+//         self.remove(key)
+//     }
+// }
 
 impl<T> Drop for Slab<T>{
     fn drop(&mut self) {

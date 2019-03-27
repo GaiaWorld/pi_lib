@@ -10,9 +10,9 @@ pub fn impl_component_macro(ast: &syn::DeriveInput) -> quote::__rt::TokenStream 
         },
         syn::Data::Enum(_) => {
             //impl_enum()
-            panic!("xxxx")
+            panic!("Enum is not suported")
         },
-        syn::Data::Union(_) => panic!("xxxx"),
+        syn::Data::Union(_) => panic!("Union is not suported"),
     }
 }
 
@@ -25,7 +25,10 @@ pub fn impl_struct(name: &syn::Ident, s: &syn::DataStruct) -> quote::__rt::Token
         syn::Fields::Unnamed(f) => {
             Fields::from(&f.unnamed, FieldsType::Named, |_f, _i|{true})
         },
-        syn::Fields::Unit => panic!("xxxx")
+        syn::Fields::Unit => Fields{
+            ty: FieldsType::Unnamed,
+            data: Vec::new(),
+        }
     };
     arr.push(def_ref(name));
     arr.push(impl_struct_ref(name, &fields));
@@ -110,11 +113,11 @@ pub fn impl_ref(name: &syn::Ident, readref_impls: &Vec<quote::__rt::TokenStream>
                 let handlers = groups._group.get_handlers();
                 let mut elem = groups._group.get_mut(self.id);
                 if m(&mut elem) {
-                    notify(Event::ModifyField{
+                    handlers.notify_modify_field(ModifyFieldEvent{
                         id: self.id.clone(),
                         parent: elem.parent,
                         field: ""
-                    }, &handlers.borrow(), &mut self.mgr);
+                    }, &mut self.mgr);
                 }
             }
 
@@ -168,7 +171,7 @@ pub fn impl_struct_readref_fun(field: &Field) -> quote::__rt::TokenStream {
                 }
             }
         },
-        FieldMark::Data => {
+        _ => {
             quote! {
                 pub fn #get_name(&self) -> &#ty{
                     unsafe{&*(self.groups._group.get(self.id).#get_name() as *const #ty)}
@@ -217,11 +220,11 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     // }, &handlers1.borrow(), &mut self.mgr);
 
                     //修改事件
-                    notify(Event::ModifyField{
+                    handlers.notify_modify_field(ModifyFieldEvent{
                         id: self.id.clone(),
                         parent: parent,
                         field: #key_str
-                    }, &handlers.borrow(), &mut self.mgr);
+                    }, &mut self.mgr);
                 }
 
                 pub fn #get_name(&self) -> #read_ref_name<M>{
@@ -263,11 +266,11 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
 
                     let handlers = groups._group.get_handlers();
                     //修改事件
-                    notify(Event::ModifyField{
+                    handlers.notify_modify_field(ModifyFieldEvent{
                         id: self.id.clone(),
                         parent: parent,
                         field: #key_str
-                    }, &handlers.borrow(), &mut self.mgr);
+                    }, &mut self.mgr);
                 }
 
                 pub fn #get_name(&self) -> #read_ref_name<M>{
@@ -281,6 +284,35 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                 }
             }
         },
+        FieldMark::ListenProperty => {
+            quote! {
+                pub fn #set_name(&mut self, value: #ty){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    let parent = {
+                        let elem = groups._group.get_mut(self.id);
+                        elem.#set_name(value);
+                        elem.parent
+                    };
+                    //let parent = self.id.#set_name(value, groups);
+                    let handlers = groups.#key.clone();
+                    handlers.notify(ModifyFieldEvent{
+                        id: self.id.clone(),
+                        parent: parent,
+                        field: ""
+                    }, &mut self.mgr);
+                }
+
+                pub fn #get_name(&self) -> &#ty{
+                    let groups = #group::<M>::from_usize(self.groups);
+                    unsafe{&*(groups._group.get(self.id).#get_name() as *const #ty)}
+                }
+
+                pub fn #get_mut_name(&self) -> &mut #ty{
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    unsafe{&mut *(groups._group.get_mut(self.id).#get_mut_name() as *mut #ty)}
+                }
+            }
+        }
         FieldMark::Data => {
             quote! {
                 pub fn #set_name(&mut self, value: #ty){
@@ -292,11 +324,11 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     };
                     //let parent = self.id.#set_name(value, groups);
                     let handlers = groups._group.get_handlers();
-                    notify(Event::ModifyField{
+                    handlers.notify_modify_field(ModifyFieldEvent{
                         id: self.id.clone(),
                         parent: parent,
                         field: #key_str
-                    }, &handlers.borrow(), &mut self.mgr);
+                    }, &mut self.mgr);
                 }
 
                 pub fn #get_name(&self) -> &#ty{
@@ -323,6 +355,15 @@ pub fn component_group_tree(name: &syn::Ident, fields: &Fields) -> quote::__rt::
         let ComponentData {group_name, id_name:_, write_ref_name:_, read_ref_name:_, is_must:_, c_type:_} = match mark {
             FieldMark::Component(data)  => data,
             FieldMark::EnumComponent(data)  => data,
+            FieldMark::ListenProperty => {
+                field_types.push(quote! {
+                    pub #key: Handlers<#name, ModifyFieldEvent,  M>,
+                });
+                field_news.push(quote! {
+                    #key: Handlers::default(),
+                });
+                continue;
+            },
             _ => continue,
         };
         field_types.push(quote! {
@@ -459,13 +500,15 @@ pub fn component_impl_create(name: &syn::Ident, fields: &Fields) -> quote::__rt:
                     return;
                 }
                 let groups = #g_name::<M>::from_usize(self.groups);
+                let parent = groups._group.get(self.id).parent;
+                let handlers = groups._group.get_handlers();
+                handlers.notify_create(CreateEvent{id: self.id.clone(), parent: parent}, &mut self.mgr);
+
                 let parent = {
                     let value = groups._group.get(self.id);
                     #(#field_create_notifys)*
                     value.parent
                 };
-                let handlers = groups._group.get_handlers();
-                notify(Event::Create{id: self.id.clone(), parent: parent}, &handlers.borrow(), &mut self.mgr);
             }
 
             //递归设置parent
@@ -486,9 +529,9 @@ pub fn component_impl_create(name: &syn::Ident, fields: &Fields) -> quote::__rt:
                 if self.id > 0 {
                     let groups = #g_name::<M>::from_usize_mut(self.groups);
                     let parent = groups._group.get(self.id).parent.clone();
-                    let handlers = groups._group.get_handlers();
-                    notify(Event::Delete{id: self.id.clone(), parent: parent}, &handlers.borrow(), &mut self.mgr);
                     #destroy1
+                    let handlers = groups._group.get_handlers();
+                    handlers.notify_delete(DeleteEvent{id: self.id.clone(), parent: parent}, &mut self.mgr);
                     groups._group.remove(self.id);
                 }
             }
