@@ -29,5 +29,5 @@ members = [
   "future",
   "enum_default_macro",
   "pointer",
-  "indexmap",
+  "vecmap",
 ]

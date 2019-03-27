@@ -6,7 +6,7 @@ use std::ops::{Index, IndexMut};
 // use std::ops::Drop;
 // use std::ptr::write;
 
-// pub trait IndexMap<T>{
+// pub trait VecMap<T>{
 //     fn len(&self) -> usize;
 //     fn get(&self, index: usize) -> Option<&T>;
 //     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
@@ -18,25 +18,25 @@ use std::ops::{Index, IndexMut};
 // }
 
 
-pub struct IndexMap<T> {
+pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
     len: usize,// Number of Filled elements currently in the slab
 }
 
-impl<T> Default for IndexMap<T> {
+impl<T> Default for VecMap<T> {
     fn default() -> Self {
-        IndexMap::new()
+        VecMap::new()
     }
 }
 
-impl<T> IndexMap<T> {
+impl<T> VecMap<T> {
 
-    pub fn new() -> IndexMap<T> {
-        IndexMap::with_capacity(0)
+    pub fn new() -> VecMap<T> {
+        VecMap::with_capacity(0)
     }
 
-    pub fn with_capacity(capacity: usize) -> IndexMap<T> {
-        IndexMap {
+    pub fn with_capacity(capacity: usize) -> VecMap<T> {
+        VecMap {
             entries: Vec::with_capacity(capacity),
             len: 0,
         }
@@ -166,7 +166,7 @@ impl<T> IndexMap<T> {
         }
     }
 }
-impl<T> Index<usize> for IndexMap<T> {
+impl<T> Index<usize> for VecMap<T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &T {
@@ -174,7 +174,7 @@ impl<T> Index<usize> for IndexMap<T> {
     }
 }
 
-impl<T> IndexMut<usize> for IndexMap<T> {
+impl<T> IndexMut<usize> for VecMap<T> {
     fn index_mut(&mut self, index: usize) -> &mut T {
         unsafe{ self.get_unchecked_mut(index) }
     }
@@ -198,7 +198,7 @@ impl<T> IndexMut<usize> for IndexMap<T> {
 //     }
 // }
 
-impl<T> Debug for IndexMap<T> where T: Debug {
+impl<T> Debug for VecMap<T> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
         write!(fmt,
                "Slab {{ len: {}, entries:{:?} }}",
@@ -304,7 +304,7 @@ extern crate time;
 
 #[test]
 fn test(){
-    let mut map: IndexMap<u64> = IndexMap::new();
+    let mut map: VecMap<u64> = VecMap::new();
     for i in 1..71{
         map.insert(i as usize, i);
         println!("map------{:?}", map);
@@ -354,7 +354,7 @@ fn test(){
 #[test]
 fn test_eff(){
     use time::now_millis;
-    let mut map: IndexMap<u64> = IndexMap::new();
+    let mut map: VecMap<u64> = VecMap::new();
     let time = now_millis();
     for i in 1..1000001{
         map.insert(i as usize, i);
