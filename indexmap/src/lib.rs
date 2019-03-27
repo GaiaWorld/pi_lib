@@ -1,338 +1,184 @@
 
-// use std::mem::{size_of, transmute_copy, needs_drop, replace};
-// use std::fmt::{Debug, Formatter, Result as FResult};
-// use std::ops::{Index, IndexMut};
+use std::mem::{replace};
+use std::fmt::{Debug, Formatter, Result as FResult};
+use std::ops::{Index, IndexMut};
 // use std::iter::IntoIterator;
 // use std::ops::Drop;
 // use std::ptr::write;
 
-// // pub trait IndexMap<T>{
-// //     fn len(&self) -> usize;
-// //     fn get(&self, key: usize) -> Option<&T>;
-// //     fn get_mut(&mut self, key: usize) -> Option<&mut T>;
-// //     fn contains(&self, key: usize) -> bool;
-// //     unsafe fn get_unchecked(&self, key: usize) -> &T;
-// //     unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
-// //     fn insert(&mut self, val: T) -> usize;
-// //     fn remove(&mut self, key: usize) -> T;
-// // }
-
-
-// pub struct IndexMap<T> {
-//     entries: Vec<Option<T>>,// Chunk of memory
-//     len: usize,// Number of Filled elements currently in the slab
+// pub trait IndexMap<T>{
+//     fn len(&self) -> usize;
+//     fn get(&self, index: usize) -> Option<&T>;
+//     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
+//     fn contains(&self, index: usize) -> bool;
+//     unsafe fn get_unchecked(&self, index: usize) -> &T;
+//     unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T;
+//     fn insert(&mut self, val: T) -> usize;
+//     fn remove(&mut self, index: usize) -> T;
 // }
 
-// impl<T> Default for IndexMap<T> {
-//     fn default() -> Self {
-//         IndexMap::new()
-//     }
-// }
 
-// impl<T> IndexMap<T> {
+pub struct IndexMap<T> {
+    entries: Vec<Option<T>>,// Chunk of memory
+    len: usize,// Number of Filled elements currently in the slab
+}
 
-//     pub fn new() -> IndexMap<T> {
-//         IndexMap::with_capacity(0)
-//     }
+impl<T> Default for IndexMap<T> {
+    fn default() -> Self {
+        IndexMap::new()
+    }
+}
 
-//     pub fn with_capacity(capacity: usize) -> IndexMap<T> {
-//         IndexMap {
-//             entries: Vec::with_capacity(capacity),
-//             len: 0,
-//         }
-//     }
+impl<T> IndexMap<T> {
 
-//     pub fn capacity(&self) -> usize {
-//         self.entries.capacity()
-//     }
+    pub fn new() -> IndexMap<T> {
+        IndexMap::with_capacity(0)
+    }
 
-//     // pub fn reserve(&mut self, additional: usize) {
-//     //     if self.capacity() - self.len >= additional {
-//     //         return;
-//     //     }
-//     //     let need_add = self.len + additional - self.entries.len();
-//     //     self.entries.reserve(need_add);
-//     //     self.vacancy_sign.reserve(need_add/usize_size());
-//     // }
+    pub fn with_capacity(capacity: usize) -> IndexMap<T> {
+        IndexMap {
+            entries: Vec::with_capacity(capacity),
+            len: 0,
+        }
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.entries.capacity()
+    }
+
+    // pub fn reserve(&mut self, additional: usize) {
+    //     if self.capacity() - self.len >= additional {
+    //         return;
+    //     }
+    //     let need_add = self.len + additional - self.entries.len();
+    //     self.entries.reserve(need_add);
+    //     self.vacancy_sign.reserve(need_add/usize_size());
+    // }
 
     
-//     // pub fn reserve_exact(&mut self, additional: usize) {
-//     //     if self.capacity() - self.len >= additional {
-//     //         return;
-//     //     }
-//     //     let need_add = self.len + additional - self.entries.len();
-//     //     self.entries.reserve_exact(need_add);
-//     //     self.vacancy_sign.reserve(need_add/usize_size());
-//     // }
+    // pub fn reserve_exact(&mut self, additional: usize) {
+    //     if self.capacity() - self.len >= additional {
+    //         return;
+    //     }
+    //     let need_add = self.len + additional - self.entries.len();
+    //     self.entries.reserve_exact(need_add);
+    //     self.vacancy_sign.reserve(need_add/usize_size());
+    // }
 
-//     // pub fn shrink_to_fit(&mut self) {
-//     //     self.entries.shrink_to_fit();
-//     //     self.vacancy_sign.shrink_to_fit();
-//     // }
+    // pub fn shrink_to_fit(&mut self) {
+    //     self.entries.shrink_to_fit();
+    //     self.vacancy_sign.shrink_to_fit();
+    // }
 
-//     pub fn clear(&mut self) {
-//         self.entries.clear();
-//         self.len = 0;
-//     }
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.len = 0;
+    }
 
-//     #[inline]
-//     pub fn len(&self) -> usize {
-//         self.len
-//     }
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
 
-//     #[inline]
-//     pub fn is_empty(&self) -> bool {
-//         self.len == 0
-//     }
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 
-//     // pub fn iter(&self) -> SlabIter<T> {
-//     //     SlabIter {
-//     //         entries: &self.entries,
-//     //         signs: &self.vacancy_sign,
-//     //         curr_index: 0,
-//     //         len: self.len,
-//     //         curr_len: 0,
-//     //     }
-//     // }
+    // pub fn iter(&self) -> SlabIter<T> {
+    //     SlabIter {
+    //         entries: &self.entries,
+    //         signs: &self.vacancy_sign,
+    //         curr_index: 0,
+    //         len: self.len,
+    //         curr_len: 0,
+    //     }
+    // }
 
-//     // pub fn iter_mut(&mut self) -> SlabIterMut<T> {
-//     //     SlabIterMut {
-//     //         entries: &mut self.entries as *mut Vec<T>,
-//     //         signs: &mut self.vacancy_sign,
-//     //         curr_index: 0,
-//     //         len: self.len,
-//     //         curr_len: 0,
-//     //     }
-//     // }
+    // pub fn iter_mut(&mut self) -> SlabIterMut<T> {
+    //     SlabIterMut {
+    //         entries: &mut self.entries as *mut Vec<T>,
+    //         signs: &mut self.vacancy_sign,
+    //         curr_index: 0,
+    //         len: self.len,
+    //         curr_len: 0,
+    //     }
+    // }
 
-//     pub fn get(&self, key: usize) -> Option<&T> {
-//         if key == 0 || key > self.entries.len(){
-//             return None;
-//         }
-//         match &self.entries[key - 1] {
-//             Some(v) => Some(v),
-//             None => None,
-//         }
-//     }
+    pub fn get(&self, index: usize) -> Option<&T> {
+        if index == 0 || index > self.entries.len(){
+            return None;
+        }
+        match &self.entries[index - 1] {
+            Some(v) => Some(v),
+            None => None,
+        }
+    }
 
-//     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-//         if key == 0 || key > self.entries.len(){
-//             return None;
-//         }
-//         match &mut self.entries[key - 1] {
-//             Some(v) => Some(v),
-//             None => None,
-//         }
-        
-//     }
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        if index == 0 || index > self.entries.len(){
+            return None;
+        }
+        match &mut self.entries[index - 1] {
+            Some(v) => Some(v),
+            None => None,
+        }
+    }
 
-//     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-//         return &self.entries[key - 1];
-//     }
+    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
+        self.entries[index - 1].as_ref().unwrap()
+    }
 
-//     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-//         return &mut self.entries[key - 1];
-//     }
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+        self.entries[index - 1].as_mut().unwrap()
+    }
 
-//     pub fn alloc(&mut self) -> (usize, &mut T){
-//         let key = self.next + 1;
-//         (key, self.alloc_at(key))
-//     }
+    pub fn insert(&mut self, index:usize, val: T) {
+        let index = index - 1;
+        let len = self.entries.len();
+        if index >= self.entries.len() {
+            for _ in 0..len - index {
+                self.entries.push(None);
+            }
+            self.entries.push(Some(val));
+        }else {
+            self.entries[index] = Some(val);
+        }
+        self.len += 1;
+    }
 
-//     pub fn alloc_at(&mut self, key: usize) -> &mut T {
-//         let key = key - 1;
-//         let len = self.entries.len();
-//         self.len += 1;
-//         let t = if key == len {
-//             if len == self.capacity() {
-//                 self.entries.reserve(1);
-//             }
-//             unsafe{self.entries.set_len(len + 1)};
-//             self.next = key + 1;
-//             let s_index = key%usize_size();
-//             if s_index == 0{
-//                 self.vacancy_sign.push(usize::max_value() - 1);
-//             }else {
-//                 one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
-//             }
-//             &mut self.entries[key]
-//         } else {
-//             self.next = unsafe{*(&self.entries[key] as *const T as usize as *const usize)}.clone();
-//             self.one2zero(key);
-//             &mut self.entries[key]
-//         };
-//         t
-//     }
+    pub unsafe fn remove(&mut self, index: usize) -> T {
+        self.len -= 1;
+        replace(&mut self.entries[index - 1], None).unwrap()
+    }
 
-//     pub fn insert(&mut self, val: T) -> usize {
-//         let key = self.next + 1;
-//         self.insert_at(key, val);
-//         key
-//     }
+    pub unsafe fn replace(&mut self, index: usize, value: T) -> T {
+        replace(&mut self.entries[index - 1], Some(value)).unwrap()
+    }
 
-//     pub fn insert_at(&mut self, key: usize, val: T) {
-//         let key = key - 1;
-//         if key == self.entries.len() {
-//             self.entries.push(val);
-//             self.next = key + 1;
-//             let s_index = key%usize_size();
-//             if s_index == 0{
-//                 self.vacancy_sign.push(usize::max_value() - 1);
-//             }else {
-//                 one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
-//             }
-//         } else {
-//             self.next = unsafe{*(&mut self.entries[key] as *mut T as usize as *mut usize)};
-//             unsafe{write(&mut self.entries[key] as *mut T, val)};
-//             self.one2zero(key);
-           
-//         }
-//         self.len += 1;
-//     }
+    pub fn contains(&mut self, index: usize) -> bool {
+        if index == 0 || index > self.entries.len(){
+            return false;
+        }
+        match &self.entries[index - 1] {
+            Some(_v) => true,
+            None => false,
+        }
+    }
+}
+impl<T> Index<usize> for IndexMap<T> {
+    type Output = T;
 
-//     pub fn remove(&mut self, key: usize) -> T {
-//         let key1 = key - 1;
-//         let r: T = unsafe{ transmute_copy(&self.entries[key1]) };
-//         unsafe{*(&mut self.entries[key1] as *mut T as usize as *mut usize) = self.next };
-//         self.next = key1;
-//         self.zero2one(key1);
-//         self.len -= 1;
-//         r
-//     }
+    fn index(&self, index: usize) -> &T {
+        unsafe{ self.get_unchecked(index) }
+    }
+}
 
-//     pub unsafe fn replace(&mut self, key: usize, value: T) -> T {
-//         replace(&mut self.entries[key - 1], value)
-//     }
-
-//     pub fn contains(&self, key: usize) -> bool {
-//         if key == 0 || key > self.entries.len() || self.is_one(key - 1) {
-//             false
-//         } else{
-//             true
-//         }
-//     }
-
-//     // pub fn retain<F>(&mut self, mut f: F) where F: FnMut(usize, &mut T) -> bool {
-//     //     for i in 0..self.entries.len() {
-//     //         let keep = match self.entries[i] {
-//     //             Entry::Occupied(ref mut v) => f(i, v),
-//     //             _ => true,
-//     //         };
-
-//     //         if !keep {
-//     //             self.remove(i);
-//     //         }
-//     //     }
-//     // }
-
-//     #[inline]
-//     fn zero2one(&mut self, index: usize){
-//         zero2one(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
-//     }
-
-//     #[inline]
-//     fn one2zero(&mut self, index: usize){
-//         one2zero(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
-//     }
-
-//     #[inline]
-//     fn is_one(&self, key: usize) -> bool{
-//         let signs = unsafe {self.vacancy_sign.get_unchecked(key/usize_size())};
-//         is_one(signs, key%usize_size())
-//     }
-
-//     fn clear_entries(&mut self){
-//         if needs_drop::<T>(){
-//             let count = 0;
-//             if self.entries.len() == 0 {
-//                 return;
-//             }
-//             let index = self.entries.len() - 1;
-//             let mut index1 = index/usize_size();
-//             let mut index2 = index%usize_size();
-//             loop {
-//                 let signs = self.vacancy_sign[index1].clone();
-//                 let diff = usize_size() - index2 - 1;
-//                 let signs =  signs<<diff;
-//                 let len = self.entries.len();
-//                 if signs == usize::max_value()<<diff {  //如果全是空位， 不需要drop
-//                     unsafe{ self.entries.set_len(len - (index2 + 1))};
-//                 }else{ //否则找到容器尾部的非空位， 移除元素（移除即drop）
-//                     let i = (!signs).leading_zeros() as usize;
-//                     unsafe{ self.entries.set_len(len - i)};
-//                     self.entries.pop();
-//                     if index2 - i != 0{
-//                         index2 = index2 - i - 1;
-//                         continue;
-//                     }
-//                 }
-//                 if index1 == 0 {
-//                     return;
-//                 }
-//                 index1 -= 1;
-//                 index2 = usize_size() - 1;
-//                 if count == self.len(){
-//                     break;
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// impl<T> IndexMap<T> for Slab<T>{
-//     #[inline]
-//     fn len(&self) -> usize{
-//         self.len()
-//     }
-//     #[inline]
-//     fn get(&self, key: usize) -> Option<&T> {
-//         self.get(key)
-//     }
-//     #[inline]
-//     fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-//         self.get_mut(key)
-//     }
-//     #[inline]
-//     fn contains(&self, key: usize) -> bool{
-//         self.contains(key)
-//     }
-//     #[inline]
-//     unsafe fn get_unchecked(&self, key: usize) -> &T{
-//         self.get_unchecked(key)
-//     }
-//     #[inline]
-//     unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T{
-//         self.get_unchecked_mut(key)
-//     }
-//     #[inline]
-//     fn insert(&mut self, val: T) -> usize{
-//         self.insert(val)
-//     }
-//     #[inline]
-//     fn remove(&mut self, key: usize) -> T{
-//         self.remove(key)
-//     }
-// }
-
-// impl<T> Drop for Slab<T>{
-//     fn drop(&mut self) {
-//         self.clear_entries();
-//     }
-// }
-
-// impl<T> Index<usize> for Slab<T> {
-//     type Output = T;
-
-//     fn index(&self, key: usize) -> &T {
-//         unsafe{ self.get_unchecked(key) }
-//     }
-// }
-
-// impl<T> IndexMut<usize> for Slab<T> {
-//     fn index_mut(&mut self, key: usize) -> &mut T {
-//         unsafe{ self.get_unchecked_mut(key) }
-//     }
-// }
+impl<T> IndexMut<usize> for IndexMap<T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        unsafe{ self.get_unchecked_mut(index) }
+    }
+}
 
 // impl<'a, T> IntoIterator for &'a Slab<T> {
 //     type Item = (usize, &'a T);
@@ -352,24 +198,14 @@
 //     }
 // }
 
-// impl<T> Debug for Slab<T> where T: Debug {
-//     fn fmt(&self, fmt: &mut Formatter) -> FResult {
-//         //let vacancy_sign = Vec<()>;
-//         let mut s = String::from("[");
-//         for v in self.vacancy_sign.iter(){
-//             s += &format!("{:b}", v);
-//             s += ",";
-//         }
-//         s += "]";
-//         write!(fmt,
-//                "Slab {{ len: {}, cap: {}, next: {}, vacancy_sign: {}, entries:{:?} }}",
-//                self.len,
-//                self.capacity(),
-//                self.next,
-//                s,
-//                self.entries)
-//     }
-// }
+impl<T> Debug for IndexMap<T> where T: Debug {
+    fn fmt(&self, fmt: &mut Formatter) -> FResult {
+        write!(fmt,
+               "Slab {{ len: {}, entries:{:?} }}",
+               self.len,
+               self.entries)
+    }
+}
 
 // pub struct SlabIter<'a, T: 'a> {
 //     signs: &'a Vec<usize>,
@@ -406,7 +242,7 @@
 // }
 
 
-// // ===== Iter =====
+// ===== Iter =====
 
 // impl<'a, T> Iterator for SlabIter<'a, T> {
 //     type Item = (usize, &'a T);
@@ -462,182 +298,89 @@
 //     }
 // }
 
-// #[inline]
-// fn is_one(i: &usize, index: usize) -> bool {
-//     ((i >> index) & 1 == 1)
-// }
 
-// #[inline]
-// fn zero2one(i: &mut usize, index: usize){
-//     (*i) = *i | (1 << index);
-// }
+#[cfg(test)]
+extern crate time;
 
-// #[inline]
-// fn one2zero(i: &mut usize, index: usize){
-//     (*i) = *i - (1 << index);
-// }
+#[test]
+fn test(){
+    let mut map: IndexMap<u64> = IndexMap::new();
+    for i in 1..71{
+        map.insert(i as usize, i);
+        println!("map------{:?}", map);
+    }
 
-// #[inline]
-// fn usize_size() -> usize{
-//     size_of::<usize>() * 8
-// }
+    unsafe {map.remove(30)};
+    println!("r 30------{:?}", map);
 
-// // 返回指定的数字中低位第一个0的位置
-// #[inline]
-// fn find_zero(i:usize) -> usize {
-// 	let a = !i;
-//     a.trailing_zeros() as usize
-// }
+    unsafe {map.remove(31)};
+    println!("r 31------{:?}", map);
 
-// #[cfg(test)]
-// extern crate time;
+    unsafe {map.remove(69)};
+    println!("r 69------{:?}", map);
 
-// #[test]
-// fn test(){
-//     let mut slab: Slab<u64> = Slab::new();
-//     for i in 1..71{
-//         slab.insert(i);
-//         println!("slab------{:?}", slab);
-//     }
+    unsafe {map.remove(70)};
+    println!("r 70------{:?}", map);
 
-//     slab.remove(30);
-//     println!("r 30------{:?}", slab);
+    assert_eq!(map.contains(0), false);
+    assert_eq!(map.contains(1), true);
+    assert_eq!(map.contains(71), true);
+    assert_eq!(map.contains(72), false);
 
-//     slab.remove(31);
-//     println!("r 31------{:?}", slab);
-
-//     slab.remove(69);
-//     println!("r 69------{:?}", slab);
-
-//     slab.remove(70);
-//     println!("r 70------{:?}", slab);
-
-//     {
-//         let mut it = slab.iter_mut();
-//         println!("itermut start-----------------------------------------------");
-//         loop {
-//             match it.next() {
-//                 Some(n) => {
-//                     print!("{:?},", n);
-//                 },
-//                 None => break,
-//             };
-//         }
-//         println!("itermut end-----------------------------------------------");
-//     }
-
-//     slab.insert(70);
-//     println!("i 70------{:?}", slab);
-
-//     slab.insert(60);
-//     println!("i 60------{:?}", slab);
-
-//     slab.insert(31);
-//     println!("i 31------{:?}", slab);
-
-//     slab.insert(30);
-//     println!("i 31------{:?}", slab);
-
-//     slab.insert(71);
-//     println!("i 71------{:?}", slab);
-
-//     assert_eq!(slab.contains(0), false);
-//     assert_eq!(slab.contains(1), true);
-//     assert_eq!(slab.contains(71), true);
-//     assert_eq!(slab.contains(72), false);
-
-//     assert_eq!(slab.get(0), None);
-//     assert_eq!(slab.get(1), Some(&1));
-//     assert_eq!(slab.get(50), Some(&50));
-//     assert_eq!(slab.get(70), Some(&70));
-//     assert_eq!(slab.get(72), None);
+    assert_eq!(map.get(0), None);
+    assert_eq!(map.get(1), Some(&1));
+    assert_eq!(map.get(50), Some(&50));
+    assert_eq!(map.get(70), Some(&70));
+    assert_eq!(map.get(72), None);
 
 
-//     assert_eq!(slab.get_mut(0), None);
-//     assert_eq!(slab.get_mut(64), Some(&mut 64));
-//     assert_eq!(slab.get_mut(30), Some(&mut 30));
-//     assert_eq!(slab.get_mut(20), Some(&mut 20));
-//     assert_eq!(slab.get_mut(75), None);
+    assert_eq!(map.get_mut(0), None);
+    assert_eq!(map.get_mut(64), Some(&mut 64));
+    assert_eq!(map.get_mut(30), Some(&mut 30));
+    assert_eq!(map.get_mut(20), Some(&mut 20));
+    assert_eq!(map.get_mut(75), None);
 
-//     assert_eq!(unsafe{slab.get_unchecked(2)}, &2);
-//     assert_eq!(unsafe{slab.get_unchecked(9)}, &9);
-//     assert_eq!(unsafe{slab.get_unchecked(55)}, &55);
-//     assert_eq!(unsafe{slab.get_unchecked(60)}, &60);
+    assert_eq!(unsafe{map.get_unchecked(2)}, &2);
+    assert_eq!(unsafe{map.get_unchecked(9)}, &9);
+    assert_eq!(unsafe{map.get_unchecked(55)}, &55);
+    assert_eq!(unsafe{map.get_unchecked(60)}, &60);
 
-//     assert_eq!(unsafe{slab.get_unchecked_mut(31)}, &mut 31);
-//     assert_eq!(unsafe{slab.get_unchecked_mut(44)}, &mut 44);
-//     assert_eq!(unsafe{slab.get_unchecked_mut(33)}, &mut 33);
-//     assert_eq!(unsafe{slab.get_unchecked_mut(7)}, &mut 7);
+    assert_eq!(unsafe{map.get_unchecked_mut(31)}, &mut 31);
+    assert_eq!(unsafe{map.get_unchecked_mut(44)}, &mut 44);
+    assert_eq!(unsafe{map.get_unchecked_mut(33)}, &mut 33);
+    assert_eq!(unsafe{map.get_unchecked_mut(7)}, &mut 7);
+}
 
-//     let mut it = slab.iter();
-//     println!("iter start-----------------------------------------------");
-//     loop {
-//         match it.next() {
-//             Some(n) => {
-//                 print!("{:?},", n);
-//             },
-//             None => break,
-//         };
-//     }
-//     println!("iter end-----------------------------------------------");
-// }
+#[test]
+fn test_eff(){
+    use time::now_millis;
+    let mut map: IndexMap<u64> = IndexMap::new();
+    let time = now_millis();
+    for i in 1..1000001{
+        map.insert(i as usize, i);
+    }
+    let time1 = now_millis();
+    println!("insert time-----------------------------------------------{}", time1 - time);
+
+    for i in 1..1000001{
+        unsafe { map.remove(i) };
+    }
+    let time2 = now_millis();
+    println!("remove time-----------------------------------------------{}", time2 - time1);
+
+    let mut v = Vec::new();
+
+    let time3 = now_millis();
+    for i in 1..1000001{
+        v.push(i);
+    }
+
+    let time4 = now_millis();
+    println!("insert vec time-----------------------------------------------{}", time4 - time3);
+}
 
 // #[test]
-// fn test_alloc(){
-//     let mut slab: Slab<u64> = Slab::new();
-//     for i in 1..71{
-//         let r = slab.alloc();
-//         *r.1 = i;
-//     }
-//     println!("slab ------{:?}", slab);
+// fn m(){
+//     //let a: usize = (usize::max_value() - 1) << 1;
+//     println!("xxxxxxxxxxxxxxxxxxxxxx");
 // }
-
-
-
-// #[test]
-// fn test_eff(){
-//     use time::now_millis;
-//     let mut slab: Slab<u64> = Slab::new();
-//     let time = now_millis();
-//     for i in 0..1000000{
-//         let r = slab.alloc();
-//         *r.1 = i;
-//     }
-//     println!("alloc time-----------------------------------------------{}", now_millis() - time);
-//     let mut slab: Slab<u64> = Slab::new();
-//     let time = now_millis();
-//     for i in 0..1000000{
-//         slab.insert(i);
-//     }
-//     let time1 = now_millis();
-//     println!("insert time-----------------------------------------------{}", time1 - time);
-
-//     for i in 1..1000001{
-//         slab.remove(i);
-//     }
-//     let time2 = now_millis();
-//     println!("remove time-----------------------------------------------{}", time2 - time1);
-
-//     let time = now_millis();
-//     for i in 0..1000000{
-//         slab.insert(i);
-//     }
-//     let time1 = now_millis();
-//     println!("insert1 time-----------------------------------------------{}", time1 - time);
-
-//     let mut v = Vec::new();
-
-//     let time3 = now_millis();
-//     for i in 1..1000001{
-//         v.push(i);
-//     }
-
-//     let time4 = now_millis();
-//     println!("insert vec time-----------------------------------------------{}", time4 - time3);
-// }
-
-// // #[test]
-// // fn m(){
-// //     //let a: usize = (usize::max_value() - 1) << 1;
-// //     println!("xxxxxxxxxxxxxxxxxxxxxx");
-// // }

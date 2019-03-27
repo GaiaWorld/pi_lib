@@ -119,7 +119,7 @@ pub struct A{
     pub y: usize,
 }
 #[cfg(test)]
-rc!(RCA, A, ASlab);
+rc!(RCA, A, a_slab);
 
 #[test]
 fn test(){
