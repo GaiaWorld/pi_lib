@@ -39,7 +39,7 @@ fn id_unnamed(enum_data: &EnumData) -> quote::__rt::TokenStream {
 
         impl Default for #id_name{
             fn default() -> #id_name {
-                #id_name::#key(0)
+                #id_name::None
             }
         }
     }
