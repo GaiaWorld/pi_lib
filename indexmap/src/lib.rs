@@ -106,17 +106,23 @@
 //     // }
 
 //     pub fn get(&self, key: usize) -> Option<&T> {
-//         if key == 0 || key > self.entries.len() || self.is_one(key - 1){
+//         if key == 0 || key > self.entries.len(){
 //             return None;
 //         }
-//         return Some(&self.entries[key - 1]);
+//         match &self.entries[key - 1] {
+//             Some(v) => Some(v),
+//             None => None,
+//         }
 //     }
 
 //     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-//         if key == 0 || key > self.entries.len() || self.is_one(key - 1){
+//         if key == 0 || key > self.entries.len(){
 //             return None;
 //         }
-//         return Some(&mut self.entries[key - 1])
+//         match &mut self.entries[key - 1] {
+//             Some(v) => Some(v),
+//             None => None,
+//         }
         
 //     }
 
