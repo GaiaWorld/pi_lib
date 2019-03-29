@@ -269,6 +269,10 @@ impl<T, C: ComponentMgr> SingleCase<T, C> {
             handlers: Handlers::default(),
         }
     }
+
+    pub fn get_handlers(&self) -> Handlers<T, SingleModifyEvent, C> {
+        self.handlers.clone()
+    }
 }
 
 impl<T, C: ComponentMgr> Deref for SingleCase<T, C> {

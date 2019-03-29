@@ -12,8 +12,8 @@ extern crate bon;
 extern crate lazy_static;
 
 extern crate flame;
-#[macro_use]
-extern crate flamer;
+// #[macro_use]
+// extern crate flamer;
 
 use std::ops::Deref;
 use std::convert::From;
@@ -21,7 +21,6 @@ use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 use std::sync::{Arc, Weak};
 use std::sync::RwLock;
-use std::marker::PhantomData;
 
 use fnv::FnvHashMap;
 
@@ -33,8 +32,20 @@ lazy_static! {
 }
 
 // 原子字符串
-#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Atom(Arc<(String, u64)>);
+
+impl Hash for Atom {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        h.write_u64(((self.0).1).clone())
+    }
+}
+
+impl AsRef<str> for Atom {
+    fn as_ref(&self) -> &str{
+        (*self.0).0.as_ref()
+    }
+}
 
 impl Deref for Atom {
 	type Target = String;
@@ -379,7 +390,7 @@ fn test_atom() {
     //let w = Arc::downgrade(&xx);
     for _ in 0..1000{
         for _ in 0..1000{
-            xx.clone();
+            let _a = xx.clone();
         }
     }
     println!("clone {}", time::now_millis() - time);

@@ -120,6 +120,9 @@ pub fn get_name_mut(name: &str) -> syn::Ident {
 pub fn add_name(name: &str) -> syn::Ident {
     ident(&("add_".to_string() + name))
 }
+pub fn add_with_context_name(name: &str) -> syn::Ident {
+    ident(&("add_".to_string() + name + "_with_context"))
+}
 
 // pub fn create_name(name: &str) -> syn::Ident {
 //     ident(&("create_".to_string() + name))
