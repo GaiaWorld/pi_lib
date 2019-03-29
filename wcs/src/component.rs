@@ -259,7 +259,7 @@ pub struct SingleModifyEvent {
 
 pub struct SingleCase<T, C: ComponentMgr>{
     value: T,
-    handlers: Handlers<T, SingleModifyEvent, C>, //单例组件只有修改事件
+    pub handlers: Handlers<T, SingleModifyEvent, C>, //单例组件只有修改事件
 }
 
 impl<T, C: ComponentMgr> SingleCase<T, C> {
