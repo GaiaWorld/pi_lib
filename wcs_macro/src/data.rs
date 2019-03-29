@@ -20,6 +20,16 @@ pub fn is_listen(field: &syn::Field) -> bool{
     false
 }
 
+pub fn is_single_component(field: &syn::Field) -> bool{
+    let attrs = &field.attrs;
+    for a in attrs.iter(){
+        if a.path.clone().into_token_stream().to_string().as_str() == "single_component" {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn is_enum_component(field: &syn::Field) -> bool{
     let attrs = &field.attrs;
     for a in attrs.iter(){
@@ -28,6 +38,17 @@ pub fn is_enum_component(field: &syn::Field) -> bool{
         }
     }
     false
+}
+
+pub fn is_base_type(ty: &syn::Type) -> bool{
+    let s = ty.into_token_stream().to_string();
+    let s = s.as_str();
+
+    if s == "bool" || s == "usize" || s == "isize" || s == "u8" || s == "u16" || s == "u32" || s == "u64" || s == "u128" || s == "i8" || s == "i16" || s == "i32" || s == "i64" || s == "i128" || s == "&str" || s == "String" || s == "&'static str" || s == "f32" || s == "f64" {
+        return true;
+    }else {
+        return false;
+    }
 }
 
 pub fn component_name(field: &syn::Field) -> String{
@@ -62,15 +83,6 @@ pub fn is_must(field: &syn::Field) -> bool{
         }
     }
     false
-}
-
-pub fn is_base_type(ty: &syn::Type) -> bool{
-    let s = ty.clone().into_token_stream().to_string();
-    if &s =="bool" || &s =="String" || &s =="f32" || &s =="f64" || &s =="i8" || &s =="i16" || &s =="i32" || &s =="i64" || &s =="i128" || &s =="u8" || &s =="u16" || &s =="u32" || &s =="u64" || &s =="u128" || &s =="usize" || &s =="isize" {
-        true
-    }else {
-        false
-    }
 }
 
 pub fn ident(sym: &str) -> syn::Ident {
@@ -162,6 +174,8 @@ impl Field {
             }
         }else if is_listen(&field){
             FieldMark::ListenProperty
+        }else if is_single_component(&field){
+            FieldMark::SingleComponent
         }else {
             (FieldMark::Data)
         };
@@ -300,6 +314,7 @@ pub enum FieldMark{
     Component(ComponentData),
     EnumComponent(ComponentData),
     ListenProperty,
+    SingleComponent,
     Data,
 }
 

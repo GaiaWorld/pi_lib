@@ -253,6 +253,70 @@ impl<T: Sized, C: ComponentMgr> ComponentGroup<T, C>{
     // }
 }
 
+pub struct SingleModifyEvent {
+    pub field: &'static str,
+}
+
+pub struct SingleCase<T, C: ComponentMgr>{
+    value: T,
+    handlers: Handlers<T, SingleModifyEvent, C>, //单例组件只有修改事件
+}
+
+impl<T, C: ComponentMgr> SingleCase<T, C> {
+    pub fn new(value: T) -> Self{
+        SingleCase{
+            value,
+            handlers: Handlers::default(),
+        }
+    }
+}
+
+impl<T, C: ComponentMgr> Deref for SingleCase<T, C> {
+    type Target=T;
+    fn deref(&self) -> &Self::Target{
+        &self.value
+    }
+}
+
+impl<T, C: ComponentMgr> DerefMut for SingleCase<T, C> {
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.value
+    }
+}
+
+pub struct SingleCaseWriteRef<'a, T, C: ComponentMgr> {
+    mgr: usize,
+    value: &'a mut SingleCase<T, C>,
+}
+
+impl<'a, T, C: ComponentMgr> Deref for SingleCaseWriteRef<'a, T, C> {
+    type Target=SingleCase<T, C>;
+    fn deref(&self) -> &Self::Target{
+        &self.value
+    }
+}
+
+impl<'a, T, C: ComponentMgr> DerefMut for SingleCaseWriteRef<'a, T, C> {
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.value
+    }
+}
+
+impl<'a, T, C: ComponentMgr> SingleCaseWriteRef<'a, T, C> {
+    pub fn new(value: &'a mut SingleCase<T, C>, mgr: usize) -> Self{
+        SingleCaseWriteRef{
+            mgr: mgr,
+            value: value,
+        }
+    }
+
+    pub fn modify<F: FnOnce(&mut T) -> bool>(&mut self, f: F) {
+        if f(&mut self.value) {
+            self.handlers.notify(SingleModifyEvent{field: ""}, unsafe{&mut *(self.mgr as *mut C)});
+        }
+    }
+}
+
 //通知处理器
 // pub fn notify<T, C: ComponentMgr>(event: Event, handlers: &Vec<Weak<ComponentHandler<T, C>>>, mgr: &mut C) {
 //     for it in handlers.iter(){

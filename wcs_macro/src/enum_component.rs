@@ -29,7 +29,7 @@ fn id_unnamed(enum_data: &EnumData) -> quote::__rt::TokenStream {
         });
     }
     let variant = &variants.data[0];
-    let Variant{key, fields:_} = variant;
+    let Variant{key: _, fields:_} = variant;
     quote!{
         #[derive(Clone, Debug)]
         pub enum #id_name{

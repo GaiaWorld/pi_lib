@@ -19,7 +19,7 @@ pub fn impl_getter_setter_macro(ast: &syn::DeriveInput) -> quote::__rt::TokenStr
             };
             impl_struct_set_get(name, &fields)
         },
-        syn::Data::Enum(_) => panic!("cant not impl 'Geter' and 'Seter' for Enum"),
+        syn::Data::Enum(_) => quote! {},
         syn::Data::Union(_) => panic!("cant not impl 'Geter' and 'Seter' for Union"),
     }
 }

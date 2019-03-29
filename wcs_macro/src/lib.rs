@@ -95,6 +95,13 @@ pub fn world(input: TokenStream) -> TokenStream {
     let mut adds = Vec::new();
     let mut res = Vec::new();
     let mut res_new = Vec::new();
+    let mut single = Vec::new();
+    let mut single_sets = Vec::new();
+    let mut single_gets = Vec::new();
+    let mut single_gets_mut = Vec::new();
+    let mut single_tys = Vec::new();
+    let mut single_mgrs = Vec::new();
+    let mut single_names = Vec::new();
     for field in fields.iter(){
         if is_component(&field) || is_enum_component(&field)  {
             let field_name_str = match &field.ident {
@@ -119,6 +126,22 @@ pub fn world(input: TokenStream) -> TokenStream {
             read_refs.push(read_ref_name(field_ty.clone()));
             write_refs.push(write_ref_name(field_ty));
             adds.push(add_name(&field_name_str));
+        } else if is_single_component(field){
+            let field_name_str = match &field.ident {
+                Some(ref i) => i.to_string(),
+                None => panic!("no fieldname"),
+            };
+            let name = &field.ident;
+            let ty = &field.ty;
+            single.push(quote!{
+                pub #name: SingleCase<#ty, Self>,
+            });
+            single_gets.push(get_name(&field_name_str));
+            single_gets_mut.push(get_name_mut(&field_name_str));
+            single_sets.push(set_name(&field_name_str));
+            single_tys.push(ty.clone());
+            single_mgrs.push(ident(&mgr_str));
+            single_names.push(name.clone());
         }else {
             let name = &field.ident;
             let ty = &field.ty;
@@ -155,9 +178,17 @@ pub fn world(input: TokenStream) -> TokenStream {
     let write_refs2 = write_refs.clone();
     let write_refs3 = write_refs.clone();
 
+    let single_mgrs1 = &single_mgrs;
+    let single_mgrs2 = &single_mgrs;
+    let single_tys1 = &single_tys;
+    let single_tys2 = &single_tys;
+    let single_names1 = &single_names;
+    let single_names2 = &single_names;
+
     let gen = quote! {
         pub struct #mgr_name{
             #(#res)*
+            #(#single)*
             #(pub #field_names: #field_groups<#mgrs>),*
         }
 
@@ -191,6 +222,17 @@ pub fn world(input: TokenStream) -> TokenStream {
 
                 pub fn #field_gets_mut(&mut self, index: usize) -> #write_refs2<#mgrs3>{
                     #write_refs3::new(index.clone(), self.#field_names9.to_usize(), self)
+                }
+            )*
+
+            #(
+                pub fn #single_gets(&mut self) -> &#single_tys1{
+                    &self.#single_names1
+                }
+
+                pub fn #single_gets_mut(&mut self) -> SingleCaseWriteRef<#single_tys2, #single_mgrs2>{
+                    let mgr = self as *const #single_mgrs1 as usize;
+                    SingleCaseWriteRef::new(&mut self.#single_names2, mgr)
                 }
             )*
         }

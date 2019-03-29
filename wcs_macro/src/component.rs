@@ -8,9 +8,9 @@ pub fn impl_component_macro(ast: &syn::DeriveInput) -> quote::__rt::TokenStream 
         syn::Data::Struct(s) => {
             impl_struct(name, s)
         },
-        syn::Data::Enum(_) => {
-            //impl_enum()
-            panic!("Enum is not suported")
+        syn::Data::Enum(s) => {
+            impl_enum(name, s)
+            // panic!("Enum is not suported")
         },
         syn::Data::Union(_) => panic!("Union is not suported"),
     }
@@ -39,26 +39,21 @@ pub fn impl_struct(name: &syn::Ident, s: &syn::DataStruct) -> quote::__rt::Token
     }
 }
 
-// fn impl_enum(name: &syn::Ident, s: &syn::DataEnum) -> quote::__rt::TokenStream {
-//     let variants = &s.variants;
-//     for v in variants.iter(){
+fn impl_enum(name: &syn::Ident, _s: &syn::DataEnum) -> quote::__rt::TokenStream {
+    let mut arr = Vec::new();
+    let fields = Fields{
+        ty: FieldsType::Unnamed,
+        data: Vec::new(),
+    };
 
-//     }
-//     match &s.variants {
-//         syn::Fields::Named(f) => {
-//             let mut arr = Vec::new();
-//             let fields = &f.named;
-//             arr.push(def_id(name));
-//             arr.push(impl_struct_id(name, fields));
-//             arr.push(component_group_tree(name, fields));
-//             quote! {
-//                 #(#arr)*
-//             }
-//         },
-//         syn::Fields::Unnamed(f) => panic!("xxxx"),
-//         syn::Fields::Unit => panic!("xxxx")
-//     }
-// }
+    arr.push(def_ref(name));
+    arr.push(impl_struct_ref(name, &fields));
+    arr.push(component_group_tree(name, &fields));
+    arr.push(component_impl_create(name, &fields));
+    quote! {
+        #(#arr)*
+    }
+}
 
 pub fn def_ref(name: &syn::Ident) -> quote::__rt::TokenStream {
     // let id = id_name(name.to_string());
@@ -96,6 +91,10 @@ pub fn impl_ref(name: &syn::Ident, readref_impls: &Vec<quote::__rt::TokenStream>
                     groups: g,
                 }
             }
+
+            pub fn get(&self) -> &#name {
+                self.groups._group.get(self.id)
+            }
         }
 
         impl<'a, M: ComponentMgr> Deref for #read_reff<'a, M>{
@@ -119,6 +118,11 @@ pub fn impl_ref(name: &syn::Ident, readref_impls: &Vec<quote::__rt::TokenStream>
                         field: ""
                     }, &mut self.mgr);
                 }
+            }
+
+            pub fn get(&self) -> &#name {
+                let groups = #group::<M>::from_usize_mut(self.groups);
+                groups._group.get(self.id)
             }
 
             pub fn new(p: usize, g: usize, m: &mut M) -> #write_reff< M>{
@@ -285,11 +289,26 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
             }
         },
         FieldMark::ListenProperty => {
+            let is_base_type = is_base_type(ty);
+            let set_condition = match is_base_type {
+                true => {
+                    quote! {
+                        if *elem.#get_name() == value {
+                            return;
+                        }
+                    }
+                },
+                false => {
+                    quote! {}
+                },
+            };
             quote! {
                 pub fn #set_name(&mut self, value: #ty){
+                    
                     let groups = #group::<M>::from_usize_mut(self.groups);
                     let parent = {
                         let elem = groups._group.get_mut(self.id);
+                        #set_condition
                         elem.#set_name(value);
                         elem.parent
                     };
@@ -314,11 +333,25 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
             }
         }
         FieldMark::Data => {
+            let is_base_type = is_base_type(ty);
+            let set_condition = match is_base_type {
+                true => {
+                    quote! {
+                        if *elem.#get_name() == value {
+                            return;
+                        }
+                    }
+                },
+                false => {
+                    quote! {}
+                },
+            };
             quote! {
                 pub fn #set_name(&mut self, value: #ty){
                     let groups = #group::<M>::from_usize_mut(self.groups);
                     let parent = {
                         let elem = groups._group.get_mut(self.id);
+                        #set_condition
                         elem.#set_name(value);
                         elem.parent
                     };
@@ -341,7 +374,8 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     unsafe{&mut *(groups._group.get_mut(self.id).#get_mut_name() as *mut #ty)}
                 }
             }
-        }
+        },
+        FieldMark::SingleComponent => panic!("error"),
     }
 }
 
