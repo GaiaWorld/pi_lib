@@ -1,6 +1,8 @@
 #![feature(integer_atomics)]
 #![feature(fnbox)]
 
+extern crate atom;
+extern crate apm;
 extern crate wheel;
 extern crate time;
 
@@ -16,9 +18,24 @@ use std::boxed::FnBox;
 use std::mem::{transmute};
 use std::marker::Send;
 
+use atom::Atom;
+use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
 use wheel::slab_wheel::Wheel;
 use wheel::wheel::Item;
 use time::{now_millis};
+
+lazy_static! {
+    //定时器数量
+    pub static ref TIMER_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_count"), 0).unwrap();
+    //创建定时任务数量
+    pub static ref TIMER_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_create_count"), 0).unwrap();
+    //取消定时任务数量
+    pub static ref TIMER_CANCEL_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_cancel_count"), 0).unwrap();
+    //定时任务运行数量
+    pub static ref TIMER_RUN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_run_count"), 0).unwrap();
+    //定时任务运行总时长
+    pub static ref TIMER_RUN_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("timer_run_time"), 0).unwrap();
+}
 
 pub trait Runer{
     fn run(self, index: usize);
@@ -26,42 +43,47 @@ pub trait Runer{
 
 impl<T: 'static + Send + Runer> Timer<T>{
     pub fn new(clock_ms: u64) -> Self {
+        TIMER_COUNT.sum(1);
+
         Timer(Arc::new(Mutex::new(TimerImpl::new(clock_ms))))
     }
 
     pub fn run(&self){
         let s = self.0.clone();
-		thread::spawn(move ||{
-            let mut sleep_time = {
-                let mut lock = s.lock().unwrap();
-                lock.wheel.set_time(now_millis());
-                lock.clock_ms
-            };
-			loop {
-                thread::sleep(Duration::from_millis(sleep_time));
-                let mut now = now_millis();
-                now = run_zero(&s, now);//运行0毫秒任务
+		thread::Builder::new()
+            .name("Timer".to_string())
+            .spawn(move ||{
+                let mut sleep_time = {
+                    let mut lock = s.lock().unwrap();
+                    lock.wheel.set_time(now_millis());
+                    lock.clock_ms
+                };
                 loop {
-                    let mut r = {
-                        let mut s = s.lock().unwrap();
-                        match now >= s.clock_ms + s.wheel.get_time(){
-                            true => s.wheel.roll(),
-                            false => {
-                                sleep_time = s.clock_ms + s.wheel.get_time()- now;
-                                break;
+                    thread::sleep(Duration::from_millis(sleep_time));
+                    let mut now = now_millis();
+                    now = run_zero(&s);//运行0毫秒任务
+                    loop {
+                        let mut r = {
+                            let mut s = s.lock().unwrap();
+                            match now >= s.clock_ms + s.wheel.get_time(){
+                                true => s.wheel.roll(),
+                                false => {
+                                    sleep_time = s.clock_ms + s.wheel.get_time()- now;
+                                    break;
+                                }
                             }
-                        }
-                    };
-                    now = run_task(&s, &mut r, now);
-                    now = run_zero(&s, now);//运行0毫秒任务
+                        };
+                        now = run_task(&s, &mut r);
+                        now = run_zero(&s);//运行0毫秒任务
+                    }
                 }
-			}
 		});
 	}
 
     pub fn set_timeout(&self, elem: T, ms: u32) -> usize{
+        TIMER_CREATE_COUNT.sum(1);
+
         let mut lock = self.0.lock().unwrap();
-		lock.statistics.all_count.fetch_add(1, Ordering::Relaxed);
         let time =  lock.wheel.get_time();
 		lock.wheel.insert(Item{elem: elem, time_point: time + (ms as u64)})
 	}
@@ -70,7 +92,8 @@ impl<T: 'static + Send + Runer> Timer<T>{
         let mut lock = self.0.lock().unwrap();
 		match lock.wheel.try_remove(index) {
 			Some(v) => {
-                lock.statistics.cancel_count.fetch_add(1, Ordering::Relaxed);
+                TIMER_CANCEL_COUNT.sum(1);
+
                 Some(v.elem)
             },
 			None => {None},
@@ -153,7 +176,8 @@ impl Statistics{
 }
 
 
-fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> u64{
+fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>) -> u64{
+    let mut now = 0;
     loop {
         let mut r = {
             let mut s = timer.lock().unwrap();
@@ -164,7 +188,7 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> 
                 }
             }
         };
-        now = run_task(timer, &mut r, now);
+        now = run_task(timer, &mut r);
         r.clear();
         timer.lock().unwrap().wheel.set_zero_cache(r);
     }
@@ -172,20 +196,19 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> 
 }
 
 //执行任务，返回任务执行完的时间
-fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>, old: u64) -> u64{
+fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>) -> u64{
+    let start = TIMER_RUN_TIME.start();
     let mut j = r.len();
-    {
-        let lock = timer.lock().unwrap();
-        lock.statistics.run_count.fetch_add(r.len(), Ordering::Relaxed);//统计运行任务个数
-    }
     for _ in 0..r.len(){
         j -= 1;
         let e = r.remove(j);
         e.0.elem.run(e.1);
     }
-    let now = now_millis();
-    timer.lock().unwrap().statistics.run_time.fetch_add(now - old, Ordering::Relaxed); //统计运行时长
-    now
+
+    TIMER_RUN_COUNT.sum(1);
+    TIMER_RUN_TIME.timing(start);
+
+    now_millis()
 }
 #[test]
 fn test(){

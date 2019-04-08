@@ -2,6 +2,7 @@ use std::boxed::FnBox;
 use std::sync::{Arc, Mutex, Condvar};
 
 use atom::Atom;
+use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter};
 use timer::Timer;
 use task_pool::{TaskPool, DelayTask};
 
@@ -62,10 +63,67 @@ lazy_static! {
 	})));
 }
 
+lazy_static! {
+    //虚拟机动态队列创建数量
+    static ref JS_DYNAMIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_dynamic_queue_create_count"), 0).unwrap();
+    //虚拟机动态队列移除数量
+    static ref JS_DYNAMIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_dynamic_queue_remove_count"), 0).unwrap();
+    //虚拟机静态队列创建数量
+    static ref JS_STATIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_queue_create_count"), 0).unwrap();
+    //虚拟机静态队列移除数量
+    static ref JS_STATIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_queue_remove_count"), 0).unwrap();
+    //存储动态队列创建数量
+    static ref STORE_DYNAMIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_dynamic_queue_create_count"), 0).unwrap();
+    //存储动态队列移除数量
+    static ref STORE_DYNAMIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_dynamic_queue_remove_count"), 0).unwrap();
+    //存储静态队列创建数量
+    static ref STORE_STATIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_queue_create_count"), 0).unwrap();
+    //存储静态队列移除数量
+    static ref STORE_STATIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_queue_remove_count"), 0).unwrap();
+    //网络动态队列创建数量
+    static ref NET_DYNAMIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_dynamic_queue_create_count"), 0).unwrap();
+    //网络动态队列移除数量
+    static ref NET_DYNAMIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_dynamic_queue_remove_count"), 0).unwrap();
+    //网络静态队列创建数量
+    static ref NET_STATIC_QUEUE_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_queue_create_count"), 0).unwrap();
+    //网络静态队列移除数量
+    static ref NET_STATIC_QUEUE_REMOVE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_queue_remove_count"), 0).unwrap();
+    //虚拟机动态异步任务投递数量
+    static ref JS_DYNAMIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_dynamic_async_task_cast_count"), 0).unwrap();
+    //虚拟机动态同步任务投递数量
+    static ref JS_DYNAMIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_dynamic_sync_task_cast_count"), 0).unwrap();
+    //虚拟机静态异步任务投递数量
+    static ref JS_STATIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_async_task_cast_count"), 0).unwrap();
+    //虚拟机静态同步任务投递数量
+    static ref JS_STATIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_sync_task_cast_count"), 0).unwrap();
+    //存储动态异步任务投递数量
+    static ref STORE_DYNAMIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_dynamic_async_task_cast_count"), 0).unwrap();
+    //存储动态同步任务投递数量
+    static ref STORE_DYNAMIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_dynamic_sync_task_cast_count"), 0).unwrap();
+    //存储静态异步任务投递数量
+    static ref STORE_STATIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_async_task_cast_count"), 0).unwrap();
+    //存储静态同步任务投递数量
+    static ref STORE_STATIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_sync_task_cast_count"), 0).unwrap();
+    //网络动态异步任务投递数量
+    static ref NET_DYNAMIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_dynamic_async_task_cast_count"), 0).unwrap();
+    //网络动态同步任务投递数量
+    static ref NET_DYNAMIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_dynamic_sync_task_cast_count"), 0).unwrap();
+    //网络静态异步任务投递数量
+    static ref NET_STATIC_ASYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_async_task_cast_count"), 0).unwrap();
+    //网络静态同步任务投递数量
+    static ref NET_STATIC_SYNC_TASK_CAST_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_sync_task_cast_count"), 0).unwrap();
+}
+
 /*
 * 线程安全的为虚拟机任务池创建队列
 */
 pub fn create_js_task_queue(priority: usize, can_del: bool) -> isize {
+    if can_del {
+        JS_DYNAMIC_QUEUE_CREATE_COUNT.sum(1);
+    } else {
+        JS_STATIC_QUEUE_CREATE_COUNT.sum(1);
+    }
+
     create_task_queue(&JS_TASK_POOL, priority, can_del)
 }
 
@@ -88,6 +146,26 @@ pub fn unlock_js_task_queue(queue: isize) -> bool {
 */
 pub fn cast_js_task(task_type: TaskType, priority: usize, queue: Option<isize>,
                     func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            JS_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            JS_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    JS_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    JS_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
     cast_task(&JS_TASK_POOL, task_type, priority, queue, func, info)
 }
 
@@ -95,6 +173,12 @@ pub fn cast_js_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 * 线程安全的为虚拟机任务池移除队列
 */
 pub fn remove_js_task_queue(queue: isize) -> bool {
+    if queue < 0 {
+        JS_STATIC_QUEUE_REMOVE_COUNT.sum(1);
+    } else {
+        JS_DYNAMIC_QUEUE_REMOVE_COUNT.sum(1);
+    }
+
     JS_TASK_POOL.delete_queue(queue)
 }
 
@@ -102,6 +186,12 @@ pub fn remove_js_task_queue(queue: isize) -> bool {
 * 线程安全的为存储任务池创建队列
 */
 pub fn create_store_task_queue(priority: usize, can_del: bool) -> isize {
+    if can_del {
+        STORE_DYNAMIC_QUEUE_CREATE_COUNT.sum(1);
+    } else {
+        STORE_STATIC_QUEUE_CREATE_COUNT.sum(1);
+    }
+
     create_task_queue(&STORE_TASK_POOL, priority, can_del)
 }
 
@@ -123,6 +213,26 @@ pub fn unlock_store_task_queue(queue: isize) -> bool {
 * 线程安全的向存储任务池投递任务，返回可移除的任务句柄
 */
 pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            STORE_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            STORE_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    STORE_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    STORE_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
     cast_task(&STORE_TASK_POOL, task_type, priority, queue, func, info)
 }
 
@@ -130,6 +240,12 @@ pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize
 * 线程安全的为存储任务池移除队列
 */
 pub fn remove_store_task_queue(queue: isize) -> bool {
+    if queue < 0 {
+        STORE_STATIC_QUEUE_REMOVE_COUNT.sum(1);
+    } else {
+        STORE_DYNAMIC_QUEUE_REMOVE_COUNT.sum(1);
+    }
+
     STORE_TASK_POOL.delete_queue(queue)
 }
 
@@ -137,6 +253,12 @@ pub fn remove_store_task_queue(queue: isize) -> bool {
 * 线程安全的为网络任务池创建队列
 */
 pub fn create_net_task_queue(priority: usize, can_del: bool) -> isize {
+    if can_del {
+        NET_DYNAMIC_QUEUE_CREATE_COUNT.sum(1);
+    } else {
+        NET_STATIC_QUEUE_CREATE_COUNT.sum(1);
+    }
+
     create_task_queue(&NET_TASK_POOL, priority, can_del)
 }
 
@@ -158,6 +280,26 @@ pub fn unlock_net_task_queue(queue: isize) -> bool {
 * 线程安全的向网络任务池投递任务，返回可移除的任务句柄
 */
 pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            NET_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            NET_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    NET_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    NET_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
     cast_task(&NET_TASK_POOL, task_type, priority, queue, func, info)
 }
 
@@ -165,6 +307,12 @@ pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 * 线程安全的为网络任务池移除队列
 */
 pub fn remove_net_task_queue(queue: isize) -> bool {
+    if queue < 0 {
+        NET_STATIC_QUEUE_REMOVE_COUNT.sum(1);
+    } else {
+        NET_DYNAMIC_QUEUE_REMOVE_COUNT.sum(1);
+    }
+
     NET_TASK_POOL.delete_queue(queue)
 }
 

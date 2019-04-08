@@ -11,5 +11,6 @@ lazy_static = "*"
 flame = "0.2.2"
 flamer = "0.3"
 atom = { path = "../atom" }
+apm = { path = "../apm" }
 timer = { path = "../timer" }
 task_pool = { path = "../task_pool" }
