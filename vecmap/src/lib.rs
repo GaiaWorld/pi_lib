@@ -136,8 +136,8 @@ impl<T> VecMap<T> {
     pub fn insert(&mut self, index:usize, val: T) {
         let index = index - 1;
         let len = self.entries.len();
-        if index >= self.entries.len() {
-            for _ in 0..len - index {
+        if index >= len {
+            for _ in 0..index - len  {
                 self.entries.push(None);
             }
             self.entries.push(Some(val));
