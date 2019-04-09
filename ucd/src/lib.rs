@@ -157,8 +157,8 @@ const TYPE_RANGE: [(usize, usize);145] = [(0x0080, 0x00FF), (0x0100, 0x017F),(0x
 /// 字母字符的范围
 const ALPHABETIC_RANGE: [(usize, usize);2] = [(0x0370, 0x07BF), (0x0980, 0x1FFF)];
 
-/// 中文（包括日文韩文同用）的范围
-const CJK_RANGE: [(usize, usize);5] = [(0x2000, 0x206F), (0x3000, 0x303F), (0x31C0, 0x31EF), (0x3200, 0x9FA5), (0xFF00, 0xFFEF)];
+/// 单字字符的范围， 中文（包括日文韩文同用）的范围
+const CASED_RANGE: [(usize, usize);5] = [(0x2000, 0x206F), (0x3000, 0x303F), (0x31C0, 0x31EF), (0x3200, 0x9FA5), (0xFF00, 0xFFEF)];
 /// 大写字符的范围
 const LOWER_RANGE: [(usize, usize);1] = [(65,90)];
 /// 小写字符的范围
@@ -202,13 +202,10 @@ pub fn get_type_name(c: char) -> &'static str{
     }
 }
 
-/// 字符是否为字母
-pub fn is_alphabetic(c: char) -> bool{
+/// 字符是否为单字字符
+pub fn is_cased(c: char) -> bool{
     let c = c as usize;
-    if c < 0x0250 {
-        return true;
-    }
-    match ALPHABETIC_RANGE.binary_search_by(|&(start, end)| {
+    match CASED_RANGE.binary_search_by(|&(start, end)| {
         if c < start {
             Ordering::Less
         }else if c > end {
@@ -221,10 +218,13 @@ pub fn is_alphabetic(c: char) -> bool{
         _ => false
     }
 }
-/// 字符是否为CJK
-pub fn is_cjk(c: char) -> bool{
+/// 字符是否为字母
+pub fn is_alphabetic(c: char) -> bool{
     let c = c as usize;
-    match CJK_RANGE.binary_search_by(|&(start, end)| {
+    if c < 0x0250 {
+        return true;
+    }
+    match ALPHABETIC_RANGE.binary_search_by(|&(start, end)| {
         if c < start {
             Ordering::Less
         }else if c > end {
@@ -309,7 +309,8 @@ pub fn is_whitespace(c: char) -> bool{
 }
 
 pub trait Codepoint where Self: core::marker::Sized {
-
+    // TODO is_num is_digit is_control is_ascii_alpha is_ascii_lower is_ascii_upper is_ascii_white is_ascii_control is_ascii_num
+    fn is_cased(self) -> bool;
     fn is_alpha(self) -> bool;
     fn is_lower(self) -> bool;
     fn is_upper(self) -> bool;
@@ -317,6 +318,9 @@ pub trait Codepoint where Self: core::marker::Sized {
 }
 impl Codepoint for char {
 
+    fn is_cased(self) -> bool {
+        is_cased(self)
+    }
     fn is_alpha(self) -> bool {
         is_alphabetic(self)
     }
@@ -341,12 +345,12 @@ fn test_ucd() {
     let c5 = 'た';
     
     
-    println!("xxxxxxxxxxx:{}", c.is_alpha()); 
-    println!("xxxxxxxxxxx:{}", c1.is_alpha());
-    println!("xxxxxxxxxxx:{}", c2.is_alpha()); 
-    println!("xxxxxxxxxxx:{}", c3.is_alpha());
-    println!("xxxxxxxxxxx:{}", c4.is_alpha());
-    println!("xxxxxxxxxxx:{}", c5.is_alpha());
+    println!("xxxxxxxxxxx:{}", c.is_cased()); 
+    println!("xxxxxxxxxxx:{}", c1.is_cased());
+    println!("xxxxxxxxxxx:{}", c2.is_cased()); 
+    println!("xxxxxxxxxxx:{}", c3.is_cased());
+    println!("xxxxxxxxxxx:{}", c4.is_cased());
+    println!("xxxxxxxxxxx:{}", c5.is_cased());
 
     let s = "Löwe 老虎 Léopard";
     assert!(s.is_char_boundary(0));
@@ -362,54 +366,3 @@ fn test_ucd() {
     
 }
 
-#[test]
-fn test_split_for_word_space() {
-    let arr = " \nabc xx 我y \nzρz장ρρ ".chars().collect();
-    let mut indexs = Vec::new();
-    {
-        let split = split_for_word_space(&arr);
-        for i in split {
-            indexs.push(i);
-        }
-    }
-    
-    let word = |offset: usize, len: usize|->String{
-        let mut s = "".to_string();
-        for i in 0..len {
-            s += arr[offset + i].to_string().as_str();
-        }
-        s
-    };
-
-    assert_eq!(indexs.len(), 14);
-    assert_eq!(word(indexs[0].0, indexs[0].1), " ");
-    assert_eq!(word(indexs[1].0, indexs[1].1), "\n");
-    assert_eq!(word(indexs[2].0, indexs[2].1), "abc");
-    assert_eq!(word(indexs[3].0, indexs[3].1), " ");
-    assert_eq!(word(indexs[4].0, indexs[4].1), "xx");
-    assert_eq!(word(indexs[5].0, indexs[5].1), " ");
-    assert_eq!(word(indexs[6].0, indexs[6].1), "我");
-    assert_eq!(word(indexs[7].0, indexs[7].1), "y");
-    assert_eq!(word(indexs[8].0, indexs[8].1), " ");
-    assert_eq!(word(indexs[9].0, indexs[9].1), "\n");
-    assert_eq!(word(indexs[10].0, indexs[10].1), "zρz");
-    assert_eq!(word(indexs[11].0, indexs[11].1), "장");
-    assert_eq!(word(indexs[12].0, indexs[12].1), "ρρ");
-    assert_eq!(word(indexs[13].0, indexs[13].1), " ");
-    // for (offset, len) in indexs.iter(){
-    //     for i in 0..*len {
-    //         s += arr[*offset + i].to_string().as_str();
-    //     }
-    // }
-    // print!("{:?}", s);
-}
-
-#[cfg(test)]
-fn vec_to_str(arr: &Vec<char>) -> String {
-    let mut r = "".to_string();
-    for v in arr.iter(){
-        let mut b = [0; 2];
-        r += v.encode_utf8(&mut b);
-    }
-    r
-}
