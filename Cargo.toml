@@ -15,6 +15,7 @@ members = [
   "slab",
   "time",
   "timer",
+  "ucd",
   "util",
   "wcs",
   "wheel",
