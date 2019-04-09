@@ -109,6 +109,10 @@ pub fn set_name(name: &str) -> syn::Ident {
     ident(&("set_".to_string() + name))
 }
 
+pub fn del_name(name: &str) -> syn::Ident {
+    ident(&("del_".to_string() + name))
+}
+
 pub fn get_name(name: &str) -> syn::Ident {
     ident(&("get_".to_string() + name))
 }
@@ -136,6 +140,7 @@ pub struct Field{
     pub ty: syn::Type, //字段类型
     pub set_name: syn::Ident, //set方法名称
     pub get_name: syn::Ident, //get方法名称
+    pub del_name: syn::Ident, //del方法名称
     pub get_mut_name: syn::Ident,
     pub ty_name: syn::Type, //类型， 不包含泛型
     pub mark: FieldMark, // 字段标记
@@ -204,6 +209,7 @@ impl Field {
             ty: field.ty.clone(),
             set_name: set_name(&key_str),
             get_name: get_name(&key_str),
+            del_name: del_name(&key_str),
             get_mut_name: get_name_mut(&key_str),
             ty_name: type_name,
             mark: mark,

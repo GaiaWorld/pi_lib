@@ -156,7 +156,7 @@ pub fn impl_struct_ref(name: &syn::Ident, fields: &Fields) -> quote::__rt::Token
 }
 
 pub fn impl_struct_readref_fun(field: &Field) -> quote::__rt::TokenStream {
-    let Field{key, ty, set_name:_, get_name, get_mut_name:_, ty_name:_, mark, key_str:_} = field;
+    let Field{key, ty, set_name:_, get_name, get_mut_name:_, del_name: _, ty_name:_, mark, key_str:_} = field;
     match mark {
         FieldMark::Component(data) => {
             let ComponentData {group_name:_, id_name:_, write_ref_name:_, read_ref_name, is_must:_,c_type:_} = data;
@@ -187,7 +187,7 @@ pub fn impl_struct_readref_fun(field: &Field) -> quote::__rt::TokenStream {
 
 pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt::TokenStream {
     let group = group_name(name.to_string());
-    let Field{key, ty, set_name, get_name, get_mut_name, ty_name:_, mark, key_str} = field;
+    let Field{key, ty, set_name, get_name, get_mut_name, del_name, ty_name:_, mark, key_str} = field;
     match mark {
         FieldMark::Component(data) => {
             let ComponentData {group_name:_, id_name:_, write_ref_name, read_ref_name, is_must:_, c_type} = data;
@@ -231,6 +231,33 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     }, &mut self.mgr);
                 }
 
+                pub fn #del_name(&mut self){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+                    let parent = {
+                        let elem = groups._group.get_mut(self.id);
+                        
+                        //销毁
+                        {
+                            let old = elem.#get_name().clone();
+                            let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
+                            old_ref.destroy(); 
+                        }
+
+                        elem.#set_name(0);
+                        elem.parent
+                    };
+   
+                    // let parent = self.id.#set_name(value, groups);
+                    let handlers = groups._group.get_handlers();
+
+                    //修改事件
+                    handlers.notify_modify_field(ModifyFieldEvent{
+                        id: self.id.clone(),
+                        parent: parent,
+                        field: #key_str
+                    }, &mut self.mgr);
+                }
+
                 pub fn #get_name(&self) -> #read_ref_name<M>{
                     let groups = #group::<M>::from_usize(self.groups);
                     // let p = self.id.#get_name(groups).clone();
@@ -265,6 +292,32 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         let mut new_write = #write_ref_name::<M>::new(new_id, groups.#key.to_usize(), &mut self.mgr);
                         new_write.set_parent(self.id);
                         new_write.create_notify();
+                        elem.parent
+                    };
+
+                    let handlers = groups._group.get_handlers();
+                    //修改事件
+                    handlers.notify_modify_field(ModifyFieldEvent{
+                        id: self.id.clone(),
+                        parent: parent,
+                        field: #key_str
+                    }, &mut self.mgr);
+                }
+
+                pub fn #del_name(&mut self){
+                    let groups = #group::<M>::from_usize_mut(self.groups);
+
+                    let parent = {
+                        let elem = groups._group.get_mut(self.id);
+
+                        //销毁
+                        {
+                            let old = elem.#get_name().clone();
+                            let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
+                            old_ref.destroy(); 
+                        }
+
+                        elem.#set_name(#id_name::None);
                         elem.parent
                     };
 
@@ -385,7 +438,7 @@ pub fn component_group_tree(name: &syn::Ident, fields: &Fields) -> quote::__rt::
     let Fields {ty:_, data} = fields;
     // let mut set_mgrs = Vec::new();
     for field in data.iter(){
-        let Field{key, ty:_, set_name:_, get_name:_, get_mut_name:_, ty_name:_, mark, key_str:_} = field;
+        let Field{key, ty:_, set_name:_, get_name:_, get_mut_name:_, del_name: _,  ty_name:_, mark, key_str:_} = field;
         let ComponentData {group_name, id_name:_, write_ref_name:_, read_ref_name:_, is_must:_, c_type:_} = match mark {
             FieldMark::Component(data)  => data,
             FieldMark::EnumComponent(data)  => data,
@@ -465,7 +518,7 @@ pub fn component_impl_create(name: &syn::Ident, fields: &Fields) -> quote::__rt:
     let g_name = group_name(name.to_string());
     let Fields {ty:_, data} = fields;
     for field in data.iter(){
-        let Field{key, ty, set_name:_, get_name:_, get_mut_name:_, ty_name: _, mark, key_str:_} = field;
+        let Field{key, ty, set_name:_, get_name:_, get_mut_name:_, del_name: _, ty_name: _, mark, key_str:_} = field;
         let ComponentData {group_name:_, id_name, write_ref_name, read_ref_name:_, is_must, c_type:_} = match mark {
             FieldMark::Component(data)  => data,
             FieldMark::EnumComponent(data)  => data,
