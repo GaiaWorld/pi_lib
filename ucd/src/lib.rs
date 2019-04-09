@@ -194,7 +194,7 @@ pub fn get_type_id(c: char) -> usize{
 pub fn get_type_name(c: char) -> &'static str{
     let i = get_type_id(c);
     if i == 1 {
-        "ANSI"
+        "ASCII"
     }else if i > 1{
         TYPE_NAME[i - 2]
     }else{
