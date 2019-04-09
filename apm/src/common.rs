@@ -1,8 +1,13 @@
+use std::thread;
 use std::sync::Arc;
 use std::net::IpAddr;
+use std::boxed::FnBox;
+use std::sync::RwLock;
 use std::path::PathBuf;
 use std::cell::RefCell;
+use std::net::SocketAddr;
 
+use fnv::FnvHashMap;
 use netstat::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, SocketInfo, get_sockets_info, iterate_sockets_info};
 use sysinfo::{NetworkExt, System, SystemExt, ProcessorExt, ProcessExt, ProcessStatus, DiskExt};
 
@@ -14,6 +19,51 @@ use linux::LinuxSysStat;
 * 默认采样间隔时长，单位秒
 */
 const DEFAULT_INTERVAL: f64 = 0.2;
+
+lazy_static! {
+    //当前进程打开的服务器端口注册表
+    static ref SERVER_PORTS_TABLE: Arc<RwLock<FnvHashMap<u16, SocketAddr>>> = Arc::new(RwLock::new(FnvHashMap::default()));
+}
+
+/*
+* 获取所有打开的服务器端口
+*/
+pub fn server_ports() -> Option<Vec<u16>> {
+    let ports = SERVER_PORTS_TABLE.read().unwrap();
+    let keys = ports.keys();
+    if keys.len() == 0 {
+        return None;
+    }
+
+    Some(keys.map(|key| {
+        key.clone()
+    }).collect())
+}
+
+/*
+* 获取指定服务器端口的注册信息
+*/
+pub fn port_info(port: u16) -> Option<SocketAddr> {
+    if let Some(addr) = SERVER_PORTS_TABLE.read().unwrap().get(&port) {
+        return Some(addr.clone());
+    }
+
+    None
+}
+
+/*
+* 注册指定服务器端口，返回上个服务器端口
+*/
+pub fn register_server_port(addr: SocketAddr) -> Option<SocketAddr> {
+    SERVER_PORTS_TABLE.write().unwrap().insert(addr.port(), addr)
+}
+
+/*
+* 注销指定服务器端口
+*/
+pub fn unregister_server_port(port: u16) -> Option<SocketAddr> {
+    SERVER_PORTS_TABLE.write().unwrap().remove(&port)
+}
 
 /*
 * 进程状态
@@ -34,6 +84,30 @@ pub type TcpStatus = TcpState;
 * 网络连接信息
 */
 type NetSocketsInfo = Vec<(NetProtocolType, IpAddr, u16, Option<IpAddr>, Option<u16>, Option<TcpStatus>, Vec<u32>)>;
+
+/*
+* 守护对象，用于监控对象是否退出或回收，如果是则执行回调
+*/
+pub struct ApmGuard<T> {
+    arg: T,
+    callback: Arc<Fn(&mut T, thread::Thread)>,
+}
+
+impl<T> Drop for ApmGuard<T> {
+    fn drop(&mut self) {
+        (self.callback)(&mut self.arg, thread::current());
+    }
+}
+
+impl<T> ApmGuard<T> {
+    //构建守护对象
+    pub fn new(arg: T, callback: Arc<Fn(&mut T, thread::Thread)>) -> Self {
+        ApmGuard {
+            arg,
+            callback,
+        }
+    }
+}
 
 /*
 * 网络IP类型

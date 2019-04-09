@@ -1,5 +1,6 @@
 extern crate psutil;
 
+use std::ptr;
 use std::cmp;
 use std::thread;
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use std::time::Duration;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use libc;
 use psutil::{system, process, disk, network};
 use walkdir::{DirEntry, WalkDir};
 
@@ -28,6 +30,13 @@ const PROCESS_ROOT_PATH: &'static str = "/proc/";
 * 系统线程目录
 */
 const THREADS_DIR: &'static str = "/task";
+
+/*
+* 获取当前线程的本地线程id
+*/
+pub fn current_tid() -> i32 {
+    unsafe { libc::syscall(libc::SYS_gettid) as i32 }
+}
 
 /*
 * linux系统状态
@@ -143,7 +152,7 @@ impl SysSpecialStat for LinuxSysStat {
         psutil::getpid()
     }
 
-    fn process_detal(&self, pid: i32) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
+    fn process_detal(&self, pid: i32) -> Option<(u32, u32, i64, i64, u32, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
         if let (sys_usage, user_usage, Some(info)) = get_cpu_usage_by_process(self, pid) {
             let mut cmd = "".to_string();
             let mut cwd = PathBuf::new();
@@ -158,6 +167,7 @@ impl SysSpecialStat for LinuxSysStat {
                          info.gid,                  //进程所属组id
                          info.nice,                 //进程静态优先级，数字越小，优先级越高
                          info.priority,             //进程动态优先级，数字越小，优先级越高
+                         info.rt_priority,          //进程实时优先级
                          sys_usage,                 //进程内核态cpu占用率
                          user_usage,                //进程用户态cpu占用率
                          info.vsize,                //进程虚拟内存大小，单位B

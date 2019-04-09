@@ -7,9 +7,51 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 
 use threadpool::ThreadPool;
 
+use atom::Atom;
+use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
+
 use task::Task;
 use task_pool::TaskPool;
 use task_pool::enums::Task as BaseTask;
+
+lazy_static! {
+    //虚拟机动态同步任务弹出数量
+    static ref JS_DYNAMIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_dynamic_sync_task_pop_count"), 0).unwrap();
+    //虚拟机静态异步任务弹出数量
+    static ref JS_STATIC_ASYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_async_task_pop_count"), 0).unwrap();
+    //虚拟机静态同步任务弹出数量
+    static ref JS_STATIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_static_sync_task_pop_count"), 0).unwrap();
+    //存储动态同步任务弹出数量
+    static ref STORE_DYNAMIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_dynamic_sync_task_pop_count"), 0).unwrap();
+    //存储静态异步任务弹出数量
+    static ref STORE_STATIC_ASYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_async_task_pop_count"), 0).unwrap();
+    //存储静态同步任务弹出数量
+    static ref STORE_STATIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_static_sync_task_pop_count"), 0).unwrap();
+    //网络动态同步任务弹出数量
+    static ref NET_DYNAMIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_dynamic_sync_task_pop_count"), 0).unwrap();
+    //网络静态异步任务弹出数量
+    static ref NET_STATIC_ASYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_async_task_pop_count"), 0).unwrap();
+    //网络静态同步任务弹出数量
+    static ref NET_STATIC_SYNC_TASK_POP_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_static_sync_task_pop_count"), 0).unwrap();
+    //虚拟机慢任务数量
+    static ref JS_SLOW_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_slow_task_count"), 0).unwrap();
+    //虚拟机慢任务总时长
+    static ref JS_SLOW_TASK_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("js_slow_task_time"), 0).unwrap();
+    //虚拟机异常任务数量
+    static ref JS_PANIC_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("js_panic_task_count"), 0).unwrap();
+    //存储慢任务数量
+    static ref STORE_SLOW_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_slow_task_count"), 0).unwrap();
+    //存储慢任务总时长
+    static ref STORE_SLOW_TASK_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("store_slow_task_time"), 0).unwrap();
+    //存储异常任务数量
+    static ref STORE_PANIC_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("store_panic_task_count"), 0).unwrap();
+    //网络慢任务数量
+    static ref NET_SLOW_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_slow_task_count"), 0).unwrap();
+    //网络慢任务总时长
+    static ref NET_SLOW_TASK_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("net_slow_task_time"), 0).unwrap();
+    //网络异常任务数量
+    static ref NET_PANIC_TASK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("net_panic_task_count"), 0).unwrap();
+}
 
 /*
 * 工作者状态
@@ -22,33 +64,102 @@ pub enum WorkerStatus {
 }
 
 /*
+* 工作者类型
+*/
+#[derive(Debug, Clone)]
+pub enum WorkerType {
+    Normal = 0, //通用
+    Js,         //虚拟机
+    Store,      //存储
+    Net,        //网络
+}
+
+impl ToString for WorkerType {
+    fn to_string(&self) -> String {
+        match self {
+            &WorkerType::Normal => String::from("Normal Task"),
+            &WorkerType::Js => String::from("JS Task"),
+            &WorkerType::Store => String::from("Store Task"),
+            &WorkerType::Net => String::from("Net Task"),
+        }
+    }
+}
+
+/*
 * 工作者
 */
 #[derive(Debug)]
 pub struct Worker {
-    uid:        u32,            //工作者编号
-    slow:       Duration,       //工作者慢任务时长，单位us
-    status:     AtomicUsize,    //工作者状态
-    counter:    AtomicUsize,    //工作者计数器
+    uid:            u32,            //工作者编号
+    slow:           Duration,       //工作者慢任务时长，单位us
+    status:         AtomicUsize,    //工作者状态
+    worker_type:    WorkerType,     //工作者类型
+    static_async:   PrefCounter,    //工作者静态异步任务计数器
+    static_sync:    PrefCounter,    //工作者静态同步任务计数器
+    dynamic_sync:   PrefCounter,    //工作者动态同步任务计数器
+    slow_counter:   PrefCounter,    //工作者慢任务计数器
+    slow_timer:     PrefTimer,      //工作者慢任务计时器
+    panic_counter:  PrefCounter,    //工作者异常任务计数器
 }
 
 unsafe impl Sync for Worker {} //声明保证多线程安全性
 
 impl Display for Worker {
 	fn fmt(&self, f: &mut Formatter) -> Result {
-		write!(f, "Worker[uid = {}, slow = {:?}, status = {}, counter = {}]", 
-            self.uid, self.slow, self.status.load(Ordering::Relaxed), self.counter.load(Ordering::Relaxed))
+		write!(f, "Worker[uid = {}, slow = {:?}, status = {}, static_async = {}, static_sync = {}, dynamic_sync = {}]",
+            self.uid, self.slow, self.status.load(Ordering::Relaxed), self.static_async.get(), self.static_sync.get(), self.dynamic_sync.get())
 	}
 }
 
 impl Worker {
     //创建一个工作者
-    pub fn new(uid: u32, slow: u32) -> Self {
+    pub fn new(worker_type: WorkerType, uid: u32, slow: u32) -> Self {
+        let (static_async, static_sync, dynamic_sync, slow_counter, slow_timer, panic_counter) = match worker_type {
+            WorkerType::Normal => {
+                (JS_STATIC_ASYNC_TASK_POP_COUNT.clone(),
+                 JS_STATIC_SYNC_TASK_POP_COUNT.clone(),
+                 JS_DYNAMIC_SYNC_TASK_POP_COUNT.clone(),
+                 JS_SLOW_TASK_COUNT.clone(),
+                 JS_SLOW_TASK_TIME.clone(),
+                 JS_PANIC_TASK_COUNT.clone())
+            },
+            WorkerType::Js => {
+                (JS_STATIC_ASYNC_TASK_POP_COUNT.clone(),
+                 JS_STATIC_SYNC_TASK_POP_COUNT.clone(),
+                 JS_DYNAMIC_SYNC_TASK_POP_COUNT.clone(),
+                 JS_SLOW_TASK_COUNT.clone(),
+                 JS_SLOW_TASK_TIME.clone(),
+                 JS_PANIC_TASK_COUNT.clone())
+            },
+            WorkerType::Store => {
+                (STORE_STATIC_ASYNC_TASK_POP_COUNT.clone(),
+                 STORE_STATIC_SYNC_TASK_POP_COUNT.clone(),
+                 STORE_DYNAMIC_SYNC_TASK_POP_COUNT.clone(),
+                 STORE_SLOW_TASK_COUNT.clone(),
+                 STORE_SLOW_TASK_TIME.clone(),
+                 STORE_PANIC_TASK_COUNT.clone())
+            },
+            WorkerType::Net => {
+                (NET_STATIC_ASYNC_TASK_POP_COUNT.clone(),
+                 NET_STATIC_SYNC_TASK_POP_COUNT.clone(),
+                 NET_DYNAMIC_SYNC_TASK_POP_COUNT.clone(),
+                 NET_SLOW_TASK_COUNT.clone(),
+                 NET_SLOW_TASK_TIME.clone(),
+                 NET_PANIC_TASK_COUNT.clone())
+            },
+        };
+
         Worker {
             uid:        uid,
             slow:       Duration::from_micros(slow as u64),
             status:     AtomicUsize::new(WorkerStatus::Wait as usize),
-            counter:    AtomicUsize::new(0),
+            worker_type,
+            static_async,
+            static_sync,
+            dynamic_sync,
+            slow_counter,
+            slow_timer,
+            panic_counter,
         }
     }
 
@@ -97,7 +208,7 @@ impl Worker {
 
     //获取工作者的工作计数
     pub fn count(&self) -> usize {
-        self.counter.load(Ordering::Relaxed)
+        self.static_async.get() + self.static_sync.get() + self.dynamic_sync.get()
     }
 
     //关闭工作者
@@ -144,7 +255,6 @@ impl Worker {
             }
         }
         check_slow_task(self, task, base_task); //执行任务
-        self.counter.fetch_add(1, Ordering::Acquire); //增加工作计数
     }
 }
 
@@ -153,26 +263,47 @@ fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) 
     match base_task {
         BaseTask::Async(t) => {
             //填充异步任务
+            worker.static_async.sum(1);
+
             t.copy_to(task);
         },
         BaseTask::Sync(t, q) => {
             //填充同步任务
+            if q < 0 {
+                worker.static_sync.sum(1);
+            } else {
+                worker.dynamic_sync.sum(1);
+            }
+
             t.copy_to(task);
             lock = Some(q);
         }
     }
     
-    let time = Instant::now();
+    let time = worker.slow_timer.start();
     if let Err(e) = panic::catch_unwind(|| { task.run(lock); }) {
-        //执行任务失败
-        let elapsed = time.elapsed();
-        println!("!!!> Task Run Error, time: {}, task: {}, e: {:?}", elapsed.as_secs() * 1000000 + (elapsed.subsec_micros() as u64), task, e);
+        //执行任务异常
+        worker.panic_counter.sum(1);
+
+        let reason = match e.downcast_ref::<&str>() {
+            Some(str) => Some(str.to_string()),
+            None => {
+                match e.downcast_ref::<String>() {
+                    Some(string) => Some(string.to_string()),
+                    None => None,
+                }
+            },
+        };
+        println!("!!!> {} Run Error, time: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, task, reason);
     } else {
         //执行任务成功
         let elapsed = time.elapsed();
         if time.elapsed() >= worker.slow {
             //记录慢任务
-            println!("===> Slow Task, time: {}, task: {}", elapsed.as_secs() * 1000000 + (elapsed.subsec_micros() as u64), task);
+            worker.slow_counter.sum(1);
+            worker.slow_timer.timing(time);
+
+            println!("===> Slow {}, time: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, task);
         }
     }
 }

@@ -1,10 +1,24 @@
+#![feature(fnbox)]
+#![feature(integer_atomics)]
+#![feature(duration_as_u128)]
+
+extern crate fnv;
 extern crate sysinfo;
 extern crate netstat;
+extern crate backtrace;
+extern crate crossbeam_queue;
 
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(any(unix))]
+extern crate libc;
 #[cfg(any(unix))]
 extern crate psutil;
 #[cfg(any(unix))]
 extern crate walkdir;
+
+extern crate atom;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -41,7 +55,7 @@ pub trait SysSpecialStat {
     fn process_current_pid(&self) -> i32;
 
     //获取指定进程详细信息
-    fn process_detal(&self, i32) -> Option<(u32, u32, i64, i64, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)>;
+    fn process_detal(&self, i32) -> Option<(u32, u32, i64, i64, u32, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)>;
 
     //获取指定进程环境
     fn process_env(&self, i32) -> Option<HashMap<String, String>>;
@@ -77,3 +91,5 @@ pub mod common;
 pub mod linux;
 
 pub mod allocator;
+pub mod trace;
+pub mod counter;

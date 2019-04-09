@@ -13,6 +13,7 @@ use std::fs::{File, OpenOptions, Metadata, rename, remove_file};
 use std::io::{Seek, Read, Write, Result, SeekFrom, Error, ErrorKind};
 
 use atom::Atom;
+use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
 
 use worker::task::TaskType;
 use worker::impls::cast_store_task;
@@ -66,6 +67,33 @@ const RENAME_ASYNC_FILE_INFO: &str = "rename async file";
 * 移除文件信息
 */
 const REMOVE_ASYNC_FILE_INFO: &str = "remove async file";
+
+lazy_static! {
+    //打开只读异步文件数量
+    static ref ONLY_READ_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("only_read_async_file_open_count"), 0).unwrap();
+    //打开只写异步文件数量
+    static ref ONLY_WRITE_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("only_write_async_file_open_count"), 0).unwrap();
+    //打开只追加异步文件数量
+    static ref ONLY_APPEND_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("only_append_async_file_open_count"), 0).unwrap();
+    //打开读追加异步文件数量
+    static ref READ_APPEND_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("read_append_async_file_open_count"), 0).unwrap();
+    //打开读写异步文件数量
+    static ref READ_WRITE_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("read_write_async_file_open_count"), 0).unwrap();
+    //打开覆写异步文件数量
+    static ref COVER_WRITE_ASYNC_FILE_OPEN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("cover_write_async_file_open_count"), 0).unwrap();
+    //读异步文件成功次数
+    static ref READ_ASYNC_FILE_OK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("read_async_file_ok_count"), 0).unwrap();
+    //读异步文件失败次数
+    static ref READ_ASYNC_FILE_ERROR_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("read_async_file_error_count"), 0).unwrap();
+    //读异步文件字节数
+    static ref READ_ASYNC_FILE_BYTE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("read_async_file_byte_count"), 0).unwrap();
+    //写异步文件成功次数
+    static ref WRITE_ASYNC_FILE_OK_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("write_async_file_ok_count"), 0).unwrap();
+    //写异步文件失败次数
+    static ref WRITE_ASYNC_FILE_ERROR_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("write_async_file_error_count"), 0).unwrap();
+    //写异步文件字节数
+    static ref WRITE_ASYNC_FILE_BYTE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("write_async_file_byte_count"), 0).unwrap();
+}
 
 /*
 * 文件选项
@@ -122,6 +150,8 @@ impl Shared for SharedFile {
 
     fn pread(self, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>) {
         if len == 0 {
+            READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
             return callback(self, Err(Error::new(ErrorKind::Other, "pread failed, invalid len")));
         }
 
@@ -132,6 +162,8 @@ impl Shared for SharedFile {
 
     fn fpread(self, buf: Vec<u8>, buf_pos: u64, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>) {
         if len == 0 {
+            READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
             return callback(self, Err(Error::new(ErrorKind::Other, "fpread failed, invalid len")));
         }
 
@@ -215,6 +247,15 @@ impl AsyncFile {
                             .open(path) {
                 Err(e) => callback(Err(e)),
                 Ok(file) => {
+                    match options {
+                        AsyncFileOptions::OnlyRead(_) => ONLY_READ_ASYNC_FILE_OPEN_COUNT.sum(1),
+                        AsyncFileOptions::OnlyWrite(_) => ONLY_WRITE_ASYNC_FILE_OPEN_COUNT.sum(1),
+                        AsyncFileOptions::OnlyAppend(_) => ONLY_APPEND_ASYNC_FILE_OPEN_COUNT.sum(1),
+                        AsyncFileOptions::ReadAppend(_) => READ_APPEND_ASYNC_FILE_OPEN_COUNT.sum(1),
+                        AsyncFileOptions::ReadWrite(_) => READ_WRITE_ASYNC_FILE_OPEN_COUNT.sum(1),
+                        AsyncFileOptions::TruncateWrite(_) => COVER_WRITE_ASYNC_FILE_OPEN_COUNT.sum(1),
+                    };
+
                     let buffer_size = match file.metadata() {
                         Ok(meta) => get_block_size(&meta) * len as usize,
                         _ => BLOCK_SIZE * len as usize,
@@ -313,6 +354,8 @@ impl AsyncFile {
         let func = move |_lock| {
             let file_size = self.get_size();
             if file_size == 0 || len == 0 {
+                READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                 let vec = self.buffer.take().unwrap();
                 callback(init_read_file(self), Ok(vec));
                 return;
@@ -322,7 +365,11 @@ impl AsyncFile {
             
             //保证在append时，当前位置也不会被改变
             match self.inner.seek(SeekFrom::Start(pos as u64)) {
-                Err(e) => callback(init_read_file(self), Err(e)),
+                Err(e) => {
+                    READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                    callback(init_read_file(self), Err(e))
+                },
                 Ok(_) => {
                     let buf_cap = self.buffer.as_ref().unwrap().capacity() as isize;
                     match  buf_cap - self.pos as isize {
@@ -338,6 +385,10 @@ impl AsyncFile {
                                     //文件尾
                                     self.pos = self.buffer.as_ref().unwrap().len() as u64;
                                     let vec = self.buffer.take().unwrap();
+
+                                    READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                                    READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                                     callback(init_read_file(self), Ok(vec));
                                 },
                                 Ok(n) => {
@@ -345,6 +396,10 @@ impl AsyncFile {
                                     if self.pos >= buf_cap as u64 {
                                         //读完成
                                         let vec = self.buffer.take().unwrap();
+
+                                        READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                                        READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                                         callback(init_read_file(self), Ok(vec));
                                     } else {
                                         //继续读
@@ -355,12 +410,20 @@ impl AsyncFile {
                                     //重复读
                                     self.read(pos, len, callback);
                                 },
-                                Err(e) => callback(init_read_file(self), Err(e)),
+                                Err(e) => {
+                                    READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                                    callback(init_read_file(self), Err(e))
+                                },
                             }
                         },
                         _ => {
                             //读完成
                             let vec = self.buffer.take().unwrap();
+
+                            READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                            READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                             callback(init_read_file(self), Ok(vec));
                         },
                     }       
@@ -375,12 +438,22 @@ impl AsyncFile {
         let func = move |_lock| {
             if !&bytes[self.pos as usize..].is_empty() {
                 match self.inner.seek(SeekFrom::Start(pos as u64)) {
-                    Err(e) => callback(init_write_file(self), Err(e)),
+                    Err(e) => {
+                        WRITE_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                        callback(init_write_file(self), Err(e))
+                    },
                     Ok(_) => {
                         match self.inner.write(&bytes[self.pos as usize..]) {
-                            Ok(0) => callback(init_write_file(self), Err(Error::new(ErrorKind::WriteZero, "write failed"))),
+                            Ok(0) => {
+                                WRITE_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                                callback(init_write_file(self), Err(Error::new(ErrorKind::WriteZero, "write failed")))
+                            },
                             Ok(n) => {
                                 //继续写
+                                WRITE_ASYNC_FILE_BYTE_COUNT.sum(n);
+
                                 self.pos += n as u64;
                                 self.write(options, pos + n as u64, bytes, callback);
                             },
@@ -388,12 +461,18 @@ impl AsyncFile {
                                 //重复写
                                 self.write(options, pos, bytes, callback);
                             },
-                            Err(e) => callback(init_write_file(self), Err(e)),
+                            Err(e) => {
+                                WRITE_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                                callback(init_write_file(self), Err(e))
+                            },
                         }
                     },
                 }
             } else {
                 //写完成
+                WRITE_ASYNC_FILE_OK_COUNT.sum(1);
+
                 let result = match options {
                     WriteOptions::None => Ok(()),
                     WriteOptions::Flush => self.inner.flush(),
@@ -458,6 +537,9 @@ fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, le
         match r {
             Ok(0) => {
                 //读完成
+                READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                 callback(file, Ok(vec));
             }
             Ok(short_len) if short_len < len => {
@@ -466,13 +548,20 @@ fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, le
             },
             Ok(_len) => {
                 //读完成
+                READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                 callback(file, Ok(vec));
             },
             Err(ref e) if e.kind() == ErrorKind::Interrupted => {
                 //重复读
                 pread_continue(vec, vec_pos, file, pos, len, callback);
             },
-            Err(e) => callback(file, Err(e)),
+            Err(e) => {
+                READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                callback(file, Err(e))
+            },
         }
     };
     cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
@@ -489,6 +578,9 @@ fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, l
         match r {
             Ok(0) => {
                 //读完成
+                READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                 callback(file, Ok(vec));
             }
             Ok(short_len) if short_len < len => {
@@ -497,13 +589,20 @@ fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, l
             },
             Ok(_len) => {
                 //读完成
+                READ_ASYNC_FILE_BYTE_COUNT.sum(vec.len());
+                READ_ASYNC_FILE_OK_COUNT.sum(1);
+
                 callback(file, Ok(vec));
             },
             Err(ref e) if e.kind() == ErrorKind::Interrupted => {
                 //重复读
                 fpread_continue(vec, vec_pos, file, pos, len, callback);
             },
-            Err(e) => callback(file, Err(e)),
+            Err(e) => {
+                READ_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                callback(file, Err(e))
+            },
         }
     };
     cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_READ_ASYNC_FILE_INFO));
@@ -520,9 +619,14 @@ fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos:
         match r {
             Ok(short_len) if short_len < len => {
                 //继续写
+                WRITE_ASYNC_FILE_BYTE_COUNT.sum(len);
+
                 pwrite_continue(len - short_len, file, options, pos + short_len as u64, bytes, vec_pos + short_len as u64, callback);
             },
             Ok(len) => {
+                WRITE_ASYNC_FILE_BYTE_COUNT.sum(len);
+                WRITE_ASYNC_FILE_OK_COUNT.sum(1);
+
                 //写完成
                 let result = match options {
                     WriteOptions::None => Ok(len),
@@ -538,7 +642,11 @@ fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos:
                 //重复写
                 pwrite_continue(len, file, options, pos, bytes, vec_pos, callback);
             },
-            Err(e) => callback(file, Err(e)),
+            Err(e) => {
+                WRITE_ASYNC_FILE_ERROR_COUNT.sum(1);
+
+                callback(file, Err(e))
+            },
         }
     };
     cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(SHARED_WRITE_ASYNC_FILE_INFO));

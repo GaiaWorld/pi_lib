@@ -317,7 +317,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     handlers.notify(ModifyFieldEvent{
                         id: self.id.clone(),
                         parent: parent,
-                        field: ""
+                        field: #key_str,
                     }, &mut self.mgr);
                 }
 

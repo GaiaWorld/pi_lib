@@ -16,16 +16,17 @@ use std::io::{Error, Result};
 
 use npnc::bounded::mpmc::{Producer, Consumer};
 
-use atom::Atom;
 use worker::task::{TaskType, Task};
 use worker::impls::{STORE_WORKER_WALKER, STORE_TASK_POOL, create_store_task_queue, cast_store_task};
 use worker::worker_pool::WorkerPool;
+use atom::Atom;
+use worker::worker::WorkerType;
 use file::file::{Shared, AsyncFile, AsyncFileOptions, WriteOptions};
 use file::fs_monitor::{FSMonitorOptions, FSListener, FSMonitor};
 
 #[test]
 fn test_file() {
-    let worker_pool = Box::new(WorkerPool::new(10, 1024 * 1024, 10000, STORE_WORKER_WALKER.clone()));
+    let worker_pool = Box::new(WorkerPool::new("test file".to_string(), WorkerType::Store, 10, 1024 * 1024, 10000, STORE_WORKER_WALKER.clone()));
     worker_pool.run(STORE_TASK_POOL.clone());
 
     let open = move |f0: Result<AsyncFile>| {
@@ -101,7 +102,7 @@ fn test_file() {
 
 #[test]
 fn test_shared_file() {
-    let worker_pool = Box::new(WorkerPool::new(10, 1024 * 1024, 10000, STORE_WORKER_WALKER.clone()));
+    let worker_pool = Box::new(WorkerPool::new("test shared file".to_string(), WorkerType::Store, 10, 1024 * 1024, 10000, STORE_WORKER_WALKER.clone()));
     worker_pool.run(STORE_TASK_POOL.clone());
 
     let open = move |f0: Result<AsyncFile>| {

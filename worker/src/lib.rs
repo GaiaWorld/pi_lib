@@ -21,6 +21,7 @@ extern crate flame;
 extern crate flamer;
 
 extern crate atom;
+extern crate apm;
 extern crate timer;
 extern crate task_pool;
 

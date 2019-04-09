@@ -7,7 +7,7 @@ use threadpool::{ThreadPool, Builder as ThreadPoolBuilder};
 use task_pool::TaskPool;
 
 use task::Task;
-use worker::{WorkerStatus, Worker};
+use worker::{WorkerStatus, WorkerType, Worker};
 
 /*
 * 工作者池
@@ -15,8 +15,11 @@ use worker::{WorkerStatus, Worker};
 pub struct WorkerPool {
     counter:        u32,                            //工作者编号计数器
     map:            FnvHashMap<u32, Arc<Worker>>,   //工作者缓存
-    thread_pool:    ThreadPool,                     //线程池
+    worker_type:    WorkerType,                     //工作者类型
     walker:         Arc<(Mutex<bool>, Condvar)>,    //唤醒者
+    stack_size:     usize,                          //堆栈大小
+    slow:           u32,                            //慢执行时长
+    thread_pool:    ThreadPool,                     //线程池
 }
 
 impl Display for WorkerPool {
@@ -29,27 +32,51 @@ impl Display for WorkerPool {
 
 impl WorkerPool {
     //构建指定数量工作者的工作者池
-    pub fn new(len: usize, stack_size: usize, slow: u32, walker: Arc<(Mutex<bool>, Condvar)>) -> Self {
+    pub fn new(name: String, worker_type: WorkerType, len: usize, stack_size: usize, slow: u32, walker: Arc<(Mutex<bool>, Condvar)>) -> Self {
         let mut counter: u32 = 0;
         let mut map = FnvHashMap::default();
         for _ in 0..len {
             counter += 1;
-            map.insert(counter, Arc::new(Worker::new(counter, slow)));
+            map.insert(counter, Arc::new(Worker::new(worker_type.clone(), counter, slow)));
         }
         WorkerPool {
             counter:        counter,
             map:            map,
-            thread_pool:    ThreadPoolBuilder::new().
-                                                num_threads(len).
-                                                thread_stack_size(stack_size).
-                                                build(),
+            worker_type,
             walker:         walker,
+            stack_size,
+            slow,
+            thread_pool:    ThreadPoolBuilder::new()
+                                                .thread_name(name)
+                                                .num_threads(len)
+                                                .thread_stack_size(stack_size)
+                                                .build(),
         }
     }
 
     //获取工作者数量
-    pub fn size(&self) -> u32 {
-        self.map.len() as u32
+    pub fn size(&self) -> usize {
+        self.map.len()
+    }
+
+    //获取工作者分配堆栈大小
+    pub fn stack_size(&self) -> usize {
+        self.stack_size
+    }
+
+    //获取工作者慢任务时长
+    pub fn slow_time(&self) -> usize {
+        self.slow as usize
+    }
+
+    //获取空闲工作者数量
+    pub fn free_size(&self) -> usize {
+        self.thread_pool.queued_count()
+    }
+
+    //获取异常工作者数量
+    pub fn panic_size(&self) -> usize {
+        self.thread_pool.panic_count()
     }
 
     //获取指定状态的工作者编号数组
@@ -118,7 +145,7 @@ impl WorkerPool {
     }
 
     //增加工作者
-    pub fn increase(&mut self, pool: Arc<TaskPool<Task>>, len: usize, slow: u32) {
+    pub fn increase(&mut self, pool: Arc<TaskPool<Task>>, len: usize) {
         if len == 0 {
             return;
         }
@@ -127,7 +154,7 @@ impl WorkerPool {
         let mut worker: Arc<Worker>;
         for _ in 0..len {
             self.counter += 1;
-            worker = Arc::new(Worker::new(self.counter, slow));
+            worker = Arc::new(Worker::new(self.worker_type.clone(), self.counter, self.slow));
             worker.stop();
             self.map.insert(self.counter, worker.clone());
         }
