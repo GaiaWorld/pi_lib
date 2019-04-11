@@ -1651,7 +1651,7 @@ impl<T: Decode> Decode for Option<T> {
 }
 
 #[inline]
-fn partial_cmp<'a>(b1: &mut ReadBuffer<'a>, b2: &mut ReadBuffer<'a>) -> Option<Ordering>{
+pub fn partial_cmp<'a>(b1: &mut ReadBuffer<'a>, b2: &mut ReadBuffer<'a>) -> Option<Ordering>{
 	let err = "partial_cmp err";
 	let t1 = b1.get_type().expect(err);
 	let t2 = b2.get_type().expect(err);
