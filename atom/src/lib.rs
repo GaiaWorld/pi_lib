@@ -1,5 +1,7 @@
-#![feature(core_intrinsics)] 
+#![feature(core_intrinsics)]
 #![feature(nll)]
+#![feature(pattern)]
+
 /**
  * 全局的线程安全的原子字符串池，为了移植问题，可能需要将实现部分移到其他库
  * 某些高频单次的Atom，可以在应用层增加一个cache来缓冲Atom，定期检查引用计数来判断是否缓冲。
@@ -21,6 +23,9 @@ use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 use std::sync::{Arc, Weak};
 use std::sync::RwLock;
+use std::str::pattern::Pattern;
+use std::iter::Map;
+use std::str::Split;
 
 use fnv::FnvHashMap;
 
@@ -102,6 +107,12 @@ impl<'a> From<&'a [u8]> for Atom {
 	fn from(s: &[u8]) -> Atom {
 		Atom(ATOM_MAP.or_insert(unsafe { String::from_utf8_unchecked(Vec::from(s)) }))
 	}
+}
+/// 劈分字符串, 返回trim后的Atom的迭代器
+pub fn split<'a, P: Pattern<'a>>(s: &'a String, pat: P) -> Map<Split<'a, P>, fn(&str) -> Atom> {
+    s.split(pat).map(|r|{
+        Atom::from(r.trim_start().trim_end())
+    })
 }
 
 //todo
