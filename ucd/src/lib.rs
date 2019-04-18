@@ -310,6 +310,8 @@ pub fn is_whitespace(c: char) -> bool{
 
 pub trait Codepoint where Self: core::marker::Sized {
     // TODO is_num is_digit is_control is_ascii_alpha is_ascii_lower is_ascii_upper is_ascii_white is_ascii_control is_ascii_num
+    fn get_type_id(self) -> usize;
+    fn get_type_name(self) -> &'static str;
     fn is_cased(self) -> bool;
     fn is_alpha(self) -> bool;
     fn is_lower(self) -> bool;
@@ -318,6 +320,13 @@ pub trait Codepoint where Self: core::marker::Sized {
 }
 impl Codepoint for char {
 
+
+    fn get_type_id(self) -> usize{
+        get_type_id(self)
+    }
+    fn get_type_name(self) -> &'static str {
+        get_type_name(self)
+    }
     fn is_cased(self) -> bool {
         is_cased(self)
     }
