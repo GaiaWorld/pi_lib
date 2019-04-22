@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use lazy_static;
 use fnv::FnvHashMap;
+use parking_lot::RwLock;
 use crossbeam_queue::ArrayQueue;
 
 use atom::Atom;
@@ -119,8 +120,9 @@ impl Iterator for DynamicIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(counter) = self.inner.dynamic_collect.pop() {
-            if Arc::strong_count(&(counter.1)) == 1 {
-                //外部没有使用当前动态计数器，则直接返回
+            if Arc::strong_count(&(counter.1)) == 2 {
+                //外部没有使用当前动态计数器，则从动态计数器表中移出指定动态计数器，并直接返回
+                self.inner.dynamic_table.write().remove(&(counter.0));
                 return Some(counter);
             }
 
@@ -175,9 +177,10 @@ unsafe impl Send for PrefCollect {}
 unsafe impl Sync for PrefCollect {}
 
 struct InnerCollect {
-    dynamic_collect:    ArrayQueue<(u64, Arc<AtomicUsize>)>,    //动态计数器队列，运行时可以动态增删计数器
-    static_init:        AtomicBool,                             //静态计数器队列初始化标记
-    static_collect:     ArrayQueue<(u64, Arc<AtomicUsize>)>,    //静态计数器队列，初始化后无法增删计数器
+    dynamic_table:      RwLock<FnvHashMap<u64, Arc<AtomicUsize>>>,  //动态计数器表，用于随机查询指定的动态计数器
+    dynamic_collect:    ArrayQueue<(u64, Arc<AtomicUsize>)>,        //动态计数器队列，运行时可以动态增删计数器
+    static_init:        AtomicBool,                                 //静态计数器队列初始化标记
+    static_collect:     ArrayQueue<(u64, Arc<AtomicUsize>)>,        //静态计数器队列，初始化后无法增删计数器
 }
 
 impl PrefCollect {
@@ -191,6 +194,7 @@ impl PrefCollect {
         }
 
         PrefCollect(Arc::new(InnerCollect {
+            dynamic_table: RwLock::new(FnvHashMap::default()),
             dynamic_collect: ArrayQueue::new(dynamic_capacity),
             static_init: AtomicBool::new(false),
             static_collect: ArrayQueue::new(static_capacity),
@@ -215,8 +219,15 @@ impl PrefCollect {
         }
 
         let cid = target.get_hash();
+        if let Some(counter) = self.0.dynamic_table.read().get(&cid) {
+            //存在指定的动态计数器
+            return Some(PrefCounter(counter.clone()));
+        }
+
+        //不存在指定的动态计数器
         let counter = Arc::new(AtomicUsize::new(init));
         self.0.dynamic_collect.push((cid, counter.clone()));
+        self.0.dynamic_table.write().insert(cid, counter.clone());
         Some(PrefCounter(counter))
     }
 
@@ -228,8 +239,15 @@ impl PrefCollect {
         }
 
         let cid = target.get_hash();
+        if let Some(counter) = self.0.dynamic_table.read().get(&cid) {
+            //存在指定的动态计时器
+            return Some(PrefTimer(counter.clone()));
+        }
+
+        //不存在指定的动态计时器
         let counter = Arc::new(AtomicUsize::new(init));
         self.0.dynamic_collect.push((cid, counter.clone()));
+        self.0.dynamic_table.write().insert(cid, counter.clone());
         Some(PrefTimer(counter))
     }
 

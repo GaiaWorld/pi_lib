@@ -6,6 +6,7 @@ extern crate fnv;
 extern crate sysinfo;
 extern crate netstat;
 extern crate backtrace;
+extern crate parking_lot;
 extern crate crossbeam_queue;
 
 #[macro_use]
