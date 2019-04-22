@@ -1,5 +1,7 @@
 
 extern crate slab;
+extern crate atom;
+extern crate fnv;
 
 pub mod world;
 pub mod component;

@@ -5,5 +5,7 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 slab = {path="../slab"}
+atom = {path="../atom"}
 paste = "0.1"
 lazy_static = "*"
+fnv = "*"
