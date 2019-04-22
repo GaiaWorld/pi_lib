@@ -198,7 +198,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         let elem = groups._group.get_mut(self.id);
                         
                         //销毁
-                        {
+                        if elem.parent > 0 {
                             let old = elem.#get_name().clone();
                             let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
                             old_ref.destroy(); 
@@ -212,23 +212,19 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     // let parent = self.id.#set_name(value, groups);
                     let handlers = groups._group.get_handlers();
                     //创建事件
-                    {
-                        let mut v_ref = #write_ref_name::<M>::new(new_id, groups.#key.to_usize(), &mut self.mgr);
-                        v_ref.set_parent(self.id); // 递归设置parent
-                        v_ref.create_notify();
+                    if parent > 0 {
+                        {
+                            let mut v_ref = #write_ref_name::<M>::new(new_id, groups.#key.to_usize(), &mut self.mgr);
+                            v_ref.set_parent(self.id); // 递归设置parent
+                            v_ref.create_notify();
+                        }
+                        //修改事件
+                        handlers.notify_modify_field(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str
+                        }, &mut self.mgr);
                     }
-                    
-                    // notify(Event::Create{
-                    //     id: new_id,
-                    //     parent: parent,
-                    // }, &handlers1.borrow(), &mut self.mgr);
-
-                    //修改事件
-                    handlers.notify_modify_field(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str
-                    }, &mut self.mgr);
                 }
 
                 pub fn #del_name(&mut self){
@@ -237,7 +233,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         let elem = groups._group.get_mut(self.id);
                         
                         //销毁
-                        {
+                        if elem.parent > 0 {
                             let old = elem.#get_name().clone();
                             let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
                             old_ref.destroy(); 
@@ -246,16 +242,16 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         elem.#set_name(0);
                         elem.parent
                     };
-   
-                    // let parent = self.id.#set_name(value, groups);
-                    let handlers = groups._group.get_handlers();
 
                     //修改事件
-                    handlers.notify_modify_field(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str
-                    }, &mut self.mgr);
+                    if parent > 0 {
+                        let handlers = groups._group.get_handlers();
+                        handlers.notify_modify_field(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str
+                        }, &mut self.mgr);
+                    }
                 }
 
                 pub fn #get_name(&self) -> #read_ref_name<M>{
@@ -281,7 +277,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         let elem = groups._group.get_mut(self.id);
 
                         //销毁
-                        {
+                        if elem.parent > 0 {
                             let old = elem.#get_name().clone();
                             let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
                             old_ref.destroy(); 
@@ -289,19 +285,23 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
 
                         let new_id = #id_name::_set(&mut groups.#key, value, self.id);
                         elem.#set_name(new_id.clone()); // 递归设置parent
-                        let mut new_write = #write_ref_name::<M>::new(new_id, groups.#key.to_usize(), &mut self.mgr);
-                        new_write.set_parent(self.id);
-                        new_write.create_notify();
+                        if elem.parent > 0 {
+                            let mut new_write = #write_ref_name::<M>::new(new_id, groups.#key.to_usize(), &mut self.mgr);
+                            new_write.set_parent(self.id);
+                            new_write.create_notify();
+                        }
                         elem.parent
                     };
 
-                    let handlers = groups._group.get_handlers();
-                    //修改事件
-                    handlers.notify_modify_field(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str
-                    }, &mut self.mgr);
+                    if parent > 0 {
+                        //修改事件
+                        let handlers = groups._group.get_handlers();
+                        handlers.notify_modify_field(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str
+                        }, &mut self.mgr);
+                    }
                 }
 
                 pub fn #del_name(&mut self){
@@ -311,7 +311,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         let elem = groups._group.get_mut(self.id);
 
                         //销毁
-                        {
+                        if elem.parent > 0 {
                             let old = elem.#get_name().clone();
                             let mut old_ref = #write_ref_name::<M>::new(old, groups.#key.to_usize(), &mut self.mgr);
                             old_ref.destroy(); 
@@ -320,14 +320,15 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         elem.#set_name(#id_name::None);
                         elem.parent
                     };
-
-                    let handlers = groups._group.get_handlers();
-                    //修改事件
-                    handlers.notify_modify_field(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str
-                    }, &mut self.mgr);
+                    if parent > 0 {
+                        //修改事件
+                        let handlers = groups._group.get_handlers();
+                        handlers.notify_modify_field(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str
+                        }, &mut self.mgr);
+                    }
                 }
 
                 pub fn #get_name(&self) -> #read_ref_name<M>{
@@ -365,13 +366,14 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         elem.#set_name(value);
                         elem.parent
                     };
-                    //let parent = self.id.#set_name(value, groups);
-                    let handlers = groups.#key.clone();
-                    handlers.notify(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str,
-                    }, &mut self.mgr);
+                    if parent > 0 {
+                        let handlers = groups.#key.clone();
+                        handlers.notify(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str,
+                        }, &mut self.mgr);
+                    }
                 }
 
                 pub fn #get_name(&self) -> &#ty{
@@ -408,13 +410,14 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                         elem.#set_name(value);
                         elem.parent
                     };
-                    //let parent = self.id.#set_name(value, groups);
-                    let handlers = groups._group.get_handlers();
-                    handlers.notify_modify_field(ModifyFieldEvent{
-                        id: self.id.clone(),
-                        parent: parent,
-                        field: #key_str
-                    }, &mut self.mgr);
+                    if parent > 0 {
+                        let handlers = groups._group.get_handlers();
+                        handlers.notify_modify_field(ModifyFieldEvent{
+                            id: self.id.clone(),
+                            parent: parent,
+                            field: #key_str
+                        }, &mut self.mgr);
+                    }
                 }
 
                 pub fn #get_name(&self) -> &#ty{
