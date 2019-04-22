@@ -17,17 +17,17 @@ use std::ops::{Index, IndexMut};
 //     fn remove(&mut self, index: usize) -> T;
 // }
 
-pub trait IndexMap<T>{
+pub trait Map<K, V>{
     fn len(&self) -> usize;
-    fn get(&self, key: usize) -> Option<&T>;
-    fn get_mut(&mut self, key: usize) -> Option<&mut T>;
-    fn contains(&self, key: usize) -> bool;
-    unsafe fn get_unchecked(&self, key: usize) -> &T;
-    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
-    fn insert(&mut self, key: usize, val: T);
-    unsafe fn remove(&mut self, key: usize) -> T;
+    fn contains(&self, key: &K) -> bool;
+    fn get(&self, key: &K) -> Option<&V>;
+    fn get_mut(&mut self, key: &K) -> Option<&mut V>;
+    unsafe fn get_unchecked(&self, key: &K) -> &V;
+    unsafe fn get_unchecked_mut(&mut self, key: &K) -> &mut V;
+    unsafe fn remove_unchecked(&mut self, key: &K) -> V;
+    fn insert(&mut self, key: &K, val: V) -> Option<V>;
+    fn remove(&mut self, key: &K) -> Option<V>;
 }
-
 
 pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
@@ -114,10 +114,8 @@ impl<T> VecMap<T> {
     pub unsafe fn replace(&mut self, index: usize, value: T) -> T {
         replace(&mut self.entries[index - 1], Some(value)).unwrap()
     }
-}
 
-impl<T> IndexMap<T> for VecMap<T> {
-    fn get(&self, index: usize) -> Option<&T> {
+    pub fn get(&self, index: usize) -> Option<&T> {
         if index == 0 || index > self.entries.len(){
             return None;
         }
@@ -127,7 +125,7 @@ impl<T> IndexMap<T> for VecMap<T> {
         }
     }
 
-    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index == 0 || index > self.entries.len(){
             return None;
         }
@@ -137,15 +135,15 @@ impl<T> IndexMap<T> for VecMap<T> {
         }
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> &T {
+    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         self.entries[index - 1].as_ref().unwrap()
     }
 
-    unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         self.entries[index - 1].as_mut().unwrap()
     }
 
-    fn insert(&mut self, index:usize, val: T) {
+    pub fn insert(&mut self, index:usize, val: T) -> Option<T>{
         let index = index - 1;
         let len = self.entries.len();
         if index >= len {
@@ -153,18 +151,33 @@ impl<T> IndexMap<T> for VecMap<T> {
                 self.entries.push(None);
             }
             self.entries.push(Some(val));
+            self.len += 1;
+            None
         }else {
-            self.entries[index] = Some(val);
+            let r = replace(&mut self.entries[index], Some(val));
+            if r.is_none(){
+                self.len += 1;
+            }
+            r
         }
-        self.len += 1;
     }
 
-    unsafe fn remove(&mut self, index: usize) -> T {
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        match replace(&mut self.entries[index - 1], None) {
+            Some(v) => {
+                self.len -= 1;
+                Some(v)
+            },
+            None => None,
+        }
+    }
+
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
         self.len -= 1;
         replace(&mut self.entries[index - 1], None).unwrap()
     }
 
-    fn contains(&self, index: usize) -> bool {
+    pub fn contains(&self, index: usize) -> bool {
         if index == 0 || index > self.entries.len(){
             return false;
         }
@@ -172,6 +185,53 @@ impl<T> IndexMap<T> for VecMap<T> {
             Some(_v) => true,
             None => false,
         }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+}
+
+impl<T> Map<usize, T> for VecMap<T> {
+    #[inline]
+    fn get(&self, key: &usize) -> Option<&T> {
+        self.get(*key)
+    }
+
+    #[inline]
+    fn get_mut(&mut self, key: &usize) -> Option<&mut T> {
+        self.get_mut(*key)
+    }
+
+    #[inline]
+    unsafe fn get_unchecked(&self, key: &usize) -> &T {
+        self.get_unchecked(*key)
+    }
+
+    #[inline]
+    unsafe fn get_unchecked_mut(&mut self, key: &usize) -> &mut T {
+        self.get_unchecked_mut(*key)
+    }
+
+    #[inline]
+    unsafe fn remove_unchecked(&mut self, key: &usize) -> T {
+        self.remove_unchecked(*key)
+    }
+
+    #[inline]
+    fn insert(&mut self, key: &usize, val: T) -> Option<T> {
+        self.insert(*key, val)
+    }
+
+    #[inline]
+    fn remove(&mut self, key: &usize) -> Option<T> {
+        self.remove(*key)
+    }
+
+    #[inline]
+    fn contains(&self, key: &usize) -> bool {
+        self.contains(*key)
     }
 
     #[inline]
