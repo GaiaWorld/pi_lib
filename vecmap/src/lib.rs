@@ -17,6 +17,17 @@ use std::ops::{Index, IndexMut};
 //     fn remove(&mut self, index: usize) -> T;
 // }
 
+pub trait IndexMap<T>{
+    fn len(&self) -> usize;
+    fn get(&self, key: usize) -> Option<&T>;
+    fn get_mut(&mut self, key: usize) -> Option<&mut T>;
+    fn contains(&self, key: usize) -> bool;
+    unsafe fn get_unchecked(&self, key: usize) -> &T;
+    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
+    fn insert(&mut self, key: usize, val: T);
+    unsafe fn remove(&mut self, key: usize) -> T;
+}
+
 
 pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
@@ -76,11 +87,6 @@ impl<T> VecMap<T> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -105,7 +111,13 @@ impl<T> VecMap<T> {
     //     }
     // }
 
-    pub fn get(&self, index: usize) -> Option<&T> {
+    pub unsafe fn replace(&mut self, index: usize, value: T) -> T {
+        replace(&mut self.entries[index - 1], Some(value)).unwrap()
+    }
+}
+
+impl<T> IndexMap<T> for VecMap<T> {
+    fn get(&self, index: usize) -> Option<&T> {
         if index == 0 || index > self.entries.len(){
             return None;
         }
@@ -115,7 +127,7 @@ impl<T> VecMap<T> {
         }
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index == 0 || index > self.entries.len(){
             return None;
         }
@@ -125,15 +137,15 @@ impl<T> VecMap<T> {
         }
     }
 
-    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
+    unsafe fn get_unchecked(&self, index: usize) -> &T {
         self.entries[index - 1].as_ref().unwrap()
     }
 
-    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+    unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         self.entries[index - 1].as_mut().unwrap()
     }
 
-    pub fn insert(&mut self, index:usize, val: T) {
+    fn insert(&mut self, index:usize, val: T) {
         let index = index - 1;
         let len = self.entries.len();
         if index >= len {
@@ -147,16 +159,12 @@ impl<T> VecMap<T> {
         self.len += 1;
     }
 
-    pub unsafe fn remove(&mut self, index: usize) -> T {
+    unsafe fn remove(&mut self, index: usize) -> T {
         self.len -= 1;
         replace(&mut self.entries[index - 1], None).unwrap()
     }
 
-    pub unsafe fn replace(&mut self, index: usize, value: T) -> T {
-        replace(&mut self.entries[index - 1], Some(value)).unwrap()
-    }
-
-    pub fn contains(&mut self, index: usize) -> bool {
+    fn contains(&self, index: usize) -> bool {
         if index == 0 || index > self.entries.len(){
             return false;
         }
@@ -165,7 +173,13 @@ impl<T> VecMap<T> {
             None => false,
         }
     }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.len
+    }
 }
+
 impl<T> Index<usize> for VecMap<T> {
     type Output = T;
 
