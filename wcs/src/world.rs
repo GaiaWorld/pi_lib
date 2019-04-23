@@ -18,7 +18,6 @@ impl<C: ComponentMgr, E> World<C, E> {
         // debug版判断是否已经存在名为name的system_group， 如果存在， 输出警告 TODO
         let mut systems = Vec::new();
         for l in list {
-            println!("systems:{:?}", l);
              match self.systems_mgr.get(l) {
                 Some(v) => systems.push(v.clone()),
                 None => return Err(format!("add_systems error, system is not exist, system_name: {}", l.as_ref())),

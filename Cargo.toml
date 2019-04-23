@@ -31,4 +31,5 @@ members = [
   "enum_default_macro",
   "pointer",
   "vecmap",
+  "debug_info",
 ]
