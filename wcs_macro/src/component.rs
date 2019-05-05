@@ -356,9 +356,9 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     quote! {}
                 },
             };
+            // let set_name_str = set_name.clone().to_string();
             quote! {
                 pub fn #set_name(&mut self, value: #ty){
-                    
                     let groups = #group::<M>::from_usize_mut(self.groups);
                     let parent = {
                         let elem = groups._group.get_mut(self.id);
@@ -401,6 +401,7 @@ pub fn impl_struct_writeref_fun(name: &syn::Ident, field: &Field) -> quote::__rt
                     quote! {}
                 },
             };
+            let set_name_str = set_name.clone().to_string();
             quote! {
                 pub fn #set_name(&mut self, value: #ty){
                     let groups = #group::<M>::from_usize_mut(self.groups);
