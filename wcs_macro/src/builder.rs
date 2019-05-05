@@ -391,7 +391,7 @@ fn impl_enum_build(name: &syn::Ident, variants: &syn::punctuated::Punctuated<syn
     let group_name = group_name(name.to_string());
     let builder_attrs = paser_builder_attrs(first_field);
 
-    if builder_attrs.build_ty == BuildType::Builder {
+    if let BuildType::Builder = builder_attrs.build_ty {
         quote!{
             impl<C: ComponentMgr> Builder<C, #group_name<C>, #name> for #builder_name{
                 fn build(self, group: &mut #group_name<C>) -> #name{
@@ -529,7 +529,6 @@ struct BuilderAttrs{
     build_ty: BuildType,
 }
 
-#[derive(PartialEq, Eq)]
 enum BuildType{
     Builder,
     Default,
