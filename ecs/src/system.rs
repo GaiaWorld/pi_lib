@@ -1,7 +1,11 @@
 
 use std::{
     sync::Arc,
+    any::Any,
 };
+
+use mopa;
+
 
 use world::World;
 use listener::{Listener as Lis, FnListener, FnListeners};
@@ -15,13 +19,13 @@ pub trait Runner {
     fn dispose(&mut self, read: Self::ReadData, write: Self::WriteData);
 }
 
-pub trait FetchData {
+pub trait FetchData: Sized + 'static {
     fn fetch(world: &World) -> Self;
 }
+
 pub trait FetchMutData {
     fn fetch_mut(world: &World) -> Self;
 }
-
 
 
 pub struct CreateEvent{
@@ -53,6 +57,7 @@ pub type ModifyListeners = FnListeners<ModifyEvent>;
 pub type CreateFn = FnListener<CreateEvent>;
 pub type DeleteFn = FnListener<DeleteEvent>;
 pub type ModifyFn = FnListener<ModifyEvent>;
+pub type RunnerFn = FnListener<()>;
 
 
 #[derive(Default)]
@@ -96,7 +101,11 @@ pub trait Notify {
     fn remove_modify(&self, &ModifyFn);
 }
 
-
+pub trait System {
+    fn fetch_setup(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
+    fn fetch_run(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
+    fn fetch_dispose(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
+}
 // Node{};
 // CharNode{};
 
@@ -110,9 +119,19 @@ pub trait Notify {
 //     const xx: HashMap<>;
 // }
 
+// struct CellXy = (TrustCell<Xy>);
+// impl System for CellXy {
+//     fn fetch_run(&self, me: Arc<Any>) -> Option<RunnerFn> {
+//         let f = |e: &E| -> {
+            
+//             system.listen(e, &read_data, &mut write_data)
+//         };
+//         f
+//     }
+// }
 // [#aa(dd)]
 // impl Listener<T, Pos, CreateEvent> for Xy {
-//     type ReadData = MultiCase<Node, WorldMatrix>;
+//     type ReadData = CellMultiCase<Node, WorldMatrix>;
 //     type WriteData: Overflow;
 //     fn listen(&mut self, event: &E, read: Self::ReadData, write: Self::WriteData) {
 

@@ -1,6 +1,6 @@
 
 use std::{
-    any::Any,
+    //any::Any,
     sync::Arc,
     any::TypeId,
     marker::PhantomData,
@@ -9,6 +9,8 @@ use std::{
     //use crate::cell::{Ref, RefMut, TrustCell};
 };
 
+use mopa::Any;
+
 
 use im::hashmap::HashMap;
 
@@ -16,7 +18,7 @@ use atom::Atom;
 use listener::{FnListeners, FnListener};
 use pointer::cell::{Ref, RefMut, TrustCell};
 
-use system::{Runner, Listener};
+use system::{System};
 use entity::{Entity, CellEntity};
 use compment::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl};
 use dispatch::Dispatcher;
@@ -25,15 +27,16 @@ use dispatch::Dispatcher;
 /// according to Rust's typical borrowing model (one writer xor multiple
 /// readers).
 pub trait Resource: Any + Send + Sync + 'static {}
+mopafy!(Resource);
 
 impl<T> Resource for T where T: Any + Send + Sync {}
 
 #[derive(Default)]
 pub struct World {
     entity: HashMap<TypeId, Arc<CellEntity>>,
-    single: HashMap<TypeId, Arc<SingleCase>>,
-    multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: HashMap<TypeId, Arc<Any>>,
+    single: HashMap<TypeId, Arc<Any>>,
+    multi: HashMap<(TypeId, TypeId), Arc<Any>>,
+    system: HashMap<Atom, Arc<System>>,
     runner: HashMap<Atom, Arc<Dispatcher>>,
 }
 
@@ -71,10 +74,11 @@ impl World {
         }
     }
     pub fn register_system<T>(&mut self, name: Atom, sys: T) {
-        // 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
+        // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
     }
     pub fn unregister_system(&mut self, name: &Atom) {
         // 要求该system不能在dispatcher中， 取消所有的监听器
+        // 如果是Runner则调用dispose方法
     }
     pub fn create_entity<E: 'static>(&self) -> usize {
         let id = TypeId::of::<E>();
@@ -110,14 +114,14 @@ impl World {
             _ => None
         }
     }
-    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<SingleCase>> {
+    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<Any>> {
         let id = TypeId::of::<T>();
         match self.single.get(&id) {
             Some(v) => Some(v.clone()),
             _ => None
         }
     }
-    pub fn fetch_multi<E: 'static, C: 'static>(&self) -> Option<Arc<MultiCase>> {
+    pub fn fetch_multi<E: 'static, C: 'static>(&self) -> Option<Arc<Any>> {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.multi.get(&(eid, cid)) {
@@ -125,13 +129,12 @@ impl World {
             _ => None
         }
     }
-    pub fn fetch_system<T: 'static>(&self) -> Option<Arc<Any>> {
-        let id = TypeId::of::<T>();
-        match self.system.get(&id) {
-            Some(v) => Some(v.clone()),
-            _ => None
-        }
-    }
+    // pub fn fetch_system(&self, name: &Atom) -> Option<Arc<System>> {
+    //     match self.system.get(name) {
+    //         Some(v) => Some(v.clone()),
+    //         _ => None
+    //     }
+    // }
     pub fn run(&self, name: &Atom) {
         match self.runner.get(name) {
             Some(v) => v.run(),

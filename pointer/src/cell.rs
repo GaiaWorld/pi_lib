@@ -80,7 +80,7 @@ impl<'a, T> Drop for RefMut<'a, T> {
 
 /// A custom cell container that is a `RefCell` with thread-safety.
 #[derive(Debug)]
-pub struct TrustCell<T> {
+pub struct TrustCell<T:?Sized> {
     flag: AtomicUsize,
     inner: UnsafeCell<T>,
 }
