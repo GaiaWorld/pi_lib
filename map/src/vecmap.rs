@@ -142,6 +142,9 @@ impl<T> VecMap<T> {
     }
 
     pub fn remove(&mut self, index: usize) -> Option<T> {
+        if index > self.len() {
+            return None;
+        }
         match replace(&mut self.entries[index - 1], None) {
             Some(v) => {
                 self.len -= 1;
