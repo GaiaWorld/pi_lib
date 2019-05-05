@@ -6,28 +6,7 @@ use std::ops::{Index, IndexMut};
 // use std::ops::Drop;
 // use std::ptr::write;
 
-// pub trait VecMap<T>{
-//     fn len(&self) -> usize;
-//     fn get(&self, index: usize) -> Option<&T>;
-//     fn get_mut(&mut self, index: usize) -> Option<&mut T>;
-//     fn contains(&self, index: usize) -> bool;
-//     unsafe fn get_unchecked(&self, index: usize) -> &T;
-//     unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T;
-//     fn insert(&mut self, val: T) -> usize;
-//     fn remove(&mut self, index: usize) -> T;
-// }
-
-pub trait Map<K, V>{
-    fn len(&self) -> usize;
-    fn contains(&self, key: &K) -> bool;
-    fn get(&self, key: &K) -> Option<&V>;
-    fn get_mut(&mut self, key: &K) -> Option<&mut V>;
-    unsafe fn get_unchecked(&self, key: &K) -> &V;
-    unsafe fn get_unchecked_mut(&mut self, key: &K) -> &mut V;
-    unsafe fn remove_unchecked(&mut self, key: &K) -> V;
-    fn insert(&mut self, key: &K, val: V) -> Option<V>;
-    fn remove(&mut self, key: &K) -> Option<V>;
-}
+use ::Map;
 
 pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
@@ -42,7 +21,7 @@ impl<T> Default for VecMap<T> {
 
 impl<T> VecMap<T> {
 
-    pub fn new() -> VecMap<T> {
+    pub fn new() -> Self {
         VecMap::with_capacity(0)
     }
 
@@ -193,7 +172,9 @@ impl<T> VecMap<T> {
     }
 }
 
-impl<T> Map<usize, T> for VecMap<T> {
+impl<T> Map for VecMap<T> {
+	type Key = usize;
+	type Val = T;
     #[inline]
     fn get(&self, key: &usize) -> Option<&T> {
         self.get(*key)
@@ -375,7 +356,8 @@ impl<T> Debug for VecMap<T> where T: Debug {
 
 #[cfg(test)]
 extern crate time;
-
+// #[cfg(test)]
+// use time::now_millis;
 #[test]
 fn test(){
     let mut map: VecMap<u64> = VecMap::new();
@@ -425,33 +407,33 @@ fn test(){
     assert_eq!(unsafe{map.get_unchecked_mut(7)}, &mut 7);
 }
 
-#[test]
-fn test_eff(){
-    use time::now_millis;
-    let mut map: VecMap<u64> = VecMap::new();
-    let time = now_millis();
-    for i in 1..1000001{
-        map.insert(i as usize, i);
-    }
-    let time1 = now_millis();
-    println!("insert time-----------------------------------------------{}", time1 - time);
+// #[test]
+// fn test_eff(){
+    
+//     let mut map: VecMap<u64> = VecMap::new();
+//     let time = now_millis();
+//     for i in 1..1000001{
+//         map.insert(i as usize, i);
+//     }
+//     let time1 = now_millis();
+//     println!("insert time-----------------------------------------------{}", time1 - time);
 
-    for i in 1..1000001{
-        unsafe { map.remove(i) };
-    }
-    let time2 = now_millis();
-    println!("remove time-----------------------------------------------{}", time2 - time1);
+//     for i in 1..1000001{
+//         unsafe { map.remove(i) };
+//     }
+//     let time2 = now_millis();
+//     println!("remove time-----------------------------------------------{}", time2 - time1);
 
-    let mut v = Vec::new();
+//     let mut v = Vec::new();
 
-    let time3 = now_millis();
-    for i in 1..1000001{
-        v.push(i);
-    }
+//     let time3 = now_millis();
+//     for i in 1..1000001{
+//         v.push(i);
+//     }
 
-    let time4 = now_millis();
-    println!("insert vec time-----------------------------------------------{}", time4 - time3);
-}
+//     let time4 = now_millis();
+//     println!("insert vec time-----------------------------------------------{}", time4 - time3);
+// }
 
 // #[test]
 // fn m(){

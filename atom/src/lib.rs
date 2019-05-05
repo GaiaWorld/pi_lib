@@ -13,9 +13,6 @@ extern crate bon;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate flame;
-// #[macro_use]
-// extern crate flamer;
 
 use std::ops::Deref;
 use std::convert::From;

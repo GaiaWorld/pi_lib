@@ -772,7 +772,7 @@ impl<'a, T: ImOrdMap + Clone + Iter<'a>> OrdMap<T> {
 			match old.insert(key.clone(), value.clone()) {
 				Some(root) => unsafe {match intrinsics::atomic_cxchg_failrelaxed(&self.root as *const T as *mut usize, *(old as *const T as *const usize), *(&root as *const T as *const usize)) {
 					(_, true) => {
-						mem::forget(root);
+						//mem::forget(root);
 						return true
 					}
 					(val, _) => old = &*(val as *const T),

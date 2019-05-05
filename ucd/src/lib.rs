@@ -159,14 +159,7 @@ const ALPHABETIC_RANGE: [(usize, usize);2] = [(0x0370, 0x07BF), (0x0980, 0x1FFF)
 
 /// 单字字符的范围， 中文（包括日文韩文同用）的范围
 const CASED_RANGE: [(usize, usize);5] = [(0x2000, 0x206F), (0x3000, 0x303F), (0x31C0, 0x31EF), (0x3200, 0x9FA5), (0xFF00, 0xFFEF)];
-/// 大写字符的范围
-const LOWER_RANGE: [(usize, usize);1] = [(65,90)];
-/// 小写字符的范围
-const UPPER_RANGE: [(usize, usize);1] = [(97,122)];
-/// 分隔符的范围 (0x2000, 0x206F)常用标点(例如:‘”)  (0x3000, 0x303F)CJK 符号和标点(例如:。)  (0xFF00, 0xFFEF)半型及全型形式(例如:，；)
-const SEPARATOR_RANGE: [(usize, usize);7] = [(0,47), (58, 64), (91, 96), (123, 256), (0x2000, 0x206F), (0x3000, 0x303F), (0xFF00, 0xFFEF)];
-/// 空白符的范围, 0x3000为中文空格
-const WHITESPACE_RANGE: [(usize, usize);4] = [(127,255), (0x02B0, 0x02FF), (0x2500, 0x257F), (0x3000, 0x3000)]; 
+
 
 /// 获得字符的类型ID
 pub fn get_type_id(c: char) -> usize{
@@ -193,10 +186,10 @@ pub fn get_type_id(c: char) -> usize{
 /// 获得字符的类型名称
 pub fn get_type_name(c: char) -> &'static str{
     let i = get_type_id(c);
-    if i == 1 {
-        "ASCII"
-    }else if i > 1{
+    if i > 1 {
         TYPE_NAME[i - 2]
+    }else if i > 1{
+        "ASCII"
     }else{
         ""
     }
@@ -236,91 +229,16 @@ pub fn is_alphabetic(c: char) -> bool{
         Ok(_) => true,
         _ => false
     }
-}
-/// 字符是否为大写
-pub fn is_uppercase(c: char) -> bool{
-    let c = c as usize;
-    match UPPER_RANGE.binary_search_by(|&(start, end)| {
-        if c < start {
-            Ordering::Less
-        }else if c > end {
-            Ordering::Greater
-        }else{
-            Ordering::Equal
-        }
-    }) {
-        Ok(_) => true,
-        _ => false
-    }
-}
-/// 字符是否为大写
-pub fn is_lowercase(c: char) -> bool{
-    let c = c as usize;
-    match LOWER_RANGE.binary_search_by(|&(start, end)| {
-        if c < start {
-            Ordering::Less
-        }else if c > end {
-            Ordering::Greater
-        }else{
-            Ordering::Equal
-        }
-    }) {
-        Ok(_) => true,
-        _ => false
-    }
-}
-/// 字符是否为分隔符
-pub fn is_separator(c: char) -> bool{
-    if is_whitespace(c) {
-        return true
-    }
-    let c = c as usize;
-    match SEPARATOR_RANGE.binary_search_by(|&(start, end)| {
-        if c < start {
-            Ordering::Less
-        }else if c > end {
-            Ordering::Greater
-        }else{
-            Ordering::Equal
-        }
-    }) {
-        Ok(_) => true,
-        _ => false
-    }
-}
-/// 字符是否为空白符
-pub fn is_whitespace(c: char) -> bool{
-    let c = c as usize;
-    if c < 33 {
-        return true;
-    }
-    match WHITESPACE_RANGE.binary_search_by(|&(start, end)| {
-        if c < start {
-            Ordering::Less
-        }else if c > end {
-            Ordering::Greater
-        }else{
-            Ordering::Equal
-        }
-    }) {
-        Ok(_) => true,
-        _ => false
-    }
+
 }
 
 pub trait Codepoint where Self: core::marker::Sized {
-    // TODO is_num is_digit is_control is_ascii_alpha is_ascii_lower is_ascii_upper is_ascii_white is_ascii_control is_ascii_num
     fn get_type_id(self) -> usize;
     fn get_type_name(self) -> &'static str;
     fn is_cased(self) -> bool;
     fn is_alpha(self) -> bool;
-    fn is_lower(self) -> bool;
-    fn is_upper(self) -> bool;
-    fn is_white(self) -> bool;
 }
 impl Codepoint for char {
-
-
     fn get_type_id(self) -> usize{
         get_type_id(self)
     }
@@ -332,15 +250,6 @@ impl Codepoint for char {
     }
     fn is_alpha(self) -> bool {
         is_alphabetic(self)
-    }
-    fn is_lower(self) -> bool {
-        is_lowercase(self)
-    }
-    fn is_upper(self) -> bool {
-        is_uppercase(self)
-    }
-    fn is_white(self) -> bool {
-        is_whitespace(self)
     }
 }
 

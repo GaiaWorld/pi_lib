@@ -1,5 +1,5 @@
 [package]
-name = "vecmap"
+name = "map"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 

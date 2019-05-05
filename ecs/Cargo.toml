@@ -1,0 +1,16 @@
+[package]
+name = "ecs"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+slab = {path="../slab"}
+atom = {path="../atom"}
+map = {path="../map"}
+pointer = {path="../pointer"}
+listener = {path="../listener"}
+paste = "0.1"
+lazy_static = "*"
+fnv = "*"
+im = "*"
+mopa="*"
