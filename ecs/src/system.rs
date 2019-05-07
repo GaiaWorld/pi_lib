@@ -4,24 +4,24 @@ use std::{
     any::{TypeId},
 };
 
-use world::World;
+use world::{ World, Fetch, Borrow, BorrowMut};
 use listener::{Listener as Lis, FnListener, FnListeners};
 
-pub trait Runner {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait Runner<'a> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
     fn setup(&mut self, read: Self::ReadData, write: Self::WriteData);
     fn run(&mut self, read: Self::ReadData, write: Self::WriteData);
     fn dispose(&mut self, read: Self::ReadData, write: Self::WriteData);
 }
 
-pub trait FetchData: Sized + 'static {
-    fn fetch(world: &World) -> Self;
+pub trait SystemData<'a> where Self: std::marker::Sized{
+    type FetchTarget: Fetch + Borrow<'a, Target=Self>;
 }
 
-pub trait FetchMutData {
-    fn fetch_mut(world: &World) -> Self;
+pub trait SystemMutData<'a> where Self: std::marker::Sized{
+    type FetchTarget: Fetch + BorrowMut<'a, Target=Self>;
 }
 
 
@@ -40,11 +40,11 @@ pub struct ModifyEvent{
 }
 
 /// E 是Entity的类型， 如果是单例组件， 则E为()。 C是组件类型， 如果仅监听Entity的创建和删除， 则C为()。 EV是事件类型
-pub trait Listener<E, C, EV> {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait Listener<'a, E, C, EV> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
-    fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
+    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
 }
 
 

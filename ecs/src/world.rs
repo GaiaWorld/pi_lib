@@ -12,20 +12,44 @@ use atom::Atom;
 use listener::{FnListeners, FnListener};
 use pointer::cell::{Ref, RefMut, TrustCell};
 
-use system::{System, RunnerFn};
+use system::{System as ASystem, RunnerFn};
 use entity::{Entity, CellEntity};
 use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use dispatch::Dispatcher;
 use Share;
 // TODO component
 
+pub trait Fetch: Sized + 'static {
+    fn fetch(world: &World) -> Self;
+}
+
+pub trait Borrow<'a> {
+    type Target;
+    fn borrow(&'a self) -> Self::Target;
+}
+
+pub trait BorrowMut<'a> {
+    type Target;
+    fn borrow_mut(&'a self) -> Self::Target;
+}
+
+pub trait System<'a> {
+    fn setup(&'a self);
+    fn run(&'a self);
+    fn dispose(&'a self);
+    fn get_depends(&'a self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+}
+
+pub trait Listener<'a>{
+    fn listen(&'a self);
+}
 
 #[derive(Default)]
 pub struct World {
     entity: HashMap<TypeId, Arc<CellEntity>>,
     single: HashMap<TypeId, Arc<SingleCase>>,
     multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: HashMap<Atom, Arc<System>>,
+    system: HashMap<Atom, Arc<ASystem>>,
     runner: HashMap<Atom, Arc<Dispatcher>>,
 }
 
@@ -65,7 +89,7 @@ impl World {
     pub fn register_system<T>(&mut self, name: Atom, sys: T) {
         // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
     }
-    pub fn get_system(&self, name: &Atom) -> Option<&Arc<System>> {
+    pub fn get_system(&self, name: &Atom) -> Option<&Arc<ASystem>> {
         self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {
