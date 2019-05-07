@@ -4,8 +4,6 @@ use std::{
     any::{TypeId},
 };
 
-pub use downcast_rs::Downcast;
-
 use world::World;
 use listener::{Listener as Lis, FnListener, FnListeners};
 

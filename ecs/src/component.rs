@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
 };
 
-pub use downcast_rs::Downcast;
+pub use any::ArcAny;
 
 use pointer::cell::{TrustCell};
 use map::{Map, vecmap::VecMap};
@@ -12,18 +12,25 @@ use map::{Map, vecmap::VecMap};
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use entity::CellEntity;
+use Share;
 
-pub trait SingleCase: Notify + Downcast {
+pub trait Component: Sized + Share {
+    type Strorage: Map<Key=usize, Val=Self>;
 }
-impl_downcast!(SingleCase);
-pub trait MultiCase: Notify + Downcast {
+
+
+pub trait SingleCase: Notify + ArcAny {
+}
+impl_downcast_arc!(SingleCase);
+
+pub trait MultiCase: Notify + ArcAny {
     fn delete(&self, id: usize);
 }
-impl_downcast!(MultiCase);
+impl_downcast_arc!(MultiCase);
 
-pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
+pub type CellMultiCase<E: Share, C: Component> = TrustCell<MultiCaseImpl<E, C>>;
 // TODO 以后用宏生成
-impl<E, C> Notify for CellMultiCase<E, C> {
+impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
     }
@@ -52,14 +59,14 @@ impl<E, C> Notify for CellMultiCase<E, C> {
         self.borrow_mut().notify.modify.delete(listener);
     }
 }
-impl<E: 'static, C: 'static> MultiCase for CellMultiCase<E, C> {
+impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
         self.borrow_mut().delete(id)
     }
 }
 
 #[derive(Default)]
-pub struct MultiCaseImpl<E, C> {
+pub struct MultiCaseImpl<E: Share, C: Component> {
     map: VecMap<C>,
     notify: NotifyImpl,
     entity: Arc<CellEntity>,
@@ -67,7 +74,7 @@ pub struct MultiCaseImpl<E, C> {
     marker: PhantomData<E>,
 }
 
-impl<E, C> MultiCaseImpl<E, C> {
+impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     pub fn new(entity: Arc<CellEntity>, bit_index: usize) -> TrustCell<Self>{
         TrustCell::new(MultiCaseImpl{
             map: VecMap::default(),

@@ -14,9 +14,11 @@ use pointer::cell::{Ref, RefMut, TrustCell};
 
 use system::{System, RunnerFn};
 use entity::{Entity, CellEntity};
-use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl};
+use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use dispatch::Dispatcher;
+use Share;
 // TODO component
+
 
 #[derive(Default)]
 pub struct World {
@@ -28,7 +30,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn register_entity<E: 'static>(&mut self) {
+    pub fn register_entity<E: Share>(&mut self) {
         let id = TypeId::of::<E>();
         match self.entity.insert(id, Arc::new(TrustCell::new(Entity::default()))) {
             Some(_) => panic!("duplicate registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
@@ -36,7 +38,7 @@ impl World {
         }
     }
     /// 注册单例组件
-    pub fn register_single<C: SingleCase + 'static>(&mut self, c: C) {
+    pub fn register_single<C: SingleCase>(&mut self, c: C) {
         let id = TypeId::of::<C>();
         match self.single.insert(id, Arc::new(c)) {
             Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<C>()}, id),
@@ -44,7 +46,7 @@ impl World {
         }
     }
     /// 注册多例组件，必须声明是那种entity上的组件
-    pub fn register_multi<E: 'static, C: 'static>(&mut self) {
+    pub fn register_multi<E: Share, C: Component>(&mut self) {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.entity.get(&eid) {
@@ -70,7 +72,7 @@ impl World {
         // 要求该system不能在dispatcher中， 取消所有的监听器
         // 如果是Runner则调用dispose方法
     }
-    pub fn create_entity<E: 'static>(&self) -> usize {
+    pub fn create_entity<E: Share>(&self) -> usize {
         let id = TypeId::of::<E>();
         match self.entity.get(&id) {
             Some(v) => {
@@ -79,7 +81,7 @@ impl World {
             _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
         }
     }
-    pub fn free_entity<E: 'static>(&self, id: usize) {
+    pub fn free_entity<E: Share>(&self, id: usize) {
         let eid = TypeId::of::<E>();
         match self.entity.get(&eid) {
             Some(v) => {
@@ -111,7 +113,7 @@ impl World {
             _ => None
         }
     }
-    pub fn fetch_multi<E: 'static, C: 'static>(&self) -> Option<Arc<MultiCase>> {
+    pub fn fetch_multi<E: Share, C: Component>(&self) -> Option<Arc<MultiCase>> {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.multi.get(&(eid, cid)) {
