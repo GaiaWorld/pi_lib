@@ -119,40 +119,47 @@
 //! ```
 
 use std::any::Any;
+use std::sync::Arc;
+use std::rc::Rc;
 
-/// Supports conversion to `Any`. Traits to be extended by `impl_downcast!` must extend `BoxAny`.
-pub trait BoxAny: Any {
-    /// Convert `Box<Trait>` (where `Trait: BoxAny`) to `Box<Any>`. `Box<Any>` can then be
-    /// further `downcast` into `Box<ConcreteType>` where `ConcreteType` implements `Trait`.
-    fn into_any(self: Box<Self>) -> Box<Any>;
-    /// Convert `&Trait` (where `Trait: BoxAny`) to `&Any`. This is needed since Rust cannot
-    /// generate `&Any`'s vtable from `&Trait`'s.
+pub trait AsAny: Any {
     fn as_any(&self) -> &Any;
-    /// Convert `&mut Trait` (where `Trait: BoxAny`) to `&Any`. This is needed since Rust cannot
-    /// generate `&mut Any`'s vtable from `&mut Trait`'s.
+}
+
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &Any { self }
+}
+
+pub trait AsMutAny: Any {
     fn as_any_mut(&mut self) -> &mut Any;
 }
 
-impl<T: Any> BoxAny for T {
-    fn into_any(self: Box<Self>) -> Box<Any> { self }
-    fn as_any(&self) -> &Any { self }
+impl<T: Any> AsMutAny for T {
     fn as_any_mut(&mut self) -> &mut Any { self }
 }
 
-
-/// Supports conversion to `Any`. Traits to be extended by `impl_arc!` must extend `ArcAny`.
-pub trait ArcAny: Any {
-    /// Convert `Arc<Trait>` (where `Trait: ArcAny`) to `Arc<Any>`. `Arc<Any>` can then be
-    /// further `downcast` into `Arc<ConcreteType>` where `ConcreteType` implements `Trait`.
-    fn into_any(self: Arc<Self>) -> Arc<Any>;
-    /// Convert `&Trait` (where `Trait: ArcAny`) to `&Any`. This is needed since Rust cannot
-    /// generate `&Any`'s vtable from `&Trait`'s.
-    fn as_any(&self) -> &Any;
+pub trait BoxAny: AsAny + AsMutAny {
+    fn into_any(self: Box<Self>) -> Box<Any>;
 }
 
-impl<T: Any> ArcAny for T {
-    fn into_any(self: Arc<Self>) -> Arc<Any> { self }
-    fn as_any(&self) -> &Any { self }
+impl<T: AsAny + AsMutAny> BoxAny for T {
+     fn into_any(self: Box<Self>) -> Box<Any> { self }
+}
+
+pub trait RcAny: AsAny {
+    fn into_any(self: Rc<Self>) -> Rc<Any>;
+}
+
+impl<T: AsAny> RcAny for T {
+     fn into_any(self: Rc<Self>) -> Rc<Any> { self }
+}
+
+pub trait ArcAny: AsAny + 'static + Send + Sync {
+    fn into_any(self: Arc<Self>) -> Arc<Any + 'static + Send + Sync>;
+}
+
+impl<T: AsAny + 'static + Send + Sync> ArcAny for T {
+     fn into_any(self: Arc<Self>) -> Arc<Any + 'static + Send + Sync> { self }
 }
 
 
@@ -163,8 +170,7 @@ impl<T: Any> ArcAny for T {
 /// for why this is implemented this way to support templatized traits.
 #[macro_export(local_inner_macros)]
 macro_rules! impl_downcast {
-    (@impl_full
-        $point_:ident
+    (@impl_full   
         $trait_:ident [$($param_types:tt)*]
         for [$($forall_types:ident),*]
         where [$($preds:tt)*]
@@ -175,19 +181,14 @@ macro_rules! impl_downcast {
                 types [$($forall_types),*]
                 where [$($preds)*]
                 [{
-                    impl_downcast! { @impl_body $point_ $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body_mut $trait_ [$($param_types)*] }
                 }]
         }
     };
 
-    (@impl_body $point_:ident $trait_:ident [$($types:tt)*]) => {
+    (@impl_body_box $trait_:ident [$($types:tt)*]) => {
         /// Returns true if the trait object wraps an object of type `__T`.
-        #[inline]
-        pub fn is<__T: $trait_<$($types)*>>(&self) -> bool {
-            $crate::BoxAny::as_any(self).is::<__T>()
-        }
-        /// Returns a boxed object from a boxed trait object if the underlying object is of type
-        /// `__T`. Returns the original boxed trait if it isn't.
         #[inline]
         pub fn downcast<__T: $trait_<$($types)*>>(
             self: ::std::boxed::Box<Self>
@@ -198,18 +199,57 @@ macro_rules! impl_downcast {
                 Err(self)
             }
         }
-        /// Returns a reference to the object within the trait object if it is of type `__T`, or
-        /// `None` if it isn't.
+    };
+
+    (@impl_body_rc $trait_:ident [$($types:tt)*]) => {
+        /// Returns true if the trait object wraps an object of type `__T`.
         #[inline]
-        pub fn downcast_ref<__T: $trait_<$($types)*>>(&self) -> ::std::option::Option<&__T> {
-            $crate::BoxAny::as_any(self).downcast_ref::<__T>()
+        pub fn downcast<__T: $trait_<$($types)*>>(
+            self: ::std::rc::Rc<Self>
+        ) -> ::std::result::Result<::std::rc::Rc<__T>, ::std::rc::Rc<Self>> {
+            if self.is::<__T>() {
+                Ok($crate::RcAny::into_any(self).downcast::<__T>().unwrap())
+            } else {
+                Err(self)
+            }
         }
+    };
+
+    (@impl_body_arc $trait_:ident [$($types:tt)*]) => {
+        /// Returns true if the trait object wraps an object of type `__T`.
+        #[inline]
+        pub fn downcast<__T: $trait_<$($types)*>>(
+            self: ::std::sync::Arc<Self>
+        ) -> ::std::result::Result<::std::sync::Arc<__T>, ::std::sync::Arc<Self>> {
+            if self.is::<__T>() {
+                Ok($crate::ArcAny::into_any(self).downcast::<__T>().unwrap())
+            } else {
+                Err(self)
+            }
+        }
+    };
+
+    (@impl_body_mut $trait_:ident [$($types:tt)*]) => {
         /// Returns a mutable reference to the object within the trait object if it is of type
         /// `__T`, or `None` if it isn't.
         #[inline]
         pub fn downcast_mut<__T: $trait_<$($types)*>>(&mut self) -> ::std::option::Option<&mut __T> {
-            $crate::BoxAny::as_any_mut(self).downcast_mut::<__T>()
+            $crate::AsMutAny::as_any_mut(self).downcast_mut::<__T>()
         }
+    };
+
+    (@impl_body $trait_:ident [$($types:tt)*]) => {
+        /// Returns true if the trait object wraps an object of type `__T`.
+        #[inline]
+        pub fn is<__T: $trait_<$($types)*>>(&self) -> bool {
+            $crate::AsAny::as_any(self).is::<__T>()
+        }
+        /// Returns a reference to the object within the trait object if it is of type `__T`, or
+        /// `None` if it isn't.
+        #[inline]
+        pub fn downcast_ref<__T: $trait_<$($types)*>>(&self) -> ::std::option::Option<&__T> {
+            $crate::AsAny::as_any(self).downcast_ref::<__T>()
+        }   
     };
 
     (@inject_where [$($before:tt)*] types [] where [] [$($after:tt)*]) => {
@@ -288,133 +328,418 @@ macro_rules! impl_downcast {
     };
 }
 
-
-#[cfg(test)]
-mod test {
-    macro_rules! test_mod {
-        (
-            $test_name:ident,
-            trait $base_trait:path { $($base_impl:tt)* },
-            type $base_type:ty,
-            { $($def:tt)+ }
-        ) => {
-            mod $test_name {
-                use super::super::BoxAny;
-
-                // A trait that can be downcast.
-                $($def)*
-
-                // Concrete type implementing Base.
-                #[derive(Debug)]
-                struct Foo(u32);
-                impl $base_trait for Foo { $($base_impl)* }
-                #[derive(Debug)]
-                struct Bar(f64);
-                impl $base_trait for Bar { $($base_impl)* }
-
-                // Functions that can work on references to Base trait objects.
-                fn get_val(base: &::std::boxed::Box<$base_type>) -> u32 {
-                    match base.downcast_ref::<Foo>() {
-                        Some(val) => val.0,
-                        None => 0
-                    }
-                }
-                fn set_val(base: &mut ::std::boxed::Box<$base_type>, val: u32) {
-                    if let Some(foo) = base.downcast_mut::<Foo>() {
-                        foo.0 = val;
-                    }
-                }
-
-                #[test]
-                fn test() {
-                    let mut base: ::std::boxed::Box<$base_type> = ::std::boxed::Box::new(Foo(42));
-                    assert_eq!(get_val(&base), 42);
-
-                    // Try sequential downcasts.
-                    if let Some(foo) = base.downcast_ref::<Foo>() {
-                        assert_eq!(foo.0, 42);
-                    } else if let Some(bar) = base.downcast_ref::<Bar>() {
-                        assert_eq!(bar.0, 42.0);
-                    }
-
-                    set_val(&mut base, 6*9);
-                    assert_eq!(get_val(&base), 6*9);
-
-                    assert!(base.is::<Foo>());
-
-                    // Fail to convert Box<Base> into Box<Bar>.
-                    let res = base.downcast::<Bar>();
-                    assert!(res.is_err());
-                    let base = res.unwrap_err();
-                    // Convert Box<Base> into Box<Foo>.
-                    assert_eq!(
-                        6*9, base.downcast::<Foo>().map_err(|_| "Shouldn't happen.").unwrap().0);
-                }
-            }
-        };
-
-        (
-            $test_name:ident,
-            trait $base_trait:path { $($base_impl:tt)* },
-            { $($def:tt)+ }
-        ) => {
-            test_mod! {
-                $test_name, trait $base_trait { $($base_impl:tt)* }, type $base_trait, { $($def)* }
-            }
+#[macro_export(local_inner_macros)]
+macro_rules! impl_downcast_box {
+    (@impl_full  
+        $trait_:ident [$($param_types:tt)*]
+        for [$($forall_types:ident),*]
+        where [$($preds:tt)*]
+    ) => {
+        impl_downcast! {
+            @inject_where
+                [impl<$($forall_types),*> $trait_<$($param_types)*>]
+                types [$($forall_types),*]
+                where [$($preds)*]
+                [{
+                    impl_downcast! { @impl_body $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body_box $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body_mut $trait_ [$($param_types)*] }
+                }]
         }
-    }
+    };
 
-    test_mod!(non_generic, trait Base {}, {
-        trait Base: BoxAny {}
-        impl_downcast!(Base);
-    });
+    (@inject_where [$($before:tt)*] types [] where [] [$($after:tt)*]) => {
+        impl_downcast_box! { @as_item $($before)* $($after)* }
+    };
 
-    test_mod!(generic, trait Base<u32> {}, {
-        trait Base<T>: BoxAny {}
-        impl_downcast!(Base<T>);
-    });
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [] [$($after:tt)*]) => {
+        impl_downcast_box! {
+            @as_item
+                $($before)*
+                where $( $types: ::std::any::Any + 'static ),*
+                $($after)*
+        }
+    };
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [$($preds:tt)+] [$($after:tt)*]) => {
+        impl_downcast_box! {
+            @as_item
+                $($before)*
+                where
+                    $( $types: ::std::any::Any + 'static, )*
+                    $($preds)*
+                $($after)*
+        }
+    };
 
-    test_mod!(constrained_generic, trait Base<u32> {}, {
-        // Should work even if standard objects in the prelude are aliased to something else.
-        #[allow(dead_code)] struct Box;
-        #[allow(dead_code)] struct Option;
-        #[allow(dead_code)] struct Result;
-        trait Base<T: Copy>: BoxAny {}
-        impl_downcast!(Base<T> where T: Copy);
-    });
+    (@as_item $i:item) => { $i };
 
-    test_mod!(associated, trait Base { type H = f32; }, type Base<H=f32>, {
-        trait Base: BoxAny { type H; }
-        impl_downcast!(Base assoc H);
-    });
-
-    test_mod!(constrained_associated, trait Base { type H = f32; }, type Base<H=f32>, {
-        trait Base: BoxAny { type H: Copy; }
-        impl_downcast!(Base assoc H where H: Copy);
-    });
-
-    test_mod!(param_and_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
-        trait Base<T>: BoxAny { type H; }
-        impl_downcast!(Base<T> assoc H);
-    });
-
-    test_mod!(constrained_param_and_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
-        trait Base<T: Clone>: BoxAny { type H: Copy; }
-        impl_downcast!(Base<T> assoc H where T: Clone, H: Copy);
-    });
-
-    test_mod!(concrete_parametrized, trait Base<u32> {}, {
-        trait Base<T>: BoxAny {}
-        impl_downcast!(concrete Base<u32>);
-    });
-
-    test_mod!(concrete_associated, trait Base { type H = u32; }, type Base<H=u32>, {
-        trait Base: BoxAny { type H; }
-        impl_downcast!(concrete Base assoc H=u32);
-    });
-
-    test_mod!(concrete_parametrized_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
-        trait Base<T>: BoxAny { type H; }
-        impl_downcast!(concrete Base<u32> assoc H=f32);
-    });
+    // No type parameters.
+    ($trait_:ident   ) => { impl_downcast_box! { @impl_full $trait_ [] for [] where [] } };
+    ($trait_:ident <>) => { impl_downcast_box! { @impl_full $trait_ [] for [] where [] } };
+    // Type parameters.
+    ($trait_:ident < $($types:ident),* >) => {
+        impl_downcast_box! { @impl_full $trait_ [$($types),*] for [$($types),*] where [] }
+    };
+    // Type parameters and where clauses.
+    ($trait_:ident < $($types:ident),* > where $($preds:tt)+) => {
+        impl_downcast_box! { @impl_full $trait_ [$($types),*] for [$($types),*] where [$($preds)*] }
+    };
+    // Associated types.
+    ($trait_:ident assoc $($atypes:ident),*) => {
+        impl_downcast_box! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [] }
+    };
+    // Associated types and where clauses.
+    ($trait_:ident assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_box! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [$($preds)*] }
+    };
+    // Type parameters and associated types.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),*) => {
+        impl_downcast_box! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where []
+        }
+    };
+    // Type parameters, associated types, and where clauses.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_box! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where [$($preds)*]
+        }
+    };
+    // Concretely-parametrized types.
+    (concrete $trait_:ident < $($types:ident),* >) => {
+        impl_downcast_box! { @impl_full $trait_ [$($types),*] for [] where [] }
+    };
+    // Concretely-associated types types.
+    (concrete $trait_:ident assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_box! { @impl_full $trait_ [$($atypes = $aty),*] for [] where [] }
+    };
+    // Concretely-parametrized types with concrete associated types.
+    (concrete $trait_:ident < $($types:ident),* > assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_box! { @impl_full $trait_ [$($types),*, $($atypes = $aty),*] for [] where [] }
+    };
 }
+
+#[macro_export(local_inner_macros)]
+macro_rules! impl_downcast_rc {
+    (@impl_full   
+        $trait_:ident [$($param_types:tt)*]
+        for [$($forall_types:ident),*]
+        where [$($preds:tt)*]
+    ) => {
+        impl_downcast! {
+            @inject_where
+                [impl<$($forall_types),*> $trait_<$($param_types)*>]
+                types [$($forall_types),*]
+                where [$($preds)*]
+                [{
+                    impl_downcast! { @impl_body $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body_rc $trait_ [$($param_types)*] }
+                }]
+        }
+    };
+
+    (@inject_where [$($before:tt)*] types [] where [] [$($after:tt)*]) => {
+        impl_downcast_rc! { @as_item $($before)* $($after)* }
+    };
+
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [] [$($after:tt)*]) => {
+        impl_downcast_rc! {
+            @as_item
+                $($before)*
+                where $( $types: ::std::any::Any + 'static ),*
+                $($after)*
+        }
+    };
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [$($preds:tt)+] [$($after:tt)*]) => {
+        impl_downcast_rc! {
+            @as_item
+                $($before)*
+                where
+                    $( $types: ::std::any::Any + 'static, )*
+                    $($preds)*
+                $($after)*
+        }
+    };
+
+    (@as_item $i:item) => { $i };
+
+    // No type parameters.
+    ($trait_:ident   ) => { impl_downcast_rc! { @impl_full $trait_ [] for [] where [] } };
+    ($trait_:ident <>) => { impl_downcast_rc! { @impl_full $trait_ [] for [] where [] } };
+    // Type parameters.
+    ($trait_:ident < $($types:ident),* >) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($types),*] for [$($types),*] where [] }
+    };
+    // Type parameters and where clauses.
+    ($trait_:ident < $($types:ident),* > where $($preds:tt)+) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($types),*] for [$($types),*] where [$($preds)*] }
+    };
+    // Associated types.
+    ($trait_:ident assoc $($atypes:ident),*) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [] }
+    };
+    // Associated types and where clauses.
+    ($trait_:ident assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [$($preds)*] }
+    };
+    // Type parameters and associated types.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),*) => {
+        impl_downcast_rc! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where []
+        }
+    };
+    // Type parameters, associated types, and where clauses.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_rc! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where [$($preds)*]
+        }
+    };
+    // Concretely-parametrized types.
+    (concrete $trait_:ident < $($types:ident),* >) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($types),*] for [] where [] }
+    };
+    // Concretely-associated types types.
+    (concrete $trait_:ident assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($atypes = $aty),*] for [] where [] }
+    };
+    // Concretely-parametrized types with concrete associated types.
+    (concrete $trait_:ident < $($types:ident),* > assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_rc! { @impl_full $trait_ [$($types),*, $($atypes = $aty),*] for [] where [] }
+    };
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! impl_downcast_arc {
+    (@impl_full   
+        $trait_:ident [$($param_types:tt)*]
+        for [$($forall_types:ident),*]
+        where [$($preds:tt)*]
+    ) => {
+        impl_downcast! {
+            @inject_where
+                [impl<$($forall_types),*> $trait_<$($param_types)*>]
+                types [$($forall_types),*]
+                where [$($preds)*]
+                [{
+                    impl_downcast! { @impl_body $trait_ [$($param_types)*] }
+                    impl_downcast! { @impl_body_arc $trait_ [$($param_types)*] }
+                }]
+        }
+    };
+
+    (@inject_where [$($before:tt)*] types [] where [] [$($after:tt)*]) => {
+        impl_downcast_arc! { @as_item $($before)* $($after)* }
+    };
+
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [] [$($after:tt)*]) => {
+        impl_downcast_arc! {
+            @as_item
+                $($before)*
+                where $( $types: ::std::any::Any + 'static ),*
+                $($after)*
+        }
+    };
+    (@inject_where [$($before:tt)*] types [$($types:ident),*] where [$($preds:tt)+] [$($after:tt)*]) => {
+        impl_downcast_arc! {
+            @as_item
+                $($before)*
+                where
+                    $( $types: ::std::any::Any + 'static, )*
+                    $($preds)*
+                $($after)*
+        }
+    };
+
+    (@as_item $i:item) => { $i };
+
+    // No type parameters.
+    ($trait_:ident   ) => { impl_downcast_arc! { @impl_full $trait_ [] for [] where [] } };
+    ($trait_:ident <>) => { impl_downcast_arc! { @impl_full $trait_ [] for [] where [] } };
+    // Type parameters.
+    ($trait_:ident < $($types:ident),* >) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($types),*] for [$($types),*] where [] }
+    };
+    // Type parameters and where clauses.
+    ($trait_:ident < $($types:ident),* > where $($preds:tt)+) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($types),*] for [$($types),*] where [$($preds)*] }
+    };
+    // Associated types.
+    ($trait_:ident assoc $($atypes:ident),*) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [] }
+    };
+    // Associated types and where clauses.
+    ($trait_:ident assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($atypes = $atypes),*] for [$($atypes),*] where [$($preds)*] }
+    };
+    // Type parameters and associated types.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),*) => {
+        impl_downcast_arc! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where []
+        }
+    };
+    // Type parameters, associated types, and where clauses.
+    ($trait_:ident < $($types:ident),* > assoc $($atypes:ident),* where $($preds:tt)+) => {
+        impl_downcast_arc! {
+            @impl_full
+                $trait_ [$($types),*, $($atypes = $atypes),*]
+                for [$($types),*, $($atypes),*]
+                where [$($preds)*]
+        }
+    };
+    // Concretely-parametrized types.
+    (concrete $trait_:ident < $($types:ident),* >) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($types),*] for [] where [] }
+    };
+    // Concretely-associated types types.
+    (concrete $trait_:ident assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($atypes = $aty),*] for [] where [] }
+    };
+    // Concretely-parametrized types with concrete associated types.
+    (concrete $trait_:ident < $($types:ident),* > assoc $($atypes:ident = $aty:ty),*) => {
+        impl_downcast_arc! { @impl_full $trait_ [$($types),*, $($atypes = $aty),*] for [] where [] }
+    };
+}
+
+// #[cfg(test)]
+// mod test {
+//     macro_rules! test_mod {
+//         (
+//             $test_name:ident,
+//             trait $base_trait:path { $($base_impl:tt)* },
+//             type $base_type:ty,
+//             { $($def:tt)+ }
+//         ) => {
+//             mod $test_name {
+//                 use super::super::BoxAny;
+
+//                 // A trait that can be downcast.
+//                 $($def)*
+
+//                 // Concrete type implementing Base.
+//                 #[derive(Debug)]
+//                 struct Foo(u32);
+//                 impl $base_trait for Foo { $($base_impl)* }
+//                 #[derive(Debug)]
+//                 struct Bar(f64);
+//                 impl $base_trait for Bar { $($base_impl)* }
+
+//                 // Functions that can work on references to Base trait objects.
+//                 fn get_val(base: &::std::boxed::Box<$base_type>) -> u32 {
+//                     match base.downcast_ref::<Foo>() {
+//                         Some(val) => val.0,
+//                         None => 0
+//                     }
+//                 }
+//                 fn set_val(base: &mut ::std::boxed::Box<$base_type>, val: u32) {
+//                     if let Some(foo) = base.downcast_mut::<Foo>() {
+//                         foo.0 = val;
+//                     }
+//                 }
+
+//                 #[test]
+//                 fn test() {
+//                     let mut base: ::std::boxed::Box<$base_type> = ::std::boxed::Box::new(Foo(42));
+//                     assert_eq!(get_val(&base), 42);
+
+//                     // Try sequential downcasts.
+//                     if let Some(foo) = base.downcast_ref::<Foo>() {
+//                         assert_eq!(foo.0, 42);
+//                     } else if let Some(bar) = base.downcast_ref::<Bar>() {
+//                         assert_eq!(bar.0, 42.0);
+//                     }
+
+//                     set_val(&mut base, 6*9);
+//                     assert_eq!(get_val(&base), 6*9);
+
+//                     assert!(base.is::<Foo>());
+
+//                     // Fail to convert Box<Base> into Box<Bar>.
+//                     let res = base.downcast::<Bar>();
+//                     assert!(res.is_err());
+//                     let base = res.unwrap_err();
+//                     // Convert Box<Base> into Box<Foo>.
+//                     assert_eq!(
+//                         6*9, base.downcast::<Foo>().map_err(|_| "Shouldn't happen.").unwrap().0);
+//                 }
+//             }
+//         };
+
+//         (
+//             $test_name:ident,
+//             trait $base_trait:path { $($base_impl:tt)* },
+//             { $($def:tt)+ }
+//         ) => {
+//             test_mod! {
+//                 $test_name, trait $base_trait { $($base_impl:tt)* }, type $base_trait, { $($def)* }
+//             }
+//         }
+//     }
+
+//     test_mod!(non_generic, trait Base {}, {
+//         trait Base: BoxAny {}
+//         impl_downcast!(Base);
+//     });
+
+//     test_mod!(generic, trait Base<u32> {}, {
+//         trait Base<T>: BoxAny {}
+//         impl_downcast!(Base<T>);
+//     });
+
+//     test_mod!(constrained_generic, trait Base<u32> {}, {
+//         // Should work even if standard objects in the prelude are aliased to something else.
+//         #[allow(dead_code)] struct Box;
+//         #[allow(dead_code)] struct Option;
+//         #[allow(dead_code)] struct Result;
+//         trait Base<T: Copy>: BoxAny {}
+//         impl_downcast!(Base<T> where T: Copy);
+//     });
+
+//     test_mod!(associated, trait Base { type H = f32; }, type Base<H=f32>, {
+//         trait Base: BoxAny { type H; }
+//         impl_downcast!(Base assoc H);
+//     });
+
+//     test_mod!(constrained_associated, trait Base { type H = f32; }, type Base<H=f32>, {
+//         trait Base: BoxAny { type H: Copy; }
+//         impl_downcast!(Base assoc H where H: Copy);
+//     });
+
+//     test_mod!(param_and_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
+//         trait Base<T>: BoxAny { type H; }
+//         impl_downcast!(Base<T> assoc H);
+//     });
+
+//     test_mod!(constrained_param_and_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
+//         trait Base<T: Clone>: BoxAny { type H: Copy; }
+//         impl_downcast!(Base<T> assoc H where T: Clone, H: Copy);
+//     });
+
+//     test_mod!(concrete_parametrized, trait Base<u32> {}, {
+//         trait Base<T>: BoxAny {}
+//         impl_downcast!(concrete Base<u32>);
+//     });
+
+//     test_mod!(concrete_associated, trait Base { type H = u32; }, type Base<H=u32>, {
+//         trait Base: BoxAny { type H; }
+//         impl_downcast!(concrete Base assoc H=u32);
+//     });
+
+//     test_mod!(concrete_parametrized_associated, trait Base<u32> { type H = f32; }, type Base<u32, H=f32>, {
+//         trait Base<T>: BoxAny { type H; }
+//         impl_downcast!(concrete Base<u32> assoc H=f32);
+//     });
+// }
