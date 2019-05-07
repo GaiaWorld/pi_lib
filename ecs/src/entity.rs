@@ -1,15 +1,14 @@
 use std::{
-    any::Any,
     sync::Arc,
     mem::size_of,
 };
 
 use pointer::cell::TrustCell;
-use slab::{Slab, SlabIter, SlabIterMut};
+use slab::Slab;
 
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
-use compment::MultiCase;
+use component::MultiCase;
 
 pub type CellEntity = TrustCell<Entity>;
 impl Notify for CellEntity {
@@ -43,16 +42,16 @@ impl Notify for CellEntity {
 }
 #[derive(Default)]
 pub struct Entity{
-    slab: Slab<usize>, // 值usize 记录每个id所关联的compment的掩码位
-    compments: Vec<Arc<MultiCase>>, // 组件
+    slab: Slab<usize>, // 值usize 记录每个id所关联的component的掩码位
+    components: Vec<Arc<MultiCase>>, // 组件
     notify: NotifyImpl,
 }
 impl Entity {
     pub fn get_mask(&self) -> usize {
-        self.compments.len()
+        self.components.len()
     }
-    pub fn add_compment(&mut self, compment: Arc<MultiCase>) {
-        self.compments.push(compment);
+    pub fn register_component(&mut self, component: Arc<MultiCase>) {
+        self.components.push(component);
     }
     pub fn create(&mut self) -> usize {
         let id = self.slab.insert(0);
@@ -68,7 +67,7 @@ impl Entity {
         // 依次删除对应的组件
         for i in mask.trailing_zeros() as usize..size_of::<usize>()-(mask.leading_zeros() as usize)+1 {
             if mask & (1<<i) != 0 {
-                self.compments[i].delete_event(id)
+                self.components[i].delete(id)
             }
         }
     }

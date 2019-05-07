@@ -7,7 +7,7 @@ use std::ops::{Index, IndexMut};
 // use std::ptr::write;
 
 use ::Map;
-
+// TODO 改成类似slab的写法，用单独的vec<usize>的位记录是否为空。现在这种写法太费内存了
 pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
     len: usize,// Number of Filled elements currently in the slab
@@ -142,7 +142,7 @@ impl<T> VecMap<T> {
     }
 
     pub fn remove(&mut self, index: usize) -> Option<T> {
-        if index > self.len() {
+        if index > self.entries.len() {
             return None;
         }
         match replace(&mut self.entries[index - 1], None) {
@@ -204,8 +204,8 @@ impl<T> Map for VecMap<T> {
     }
 
     #[inline]
-    fn insert(&mut self, key: &usize, val: T) -> Option<T> {
-        self.insert(*key, val)
+    fn insert(&mut self, key: usize, val: T) -> Option<T> {
+        self.insert(key, val)
     }
 
     #[inline]

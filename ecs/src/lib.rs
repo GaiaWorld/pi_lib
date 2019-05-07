@@ -10,12 +10,12 @@ extern crate pointer;
 extern crate im;
 
 #[macro_use]
-extern crate mopa;
+extern crate downcast_rs;
 
 pub mod world;
 pub mod system;
 pub mod entity;
-pub mod compment;
+pub mod component;
 
 pub mod idtree;
 pub mod dispatch;

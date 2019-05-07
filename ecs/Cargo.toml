@@ -7,10 +7,11 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 slab = {path="../slab"}
 atom = {path="../atom"}
 map = {path="../map"}
+#any = {path="../any"}
 pointer = {path="../pointer"}
 listener = {path="../listener"}
 paste = "0.1"
 lazy_static = "*"
 fnv = "*"
 im = "*"
-mopa="*"
+downcast-rs = "*"
