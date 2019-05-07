@@ -1,15 +1,9 @@
 
 use std::{
-    //any::Any,
     sync::Arc,
     any::TypeId,
-    marker::PhantomData,
     intrinsics::type_name,
-    ops::{Deref, DerefMut},
-    //use crate::cell::{Ref, RefMut, TrustCell};
 };
-
-use mopa::Any;
 
 
 use im::hashmap::HashMap;
@@ -18,24 +12,17 @@ use atom::Atom;
 use listener::{FnListeners, FnListener};
 use pointer::cell::{Ref, RefMut, TrustCell};
 
-use system::{System};
+use system::{System, RunnerFn};
 use entity::{Entity, CellEntity};
-use compment::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl};
+use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl};
 use dispatch::Dispatcher;
-
-/// A resource is a data slot which lives in the `World` can only be accessed
-/// according to Rust's typical borrowing model (one writer xor multiple
-/// readers).
-pub trait Resource: Any + Send + Sync + 'static {}
-mopafy!(Resource);
-
-impl<T> Resource for T where T: Any + Send + Sync {}
+// TODO component
 
 #[derive(Default)]
 pub struct World {
     entity: HashMap<TypeId, Arc<CellEntity>>,
-    single: HashMap<TypeId, Arc<Any>>,
-    multi: HashMap<(TypeId, TypeId), Arc<Any>>,
+    single: HashMap<TypeId, Arc<SingleCase>>,
+    multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
     system: HashMap<Atom, Arc<System>>,
     runner: HashMap<Atom, Arc<Dispatcher>>,
 }
@@ -52,7 +39,7 @@ impl World {
     pub fn register_single<C: SingleCase + 'static>(&mut self, c: C) {
         let id = TypeId::of::<C>();
         match self.single.insert(id, Arc::new(c)) {
-            Some(_) => panic!("duplicate registration, compment: {:?}, id: {:?}", unsafe{type_name::<C>()}, id),
+            Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<C>()}, id),
             _ => ()
         }
     }
@@ -64,9 +51,9 @@ impl World {
             Some(v) => {
                 let mut entity = v.borrow_mut();
                 let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(v.clone(), entity.get_mask()));
-                entity.add_compment(m.clone());
+                entity.register_component(m.clone());
                 match self.multi.insert((eid, cid), m) {
-                    Some(_) => panic!("duplicate registration, entity: {:?}, compment: {:?}", unsafe{type_name::<E>()}, unsafe{type_name::<C>()}),
+                    Some(_) => panic!("duplicate registration, entity: {:?}, component: {:?}", unsafe{type_name::<E>()}, unsafe{type_name::<C>()}),
                     _ => ()
                 }
             }
@@ -75,6 +62,9 @@ impl World {
     }
     pub fn register_system<T>(&mut self, name: Atom, sys: T) {
         // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
+    }
+    pub fn get_system(&self, name: &Atom) -> Option<&Arc<System>> {
+        self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {
         // 要求该system不能在dispatcher中， 取消所有的监听器
@@ -114,14 +104,14 @@ impl World {
             _ => None
         }
     }
-    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<Any>> {
+    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<SingleCase>> {
         let id = TypeId::of::<T>();
         match self.single.get(&id) {
             Some(v) => Some(v.clone()),
             _ => None
         }
     }
-    pub fn fetch_multi<E: 'static, C: 'static>(&self) -> Option<Arc<Any>> {
+    pub fn fetch_multi<E: 'static, C: 'static>(&self) -> Option<Arc<MultiCase>> {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.multi.get(&(eid, cid)) {
@@ -129,12 +119,7 @@ impl World {
             _ => None
         }
     }
-    // pub fn fetch_system(&self, name: &Atom) -> Option<Arc<System>> {
-    //     match self.system.get(name) {
-    //         Some(v) => Some(v.clone()),
-    //         _ => None
-    //     }
-    // }
+
     pub fn run(&self, name: &Atom) {
         match self.runner.get(name) {
             Some(v) => v.run(),

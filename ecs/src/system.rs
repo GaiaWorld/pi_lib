@@ -1,11 +1,10 @@
 
 use std::{
     sync::Arc,
-    any::Any,
+    any::{TypeId},
 };
 
-use mopa;
-
+pub use downcast_rs::Downcast;
 
 use world::World;
 use listener::{Listener as Lis, FnListener, FnListeners};
@@ -102,10 +101,13 @@ pub trait Notify {
 }
 
 pub trait System {
-    fn fetch_setup(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
-    fn fetch_run(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
-    fn fetch_dispose(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
+    fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+    fn fetch_setup(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+    fn fetch_run(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+    fn fetch_dispose(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
 }
+
+
 // Node{};
 // CharNode{};
 

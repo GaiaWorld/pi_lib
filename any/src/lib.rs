@@ -119,9 +119,22 @@
 //! ```
 
 use std::any::Any;
-
 /// Supports conversion to `Any`. Traits to be extended by `impl_downcast!` must extend `BoxAny`.
 pub trait BoxAny: Any {
+    /// Convert `Box<Trait>` (where `Trait: BoxAny`) to `Box<Any>`. `Box<Any>` can then be
+    /// further `downcast` into `Box<ConcreteType>` where `ConcreteType` implements `Trait`.
+    fn into_any(self: Box<Self>) -> Box<Any>;
+}
+
+impl<T: Any> BoxAny for T {
+    fn into_any(self: Box<Self>) -> Box<Any> { self }
+    fn as_any(&self) -> &Any { self }
+    fn as_any_mut(&mut self) -> &mut Any { self }
+}
+
+
+/// Supports conversion to `Any`. Traits to be extended by `impl_downcast!` must extend `BoxAny`.
+pub trait BoxAny: Any + MutAny {
     /// Convert `Box<Trait>` (where `Trait: BoxAny`) to `Box<Any>`. `Box<Any>` can then be
     /// further `downcast` into `Box<ConcreteType>` where `ConcreteType` implements `Trait`.
     fn into_any(self: Box<Self>) -> Box<Any>;

@@ -28,6 +28,6 @@ pub trait Map{
     unsafe fn get_unchecked(&self, key: &Self::Key) -> &Self::Val;
     unsafe fn get_unchecked_mut(&mut self, key: &Self::Key) -> &mut Self::Val;
     unsafe fn remove_unchecked(&mut self, key: &Self::Key) -> Self::Val;
-    fn insert(&mut self, key: &Self::Key, val: Self::Val) -> Option<Self::Val>;
+    fn insert(&mut self, key: Self::Key, val: Self::Val) -> Option<Self::Val>;
     fn remove(&mut self, key: &Self::Key) -> Option<Self::Val>;
 }

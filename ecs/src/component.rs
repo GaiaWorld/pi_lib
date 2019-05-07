@@ -2,26 +2,24 @@
 use std::{
     sync::Arc,
     marker::PhantomData,
-    intrinsics::type_name,
-    ops::{Deref, DerefMut},
 };
 
+pub use downcast_rs::Downcast;
 
-use pointer::cell::{Ref, RefMut, TrustCell};
-use slab::{Slab, SlabIter, SlabIterMut};
+use pointer::cell::{TrustCell};
 use map::{Map, vecmap::VecMap};
 
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use entity::CellEntity;
 
-pub trait SingleCase: Notify {
-
-
+pub trait SingleCase: Notify + Downcast {
 }
-pub trait MultiCase: Notify {
-    //fn create(&mut self);
+impl_downcast!(SingleCase);
+pub trait MultiCase: Notify + Downcast {
+    fn delete(&self, id: usize);
 }
+impl_downcast!(MultiCase);
 
 pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
 // TODO 以后用宏生成
@@ -54,7 +52,10 @@ impl<E, C> Notify for CellMultiCase<E, C> {
         self.borrow_mut().notify.modify.delete(listener);
     }
 }
-impl<E, C> MultiCase for CellMultiCase<E, C> {
+impl<E: 'static, C: 'static> MultiCase for CellMultiCase<E, C> {
+    fn delete(&self, id: usize) {
+        self.borrow_mut().delete(id)
+    }
 }
 
 #[derive(Default)]
@@ -75,5 +76,9 @@ impl<E, C> MultiCaseImpl<E, C> {
             bit_index: bit_index,
             marker: PhantomData,
         })
+    }
+    pub fn delete(&mut self, id: usize) {
+        self.notify.delete_event(id);
+        self.map.remove(id);
     }
 }
