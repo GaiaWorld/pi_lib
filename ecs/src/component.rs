@@ -77,6 +77,26 @@ impl<E, C> MultiCaseImpl<E, C> {
             marker: PhantomData,
         })
     }
+    pub fn get(&mut self, id: usize) -> Option<&C> {
+        self.map.get(id)
+    }
+    pub fn get_mut(&mut self, id: usize) -> Option<&mut C> {
+        self.map.get_mut(id)
+    }
+    pub unsafe fn get_unchecked(&mut self, id: usize) -> &C {
+        self.map.get_unchecked(id)
+    }
+    pub unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut C {
+        self.map.get_unchecked_mut(id)
+    }
+    pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
+        let r = self.map.insert(id, c);
+        match r {
+            Some(_) => self.notify.modify_event(id, "", 0),
+            _ => self.notify.create_event(id),
+        }
+        r
+    }
     pub fn delete(&mut self, id: usize) {
         self.notify.delete_event(id);
         self.map.remove(id);

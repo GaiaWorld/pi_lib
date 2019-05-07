@@ -42,7 +42,7 @@ impl Notify for CellEntity {
 }
 #[derive(Default)]
 pub struct Entity{
-    slab: Slab<usize>, // 值usize 记录每个id所关联的component的掩码位
+    slab: Slab<u64>, // 值usize 记录每个id所关联的component的掩码位
     components: Vec<Arc<MultiCase>>, // 组件
     notify: NotifyImpl,
 }
@@ -51,6 +51,9 @@ impl Entity {
         self.components.len()
     }
     pub fn register_component(&mut self, component: Arc<MultiCase>) {
+        if self.components.len() >= size_of::<u64>() {
+            panic!("components overflow")
+        }
         self.components.push(component);
     }
     pub fn create(&mut self) -> usize {

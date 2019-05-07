@@ -41,8 +41,23 @@ pub struct ModifyEvent{
     pub index: usize, // 一般无意义。 只有在数组或向量的元素被修改时，才有意义
 }
 
-/// E 是Entity的类型， 如果是单例组件， 则E为()。 C是组件类型， 如果仅监听Entity的创建和删除， 则C为()。 EV是事件类型
-pub trait Listener<E, C, EV> {
+/// E 是Entity的类型， C是组件类型， EV是事件类型
+pub trait MultiCaseListener<E, C, EV> {
+    type ReadData: FetchData;
+    type WriteData: FetchMutData;
+
+    fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
+}
+
+/// Entity监听器， 监听Entity的创建和删除， EV是事件类型
+pub trait EntityListener<E, EV> {
+    type ReadData: FetchData;
+    type WriteData: FetchMutData;
+
+    fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
+}
+/// 单例组件监听器， EV是事件类型
+pub trait SingleCaseListener<C, EV> {
     type ReadData: FetchData;
     type WriteData: FetchMutData;
 
