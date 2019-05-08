@@ -4,26 +4,24 @@ use std::{
     any::{TypeId},
 };
 
-pub use downcast_rs::Downcast;
-
-use world::World;
+use world::{ World, Fetch, Borrow, BorrowMut};
 use listener::{Listener as Lis, FnListener, FnListeners};
 
-pub trait Runner {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait Runner<'a> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
     fn setup(&mut self, read: Self::ReadData, write: Self::WriteData);
     fn run(&mut self, read: Self::ReadData, write: Self::WriteData);
     fn dispose(&mut self, read: Self::ReadData, write: Self::WriteData);
 }
 
-pub trait FetchData: Sized + 'static {
-    fn fetch(world: &World) -> Self;
+pub trait SystemData<'a> where Self: std::marker::Sized{
+    type FetchTarget: Fetch + Borrow<'a, Target=Self>;
 }
 
-pub trait FetchMutData {
-    fn fetch_mut(world: &World) -> Self;
+pub trait SystemMutData<'a> where Self: std::marker::Sized{
+    type FetchTarget: Fetch + BorrowMut<'a, Target=Self>;
 }
 
 
@@ -40,6 +38,7 @@ pub struct ModifyEvent{
     pub field: &'static str,
     pub index: usize, // 一般无意义。 只有在数组或向量的元素被修改时，才有意义
 }
+
 
 /// E 是Entity的类型， C是组件类型， EV是事件类型
 pub trait MultiCaseListener<E, C, EV> {
@@ -63,7 +62,6 @@ pub trait SingleCaseListener<C, EV> {
 
     fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
 }
-
 
 pub type CreateListeners = FnListeners<CreateEvent>;
 pub type DeleteListeners = FnListeners<DeleteEvent>;

@@ -6,6 +6,7 @@ use std::{
 
 use map::{Map, vecmap::VecMap};
 use pointer::cell::TrustCell;
+use Share;
 
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
@@ -41,7 +42,7 @@ impl<T> Notify for CellIdTree<T> {
         self.borrow_mut().notify.modify.delete(listener);
     }
 }
-impl<T: 'static> SingleCase for CellIdTree<T> {
+impl<T: Share> SingleCase for CellIdTree<T> {
 }
 
 pub enum InsertType{
