@@ -9,8 +9,7 @@ use std::{
 use im::hashmap::HashMap;
 
 use atom::Atom;
-use listener::{FnListeners, FnListener};
-use pointer::cell::{Ref, RefMut, TrustCell};
+use pointer::cell::{TrustCell};
 
 use system::{System};
 use entity::{Entity, CellEntity};
@@ -38,15 +37,15 @@ pub trait TypeIds {
 }
 
 #[derive(Default)]
-pub struct World<'a> {
+pub struct World {
     entity: HashMap<TypeId, Arc<CellEntity>>,
     single: HashMap<TypeId, Arc<SingleCase>>,
     multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: HashMap<Atom, Arc<System<'a>>>,
+    system: HashMap<Atom, Arc<TrustCell<System>>>,
     runner: HashMap<Atom, Arc<Dispatcher>>,
 }
 
-impl<'a> World<'a> {
+impl World {
     pub fn register_entity<E: Share>(&mut self) {
         let id = TypeId::of::<E>();
         match self.entity.insert(id, Arc::new(TrustCell::new(Entity::default()))) {
@@ -82,7 +81,7 @@ impl<'a> World<'a> {
     pub fn register_system<T>(&mut self, name: Atom, sys: T) {
         // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
     }
-    pub fn get_system(&self, name: &Atom) -> Option<&Arc<System<'a>>> {
+    pub fn get_system(&self, name: &Atom) -> Option<&Arc<TrustCell<System>>> {
         self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {
@@ -146,3 +145,66 @@ impl<'a> World<'a> {
         }
     }
 }
+
+macro_rules! impl_trait {
+    ( $($ty:ident),* ) => {
+        impl<$($ty),*> TypeIds for ( $( $ty , )* ) where $( $ty: TypeIds),*{
+            fn type_ids() -> Vec<(TypeId, TypeId)> {
+                let mut arr = Vec::new();
+                $(arr.extend_from_slice( &$ty::type_ids() );)*
+                arr
+            }
+        }
+
+        impl<$($ty),*> Fetch for ( $( $ty , )* ) where $( $ty: Fetch),*{
+            fn fetch(world: &World) -> Self {
+                ( $($ty::fetch(world),)* )
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'a, $($ty),*> Borrow<'a> for ( $( $ty , )* ) where $( $ty: Borrow<'a>),*{
+            type Target = ( $($ty::Target,)* );
+            fn borrow(&'a self) -> Self::Target {
+                let ($($ty,)*) = self;
+                ( $($ty.borrow(),)* )
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'a, $($ty),*> BorrowMut<'a> for ( $( $ty , )* ) where $( $ty: BorrowMut<'a>),*{
+            type Target = ( $($ty::Target,)* );
+            fn borrow_mut(&'a self) -> Self::Target {
+                let ( $($ty,)* ) = self;
+                ( $($ty.borrow_mut(),)* )
+            }
+        }
+    };
+}
+
+impl_trait!(A);
+impl_trait!(A, B);
+impl_trait!(A, B, C);
+impl_trait!(A, B, C, D);
+impl_trait!(A, B, C, D, E);
+impl_trait!(A, B, C, D, E, F);
+impl_trait!(A, B, C, D, E, F, G);
+impl_trait!(A, B, C, D, E, F, G, H);
+impl_trait!(A, B, C, D, E, F, G, H, I);
+impl_trait!(A, B, C, D, E, F, G, H, I, J);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
+impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);

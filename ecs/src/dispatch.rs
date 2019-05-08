@@ -45,8 +45,8 @@ impl Dispatcher for SeqDispatcher {
                     let key = names.swap_remove(len - i- 1);
                     system_map.remove(&key);
                     let sys = world.get_system(&key).unwrap();
-                    let run = sys.fetch_run(sys.clone(), world).unwrap();
-                    self.vec.push_back(run);
+                    // let run = sys.fetch_run(sys.clone(), world).unwrap();
+                    // self.vec.push_back(run);
                 }
             }
             if len == names.len() {
@@ -66,25 +66,25 @@ impl Dispatcher for SeqDispatcher {
 //====================================
 // 根据系统的读写数据，计算依赖关系
 fn depend(world: &World, key: &Atom, system_map: &mut FnvHashMap<Atom, (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>)>, component_map: &mut FnvHashMap<(TypeId, TypeId), (Vec<Atom>, Vec<Atom>)>) {
-    match world.get_system(key) {
-        Some(arc_sys) => {
-            let (read, write) = arc_sys.get_depends();
-            for r in read.iter() {
-                match component_map.entry((r.0, r.1)) {
-                    Entry::Occupied(mut e) =>e.get_mut().0.push(key.clone()),
-                    Entry::Vacant(e) => {e.insert((vec![key.clone()], Vec::new()));}
-                }
-            }
-            for r in write.iter() {
-                match component_map.entry((r.0, r.1)) {
-                    Entry::Occupied(mut e) =>e.get_mut().1.push(key.clone()),
-                    Entry::Vacant(e) => {e.insert((Vec::new(), vec![key.clone()]));}
-                }
-            }
-            system_map.insert(key.clone(), (read, write));
-        },
-        _ => ()
-    }
+    // match world.get_system(key) {
+    //     Some(arc_sys) => {
+    //         let (read, write) = arc_sys.get_depends();
+    //         for r in read.iter() {
+    //             match component_map.entry((r.0, r.1)) {
+    //                 Entry::Occupied(mut e) =>e.get_mut().0.push(key.clone()),
+    //                 Entry::Vacant(e) => {e.insert((vec![key.clone()], Vec::new()));}
+    //             }
+    //         }
+    //         for r in write.iter() {
+    //             match component_map.entry((r.0, r.1)) {
+    //                 Entry::Occupied(mut e) =>e.get_mut().1.push(key.clone()),
+    //                 Entry::Vacant(e) => {e.insert((Vec::new(), vec![key.clone()]));}
+    //             }
+    //         }
+    //         system_map.insert(key.clone(), (read, write));
+    //     },
+    //     _ => ()
+    // }
 }
 
 // 根据依赖关系，计算先后次序

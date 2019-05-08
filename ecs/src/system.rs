@@ -1,11 +1,10 @@
 
 use std::{
-    sync::Arc,
     any::{TypeId},
 };
-
-use world::{ World, Fetch, Borrow, BorrowMut, TypeIds};
-use listener::{Listener as Lis, FnListener, FnListeners};
+use world::{ World, Fetch, TypeIds};
+use listener::{Listener as LibListener, FnListeners};
+pub use listener::FnListener;
 
 pub trait Runner<'a> {
     type ReadData: SystemData<'a>;
@@ -17,11 +16,11 @@ pub trait Runner<'a> {
 }
 
 pub trait SystemData<'a> where Self: std::marker::Sized{
-    type FetchTarget: Fetch + Borrow<'a, Target=Self> + TypeIds;
+    type FetchTarget: Fetch + TypeIds;
 }
 
 pub trait SystemMutData<'a> where Self: std::marker::Sized{
-    type FetchTarget: Fetch + BorrowMut<'a, Target=Self> + TypeIds;
+    type FetchTarget: Fetch + TypeIds;
 }
 
 pub struct CreateEvent{
@@ -45,20 +44,6 @@ pub trait Listener<'a, E, C, EV> {
 
     fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
 }
-
-pub trait Monitor<'a> {
-    fn notify(&mut self);
-    fn get_depends(&'a self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-}
-
-pub trait System<'a> {
-    fn setup(&'a self);
-    fn run(&'a self);
-    fn dispose(&'a self);
-    fn get_depends(&'a self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-}
-
-
 
 pub type CreateListeners = FnListeners<CreateEvent>;
 pub type DeleteListeners = FnListeners<DeleteEvent>;
@@ -110,47 +95,119 @@ pub trait Notify {
     fn remove_modify(&self, &ModifyFn);
 }
 
-// pub trait System {
-//     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-//     fn fetch_setup(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-//     fn fetch_run(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-//     fn fetch_dispose(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-// }
+pub trait System{ 
+    fn fetch_setup(self, world: &World) -> Option<RunnerFn>;
+    fn fetch_run(self, world: &World) -> Option<RunnerFn>;
+    fn fetch_dispose(self, world: &World) -> Option<RunnerFn>;
+    fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+}
+
+pub trait Monitor<E, C, EV>{
+    fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+    fn fetch_setup(self, world: &World) -> Result<(), String>;
+}
+
+#[macro_export]
+macro_rules! impl_monitor {
+    ($share_system: ident, $system: ident, {$(<$e: ident, $c: ident, $ev: ident>)*}) => {
+        $(
+            impl $crate::system::Monitor<$e, $c, $ev> for $share_system{
+                fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
+                    (
+                        <<$system as $crate::system::Listener<'_, $e, $c, $ev>>::ReadData as $crate::system::SystemData>::FetchTarget::type_ids(), 
+                        <<$system as $crate::system::Listener<'_, $e, $c, $ev>>::WriteData as $crate::system::SystemMutData>::FetchTarget::type_ids()
+                    )
+                }
+
+                fn fetch_setup(self, world: &$crate::world::World) -> Result<(), String>{
+                    let read = <<$system as $crate::system::Listener<'_, $e, $c, $ev>>::ReadData as $crate::system::SystemData>::FetchTarget::fetch(world);
+                    let write = <<$system as $crate::system::Listener<'_, $e, $c, $ev>>::WriteData as $crate::system::SystemMutData>::FetchTarget::fetch(world);
+                    let f = $crate::system::FnListener(std::sync::Arc::new( move |e: &CreateEvent| {
+                        let read_data = read.borrow();
+                        let write = write.borrow_mut();
+                        self.0.borrow_mut().listen(e, read_data, write);
+                    }));
+                    let setup_target: Arc<CellMultiCase<Node, Position>> = match world.fetch_multi::<Node, Position>().unwrap().downcast() {
+                        Ok(r) => r,
+                        Err(_) => return Err("downcast err".to_string()),
+                    };
+                    Notify::add_create(&*setup_target, f);
+                    Ok(())
+                }
+            }
+        )*
+
+        impl $crate::system::Monitor<(), (), ()> for $share_system {
+            fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
+                let mut read_ids = Vec::new();
+                let mut write_ids = Vec::new();
+                $(
+                let ids = $crate::system::<$e, $c, $ev>::get_depends(self);
+                read_ids.extend_from_slice(&ids.0);
+                write_ids.extend_from_slice(&ids.1);
+                )*
+                (read_ids, write_ids)
+            }
+
+            fn fetch_setup(self, world: &$crate::world::World) -> Result<(), String>{
+                $(
+                $crate::system::Monitor::<$e, $c, $ec>::fetch_setup(self.clone(), world)?;
+                )*
+                Ok(())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_system {
+    ($share_system: ident, $system: ident) => {
+        impl $crate::system::System for $share_system{
+            fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
+                (
+                    <<$system as $crate::system::Runner::ReadData as $crate::system::SystemData>::FetchTarget::type_ids(), 
+                    <<$system as $crate::system::Runner::WriteData as $crate::system::SystemMutData>::FetchTarget::type_ids()
+                )
+            }
+
+            fn fetch_setup(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
+                let read = <<$system as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
+                let write = <<$system as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
+                let f = move |_e: &()| {
+                    let read_data = read.borrow();
+                    let write_data = write.borrow_mut();
+                    self.0.borrow_mut().setup(read_data, write_data);
+                };
+                Some($crate::system::FnListener(Arc::new(f)))
+            }
+
+            fn fetch_run(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
+                let read = <<$system as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
+                let write = <<$system as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
+                let f = move |_e: &()| {
+                    let read_data = read.borrow();
+                    let write_data = write.borrow_mut();
+                    self.0.borrow_mut().run(read_data, write_data);
+                };
+                Some($crate::system::FnListener(Arc::new(f)))
+            }
+
+            fn fetch_dispose(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
+                let read = <<$system as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
+                let write = <<$system as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
+                let f = move |_e: &()| {
+                    let read_data = read.borrow();
+                    let write_data = write.borrow_mut();
+                    self.0.borrow_mut().dispose(read_data, write_data);
+                };
+                Some($crate::system::FnListener(Arc::new(f)))
+            }
+        }
+    };
+}
 
 macro_rules! impl_data {
     ( $($ty:ident),* ) => {
-        impl<$($ty),*> TypeIds for ( $( $ty , )* ) where $( $ty: TypeIds),*{
-            fn type_ids() -> Vec<(TypeId, TypeId)> {
-                let mut arr = Vec::new();
-                $(arr.extend_from_slice( &$ty::type_ids() );)*
-                arr
-            }
-        }
-
-        impl<$($ty),*> Fetch for ( $( $ty , )* ) where $( $ty: Fetch),*{
-            fn fetch(world: &World) -> Self {
-                ( $($ty::fetch(world),)* )
-            }
-        }
-
-        #[allow(non_snake_case)]
-        impl<'a, $($ty),*> Borrow<'a> for ( $( $ty , )* ) where $( $ty: Borrow<'a>),*{
-            type Target = ( $($ty::Target,)* );
-            fn borrow(&'a self) -> Self::Target {
-                let ($($ty,)*) = self;
-                ( $($ty.borrow(),)* )
-            }
-        }
-
-        #[allow(non_snake_case)]
-        impl<'a, $($ty),*> BorrowMut<'a> for ( $( $ty , )* ) where $( $ty: BorrowMut<'a>),*{
-            type Target = ( $($ty::Target,)* );
-            fn borrow_mut(&'a self) -> Self::Target {
-                let ( $($ty,)* ) = self;
-                ( $($ty.borrow_mut(),)* )
-            }
-        }
-
         impl<'a, $($ty),*> SystemData<'a> for ( $( $ty , )* ) where $( $ty : SystemData<'a> ),*{
             type FetchTarget = ($($ty::FetchTarget,)*);
         }

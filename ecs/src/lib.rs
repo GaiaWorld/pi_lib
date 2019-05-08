@@ -22,3 +22,7 @@ pub mod dispatch;
 pub trait Share: Send + Sync + 'static {
 
 }
+
+impl<T: Send + Sync + 'static> Share for T {
+
+}

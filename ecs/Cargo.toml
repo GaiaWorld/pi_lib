@@ -15,3 +15,13 @@ lazy_static = "*"
 fnv = "*"
 im = "*"
 downcast-rs = "*"
+
+[[example]]
+name = "system"
+
+
+[[example]]
+name = "component"
+
+[workspace]
+members = ["ecs_derive"]

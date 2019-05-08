@@ -11,7 +11,7 @@ use pointer::cell::{TrustCell};
 use map::{Map};
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
+use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
 use entity::CellEntity;
 use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
@@ -90,6 +90,13 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         self.notify.delete_event(id);
         self.map.remove(&id);
     }
+}
+
+impl<'a, E: Share, C: Component> SystemData<'a> for &'a MultiCaseImpl<E, C> {
+    type FetchTarget = ShareMultiCase<E, C>;
+}
+impl<'a, E: Share, C: Component> SystemMutData<'a> for &'a mut MultiCaseImpl<E, C> {
+    type FetchTarget = ShareMultiCase<E, C>;
 }
 
 pub struct ShareMultiCase<E: Share, C: Component>(Arc<CellMultiCase<E, C>>);
