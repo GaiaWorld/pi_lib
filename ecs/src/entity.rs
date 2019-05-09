@@ -1,17 +1,31 @@
 use std::{
     sync::Arc,
     mem::size_of,
+    any::TypeId,
+    marker::PhantomData,
 };
 
+pub use any::ArcAny;
 use pointer::cell::TrustCell;
 use slab::Slab;
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
+use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
+use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
 use component::MultiCase;
+use Share;
 
-pub type CellEntity = TrustCell<Entity>;
-impl Notify for CellEntity {
+
+pub trait Entity: Notify + ArcAny {
+    fn get_mask(&self) -> usize;
+    fn register_component(&mut self, component: Arc<MultiCase>);
+    fn create(&mut self) -> usize;
+    fn delete(&mut self, id: usize);
+}
+impl_downcast_arc!(Entity);
+
+pub type CellEntity<T> = TrustCell<EntityImpl<T>>;
+impl<T: Share> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
     }
@@ -40,13 +54,38 @@ impl Notify for CellEntity {
         self.borrow_mut().notify.modify.delete(listener);
     }
 }
-#[derive(Default)]
-pub struct Entity{
+impl<T: Share> Entity for CellEntity<T> {
+    pub fn get_mask(&self) -> usize {
+        self.borrow().get_mask()
+    }
+    pub fn register_component(&mut self, component: Arc<MultiCase>) {
+        self.borrow_mut().register_component(component)
+    }
+    pub fn create(&mut self) -> usize {
+        self.borrow_mut().create()
+    }
+    pub fn delete(&mut self, id: usize) {
+        self.borrow_mut().delete(id)
+    }
+
+}
+
+
+pub struct EntityImpl<T>{
     slab: Slab<u64>, // 值usize 记录每个id所关联的component的掩码位
     components: Vec<Arc<MultiCase>>, // 组件
     notify: NotifyImpl,
+    marker: PhantomData<T>,
 }
-impl Entity {
+impl<T> EntityImpl<T> {
+    pub fn new() -> EntityImpl<T> {
+        EntityImpl{
+            slab: Slab::default(),
+            components: Vec::new(),
+            notify: NotifyImpl::default(),
+            marker: PhantomData,
+        }
+    }
     pub fn get_mask(&self) -> usize {
         self.components.len()
     }
@@ -77,3 +116,40 @@ impl Entity {
 
 }
 
+impl<'a, T: Share> SystemData<'a> for &'a EntityImpl<T> {
+    type FetchTarget = ShareEntity<T>;
+}
+impl<'a, T: Share> SystemMutData<'a> for &'a mut EntityImpl<T> {
+    type FetchTarget = ShareEntity<T>;
+}
+
+pub struct ShareEntity<T>(Arc<CellEntity<T>>);
+
+impl<T: Share> Fetch for ShareEntity<T> {
+    fn fetch(world: &World) -> Self {
+        match world.fetch_entity::<T>().unwrap().downcast() {
+            Ok(r) => ShareEntity(r),
+            Err(_) => panic!("downcast err"),
+        }
+    }
+}
+
+impl<T: Share> TypeIds for ShareEntity<T> {
+    fn type_ids() -> Vec<(TypeId, TypeId)> {
+        vec![(TypeId::of::<T>(), TypeId::of::<()>())]
+    }
+}
+
+impl<'a, T: Share> Borrow<'a> for ShareEntity<T> {
+    type Target = &'a EntityImpl<T>;
+    fn borrow(&'a self) -> Self::Target {
+        unsafe {&* (&*self.0.borrow() as *const EntityImpl<T>)}
+    }
+}
+
+impl<'a, T: Share> BorrowMut<'a> for ShareEntity<T> {
+    type Target = &'a mut EntityImpl<T>;
+    fn borrow_mut(&'a self) -> Self::Target {
+        unsafe {&mut * (&mut *self.0.borrow_mut() as *mut EntityImpl<T>)}
+    }
+}

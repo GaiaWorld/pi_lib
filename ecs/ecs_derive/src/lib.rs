@@ -11,24 +11,26 @@ use syn::{
     DeriveInput, Path,
 };
 
-// pub trait System {
-//     fn fetch_setup(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
-//     fn fetch_run(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
-//     fn fetch_dispose(me: Arc<Any>, world: &World) -> Option<RunnerFn> where Self: Sized;
-// }
-
-// #[proc_macro_derive(System, attributes(storage))]
-// pub fn component(input: TokenStream) -> TokenStream {
-//     let ast = syn::parse(input).unwrap();
-//     let gen = impl_component(&ast);
-//     gen.into()
-// }
-
 #[proc_macro_derive(Component, attributes(storage))]
 pub fn component(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
     let gen = impl_component(&ast);
     gen.into()
+}
+
+struct StorageAttribute {
+    storage: Path,
+}
+
+impl Parse for StorageAttribute {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        let _parenthesized_token = parenthesized!(content in input);
+
+        Ok(StorageAttribute {
+            storage: content.parse()?,
+        })
+    }
 }
 
 fn impl_component(ast: &DeriveInput) -> proc_macro2::TokenStream {

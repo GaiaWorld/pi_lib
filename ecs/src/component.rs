@@ -6,13 +6,12 @@ use std::{
 };
 
 pub use any::ArcAny;
-
 use pointer::cell::{TrustCell};
 use map::{Map};
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
-use entity::CellEntity;
+use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
+use entity::Entity;
 use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
 
@@ -71,13 +70,13 @@ impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
 pub struct MultiCaseImpl<E: Share, C: Component> {
     map: C::Strorage,
     notify: NotifyImpl,
-    entity: Arc<CellEntity>,
+    entity: Arc<CellEntity<E>>,
     bit_index: usize,
     marker: PhantomData<E>,
 }
 
 impl<E: Share, C: Component> MultiCaseImpl<E, C> {
-    pub fn new(entity: Arc<CellEntity>, bit_index: usize) -> TrustCell<Self>{
+    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> TrustCell<Self>{
         TrustCell::new(MultiCaseImpl{
             map: C::Strorage::default(),
             notify: NotifyImpl::default(),
@@ -110,6 +109,13 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         self.notify.delete_event(id);
         self.map.remove(&id);
     }
+}
+
+impl<'a, E: Share, C: Component> SystemData<'a> for &'a MultiCaseImpl<E, C> {
+    type FetchTarget = ShareMultiCase<E, C>;
+}
+impl<'a, E: Share, C: Component> SystemMutData<'a> for &'a mut MultiCaseImpl<E, C> {
+    type FetchTarget = ShareMultiCase<E, C>;
 }
 
 pub struct ShareMultiCase<E: Share, C: Component>(Arc<CellMultiCase<E, C>>);

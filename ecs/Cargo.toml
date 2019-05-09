@@ -14,4 +14,12 @@ paste = "0.1"
 lazy_static = "*"
 fnv = "*"
 im = "*"
-downcast-rs = "*"
+
+[[example]]
+name = "expanded"
+
+[[example]]
+name = "basic"
+
+[workspace]
+members = ["ecs_derive"]

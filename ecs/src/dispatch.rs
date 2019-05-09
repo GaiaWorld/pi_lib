@@ -31,6 +31,14 @@ impl Dispatcher for SeqDispatcher {
         self.init(v, world);
     }
     fn init(&mut self, mut names: Vec<Atom>, world: &World) {
+        // 简单实现
+        for k in names.iter() {
+            let sys = world.get_system(&k).unwrap();
+            let run = sys.fetch_run(world).unwrap();
+            self.vec.push_back(run);
+        }
+        
+        
         // 根据系统的读写数据，计算依赖关系。 如果一个数据被读写，则读会依赖写。写会先执行，读后执行
         // let mut system_map = FnvHashMap::default();
         // let mut component_map = FnvHashMap::default();
