@@ -41,7 +41,7 @@ pub struct World {
     entity: HashMap<TypeId, Arc<CellEntity>>,
     single: HashMap<TypeId, Arc<SingleCase>>,
     multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: HashMap<Atom, Arc<TrustCell<System>>>,
+    system: HashMap<Atom, Arc<System>>,
     runner: HashMap<Atom, Arc<Dispatcher>>,
 }
 
@@ -79,9 +79,11 @@ impl World {
         }
     }
     pub fn register_system<T>(&mut self, name: Atom, sys: T) {
+        let t = TrustCell::new(sys);
+        
         // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
     }
-    pub fn get_system(&self, name: &Atom) -> Option<&Arc<TrustCell<System>>> {
+    pub fn get_system(&self, name: &Atom) -> Option<&Arc<System>> {
         self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {

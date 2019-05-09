@@ -13,8 +13,8 @@ pub trait Listener<E> {
 
 pub struct FnListener<E>(pub Arc<Fn(&E)>);
 
-unsafe impl<E: Sync> Sync for FnListener<E> {}
-unsafe impl<E: Send> Send for FnListener<E> {}
+unsafe impl<E> Sync for FnListener<E> {}
+unsafe impl<E> Send for FnListener<E> {}
 
 impl<E> Listener<E> for FnListener<E> {
     fn listen(&self, e: &E) {

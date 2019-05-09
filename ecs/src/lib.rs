@@ -1,4 +1,5 @@
 #![feature(core_intrinsics)]
+#![feature(proc_macro_hygiene)]
 
 extern crate slab;
 extern crate atom;
@@ -10,6 +11,8 @@ extern crate pointer;
 extern crate any;
 
 extern crate im;
+#[macro_use]
+pub extern crate paste;
 
 pub mod world;
 pub mod system;
@@ -18,6 +21,7 @@ pub mod component;
 
 pub mod idtree;
 pub mod dispatch;
+
 
 pub trait Share: Send + Sync + 'static {
 
