@@ -17,7 +17,6 @@ impl Component for Position{
     type Strorage = VecMap<Self>;
 }
 
-
 // Entry
 struct Node;
 

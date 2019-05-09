@@ -12,7 +12,7 @@ use atom::Atom;
 use pointer::cell::{TrustCell};
 
 use system::{System};
-use entity::{Entity, EntityImpl};
+use entity::{Entity, EntityImpl, CellEntity};
 use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use dispatch::Dispatcher;
 use Share;
@@ -66,19 +66,22 @@ impl World {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.entity.get(&eid) {
-            Some(v) => match v.downcast() {
-                Ok(r) => {
-                    let rc = r.clone();
-                    let mut entity = BorrowMut::borrow_mut(&ShareEntity(r));
-                    let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
-                    entity.register_component(m.clone());
-                    match self.multi.insert((eid, cid), m) {
-                        Some(_) => panic!("duplicate registration, entity: {:?}, component: {:?}", unsafe{type_name::<E>()}, unsafe{type_name::<C>()}),
-                        _ => ()
-                    }
-                },
-                Err(_) => panic!("downcast err")
-            }
+            Some(v) => {
+                match v.clone().downcast(){
+                    Ok(r) => {
+                        let r: Arc<CellEntity<E>> = r;
+                        let rc = r.clone();
+                        let mut entity = BorrowMut::borrow_mut(&r);
+                        let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
+                        entity.register_component(m.clone());
+                        match self.multi.insert((eid, cid), m) {
+                            Some(_) => panic!("duplicate registration, entity: {:?}, component: {:?}", unsafe{type_name::<E>()}, unsafe{type_name::<C>()}),
+                            _ => ()
+                        }
+                    },
+                    Err(_) => panic!("downcast err")
+                };
+            },
             _ => panic!("need registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, eid),
         }
     }
@@ -97,8 +100,12 @@ impl World {
     pub fn create_entity<E: Share>(&self) -> usize {
         let id = TypeId::of::<E>();
         match self.entity.get(&id) {
-            Some(v) => {
-                v.borrow_mut().create()
+            Some(v) => match v.clone().downcast() {
+                Ok(r) => {
+                    let rc: Arc<CellEntity<E>> = r;
+                    rc.borrow_mut().create()
+                },
+                Err(_) => panic!("downcast err")
             }
             _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
         }
@@ -106,9 +113,13 @@ impl World {
     pub fn free_entity<E: Share>(&self, id: usize) {
         let eid = TypeId::of::<E>();
         match self.entity.get(&eid) {
-            Some(v) => {
-                v.borrow_mut().delete(id);
-            }
+            Some(v) => match v.clone().downcast() {
+                Ok(r) => {
+                    let r: Arc<CellEntity<E>> = r;
+                    r.borrow_mut().delete(id);
+                },
+                Err(_) => panic!("downcast err")
+            },
             _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, eid),
         }
     }

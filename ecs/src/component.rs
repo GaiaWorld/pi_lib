@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
     marker::PhantomData,
     any::TypeId,
+    ops::Deref,
 };
 
 pub use any::ArcAny;
@@ -11,7 +12,7 @@ use map::{Map};
 
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
-use entity::Entity;
+use entity::CellEntity;
 use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
 
@@ -66,7 +67,6 @@ impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     }
 }
 
-#[derive(Default)]
 pub struct MultiCaseImpl<E: Share, C: Component> {
     map: C::Strorage,
     notify: NotifyImpl,
@@ -118,12 +118,12 @@ impl<'a, E: Share, C: Component> SystemMutData<'a> for &'a mut MultiCaseImpl<E, 
     type FetchTarget = ShareMultiCase<E, C>;
 }
 
-pub struct ShareMultiCase<E: Share, C: Component>(Arc<CellMultiCase<E, C>>);
+pub type ShareMultiCase<E, C> = Arc<CellMultiCase<E, C>>;
 
 impl<E: Share, C: Component> Fetch for ShareMultiCase<E, C> {
     fn fetch(world: &World) -> Self {
         match world.fetch_multi::<E, C>().unwrap().downcast() {
-            Ok(r) => ShareMultiCase(r),
+            Ok(r) => r,
             Err(_) => panic!("downcast err"),
         }
     }
@@ -138,14 +138,14 @@ impl<E: Share, C: Component> TypeIds for ShareMultiCase<E, C> {
 impl<'a, E: Share, C: Component> Borrow<'a> for ShareMultiCase<E, C> {
     type Target = &'a MultiCaseImpl<E, C>;
     fn borrow(&'a self) -> Self::Target {
-        unsafe {&* (&*self.0.borrow() as *const MultiCaseImpl<E, C>)}
+        unsafe {&* (&* self.deref().borrow() as *const MultiCaseImpl<E, C>)}
     }
 }
 
 impl<'a, E: Share, C: Component> BorrowMut<'a> for ShareMultiCase<E, C> {
     type Target = &'a mut MultiCaseImpl<E, C>;
     fn borrow_mut(&'a self) -> Self::Target {
-        unsafe {&mut * (&mut *self.0.borrow_mut() as *mut MultiCaseImpl<E, C>)}
+        unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>)}
     }
 }
 

@@ -3,6 +3,7 @@ use std::{
     mem::size_of,
     any::TypeId,
     marker::PhantomData,
+    ops::Deref,
 };
 
 pub use any::ArcAny;
@@ -55,16 +56,16 @@ impl<T: Share> Notify for CellEntity<T> {
     }
 }
 impl<T: Share> Entity for CellEntity<T> {
-    pub fn get_mask(&self) -> usize {
+    fn get_mask(&self) -> usize {
         self.borrow().get_mask()
     }
-    pub fn register_component(&mut self, component: Arc<MultiCase>) {
+    fn register_component(&mut self, component: Arc<MultiCase>) {
         self.borrow_mut().register_component(component)
     }
-    pub fn create(&mut self) -> usize {
+    fn create(&mut self) -> usize {
         self.borrow_mut().create()
     }
-    pub fn delete(&mut self, id: usize) {
+    fn delete(&mut self, id: usize) {
         self.borrow_mut().delete(id)
     }
 
@@ -123,12 +124,12 @@ impl<'a, T: Share> SystemMutData<'a> for &'a mut EntityImpl<T> {
     type FetchTarget = ShareEntity<T>;
 }
 
-pub struct ShareEntity<T>(Arc<CellEntity<T>>);
+pub type ShareEntity<T> = Arc<CellEntity<T>>;
 
 impl<T: Share> Fetch for ShareEntity<T> {
     fn fetch(world: &World) -> Self {
         match world.fetch_entity::<T>().unwrap().downcast() {
-            Ok(r) => ShareEntity(r),
+            Ok(r) => r,
             Err(_) => panic!("downcast err"),
         }
     }
@@ -143,13 +144,13 @@ impl<T: Share> TypeIds for ShareEntity<T> {
 impl<'a, T: Share> Borrow<'a> for ShareEntity<T> {
     type Target = &'a EntityImpl<T>;
     fn borrow(&'a self) -> Self::Target {
-        unsafe {&* (&*self.0.borrow() as *const EntityImpl<T>)}
+        unsafe {&* (&*self.deref().borrow() as *const EntityImpl<T>)}
     }
 }
 
 impl<'a, T: Share> BorrowMut<'a> for ShareEntity<T> {
     type Target = &'a mut EntityImpl<T>;
     fn borrow_mut(&'a self) -> Self::Target {
-        unsafe {&mut * (&mut *self.0.borrow_mut() as *mut EntityImpl<T>)}
+        unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut EntityImpl<T>)}
     }
 }
