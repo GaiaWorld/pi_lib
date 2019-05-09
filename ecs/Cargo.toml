@@ -17,14 +17,10 @@ im = "*"
 downcast-rs = "*"
 
 [[example]]
-name = "system"
-
-
-[[example]]
-name = "component"
+name = "expanded"
 
 [[example]]
-name = "system_macro"
+name = "basic"
 
 [workspace]
 members = ["ecs_derive"]
