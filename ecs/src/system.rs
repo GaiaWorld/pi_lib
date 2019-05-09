@@ -118,24 +118,7 @@ pub trait System: any::ArcAny {
     fn fetch_run(&self, world: &World) -> Option<RunnerFn>;
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
 }
-
 impl_downcast_arc!(System);
-
-// pub trait System: any::ArcAny { 
-//     fn fetch_setup(self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-//     fn fetch_run(self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-//     fn fetch_dispose(self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-//     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-// }
-// impl_downcast_arc!(Monitor<E, V, EV> where E: 'static + Send + Sync, V: 'static + Send + Sync, EV: 'static + Send + Sync);
-
-// pub trait Monitor<E, C, EV>: any::ArcAny {
-//     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-//     fn fetch_setup(self, me: Arc<Monitor<E, C, EV>>, world: &World) -> Option<RunnerFn>;
-//     // fn fetch_dispose(self, world: &World) -> Result<(), String>;
-// }
-
-// impl_downcast_arc!(Monitor<E, V, EV> where E: 'static + Send + Sync, V: 'static + Send + Sync, EV: 'static + Send + Sync);
 
 #[macro_export(local_inner_macros)]
 macro_rules! impl_system {
@@ -301,53 +284,6 @@ macro_rules! impl_system {
         }
     };
 }
-
-// #[macro_export]
-// macro_rules! impl_system {
-//     ($cell_system: ident, $system: ident) => {
-//         impl $crate::system::System for $cell_system{
-//             fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
-//                 (
-//                     <<<$system as $crate::system::Runner::ReadData as $crate::system::SystemData>::FetchTarget as $crate::world::TypeIds>::type_ids(), 
-//                     <<<$system as $crate::system::Runner::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::world::TypeIds>::type_ids()
-//                 )
-//             }
-
-//             fn fetch_setup(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
-//                 let read = <<$system as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
-//                 let write = <<$system as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
-//                 let f = move |_e: &()| {
-//                     let read_data = $crate::world::Borrow::borrow(&read);
-//                     let write_data = $crate::world::BorrowMut::borrow_mut(&write);
-//                     self.0.borrow_mut().setup(read_data, write_data);
-//                 };
-//                 Some($crate::system::FnListener(Arc::new(f)))
-//             }
-
-//             fn fetch_run(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
-//                 let read = <<<$system as Runner>::ReadData as SystemData>::FetchTarget as $crate::world::Fetch>::fetch(world);
-//                 let write = <<<$system as Runner>::WriteData as SystemMutData>::FetchTarget as $crate::world::Fetch>::fetch(world);
-//                 let f = move |_e: &()| {
-//                     let read_data = $crate::world::Borrow::borrow(&read);
-//                     let write_data = $crate::world::BorrowMut::borrow_mut(&write);
-//                     self.0.borrow_mut().run(read_data, write_data);
-//                 };
-//                 Some($crate::system::FnListener(Arc::new(f)))
-//             }
-
-//             fn fetch_dispose(self, world: &$crate::world::World) -> Option<$crate::system::RunnerFn> {
-//                 let read = <<$system as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
-//                 let write = <<$system as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
-//                 let f = move |_e: &()| {
-//                     let read_data = $crate::world::Borrow::borrow(&read);
-//                     let write_data = $crate::world::BorrowMut::borrow_mut(&write);
-//                     self.0.borrow_mut().dispose(read_data, write_data);
-//                 };
-//                 Some($crate::system::FnListener(Arc::new(f)))
-//             }
-//         }
-//     };
-// }
 
 macro_rules! impl_data {
     ( $($ty:ident),* ) => {
