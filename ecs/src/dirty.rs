@@ -1,43 +1,95 @@
-std::slice::Iter;
+use std::slice::Iter;
 
-use map::vecmap::VecMap;
 
-pub struct Dirty {
-    pub dirtys: Vec<usize>,
-    pub dirty_mark_map: VecMap<bool>,
+pub struct LayerDirty {
+    dirtys: Vec<Vec<usize>>, // 按层放置的脏节点
+    count: usize,            // 脏节点数量
+    start: usize,            // 脏节点的起始层
 }
 
-impl Dirty {
-    pub fn new() -> Dirty{
-        Dirty{
-            dirtys: Vec::new(),
-            dirty_mark_map: VecMap::new(),
+impl LayerDirty {
+    pub fn new() -> LayerDirty {
+        LayerDirty {
+            dirtys: vec![Vec::new()],
+            count: 0,
+            start: usize::max_value(),
         }
     }
-    pub fn iter(&self) -> Iter<usize> {
-        self.dirtys.iter()
-    }
-    pub fn marked(&mut self, id: usize){
-        let dirty_mark = unsafe{self.dirty_mark_map.get_unchecked_mut(id)};
-        if *dirty_mark == true {
-            return;
+    // 设置节点脏
+    pub fn mark(&mut self, id: usize, layer: usize) {
+        self.count += 1;
+        if self.start > layer {
+            self.start = layer;
         }
-        *dirty_mark = true;
-        self.dirtys.push(id);
+        if self.dirtys.len() <= layer {
+            for _ in self.dirtys.len()..layer + 1 {
+                self.dirtys.push(Vec::new())
+            }
+        }
+        let vec = unsafe { self.dirtys.get_unchecked_mut(layer) };
+        vec.push(id);
     }
-    pub fn delete(&mut self, id: usize){
-        let dirty_mark = unsafe{self.dirty_mark_map.get_unchecked_mut(id)};
-        *dirty_mark = false;
-        for i in 0..self.dirtys.len(){
-            if self.dirtys[i] == id{
-                self.dirtys.remove(i);
-                return;
+    pub fn delete(&mut self, id: usize, layer: usize) {
+        let vec = unsafe { self.dirtys.get_unchecked_mut(layer) };
+        for i in 0..vec.len() {
+            if vec[i] == id {
+                vec.swap_remove(i);
+                self.count -= 1;
+                break;
             }
         }
     }
-    pub fn clear(&mut self){
-        self.dirtys.clear();
-        self.dirty_mark_map.clear();
+    // 迭代方法
+    pub fn iter(&self) -> DirtyIterator {
+        DirtyIterator {
+            inner: self,
+            layer: self.start + 1,
+            iter: if self.count == 0 {
+                self.dirtys[0].iter()
+            } else {
+                self.dirtys[self.start].iter()
+            },
+        }
     }
+    pub fn clear(&mut self) {
+        let len = self.dirtys.len();
+        while self.start < len {
+            let vec = unsafe { self.dirtys.get_unchecked_mut(self.start) };
+            let c = vec.len();
+            if c == 0 {
+                continue;
+            }
+            self.count -= c;
+            vec.clear();
+            self.start += 1;
+        }
+    }
+}
 
+
+pub struct DirtyIterator<'a> {
+    inner: &'a LayerDirty,
+    layer: usize,
+    iter: Iter<'a, usize>,
+}
+
+impl<'a> Iterator for DirtyIterator<'a> {
+    type Item = &'a usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut r = self.iter.next();
+        if r == None {
+            let len = self.inner.dirtys.len();
+            while self.layer < len {
+                let vec = unsafe { self.inner.dirtys.get_unchecked(self.layer) };
+                self.layer += 1;
+                if vec.len() > 0 {
+                    self.iter = vec.iter();
+                    r = self.iter.next();
+                    break;
+                }
+            }
+        }
+        r
+    }
 }

@@ -4,7 +4,7 @@ use std::{
     any::{TypeId},
 };
 
-use world::{ World, Fetch, Borrow, BorrowMut};
+use world::{ World, Fetch, Borrow, BorrowMut, TypeIds};
 use listener::{Listener as Lis, FnListener, FnListeners};
 
 pub trait Runner<'a> {
@@ -17,13 +17,12 @@ pub trait Runner<'a> {
 }
 
 pub trait SystemData<'a> where Self: std::marker::Sized{
-    type FetchTarget: Fetch + Borrow<'a, Target=Self>;
+    type FetchTarget: Fetch + Borrow<'a, Target=Self> + TypeIds;
 }
 
 pub trait SystemMutData<'a> where Self: std::marker::Sized{
-    type FetchTarget: Fetch + BorrowMut<'a, Target=Self>;
+    type FetchTarget: Fetch + BorrowMut<'a, Target=Self> + TypeIds;
 }
-
 
 pub struct CreateEvent{
     pub id: usize,
@@ -41,27 +40,41 @@ pub struct ModifyEvent{
 
 
 /// E 是Entity的类型， C是组件类型， EV是事件类型
-pub trait MultiCaseListener<E, C, EV> {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait MultiCaseListener<'a, E, C, EV> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
     fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
 }
 
 /// Entity监听器， 监听Entity的创建和删除， EV是事件类型
-pub trait EntityListener<E, EV> {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait EntityListener<'a, E, EV> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
     fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
 }
 /// 单例组件监听器， EV是事件类型
-pub trait SingleCaseListener<C, EV> {
-    type ReadData: FetchData;
-    type WriteData: FetchMutData;
+pub trait SingleCaseListener<'a, C, EV> {
+    type ReadData: SystemData<'a>;
+    type WriteData: SystemMutData<'a>;
 
     fn listen(&mut self, event: &EV, read: &Self::ReadData, write: &mut Self::WriteData);
 }
+
+pub trait Monitor<'a> {
+    fn notify(&mut self);
+    fn get_depends(&'a self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+}
+
+pub trait System<'a> {
+    fn setup(&'a self);
+    fn run(&'a self);
+    fn dispose(&'a self);
+    fn get_depends(&'a self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+}
+
+
 
 pub type CreateListeners = FnListeners<CreateEvent>;
 pub type DeleteListeners = FnListeners<DeleteEvent>;
@@ -113,13 +126,83 @@ pub trait Notify {
     fn remove_modify(&self, &ModifyFn);
 }
 
-pub trait System {
-    fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
-    fn fetch_setup(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-    fn fetch_run(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
-    fn fetch_dispose(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+// pub trait System {
+//     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
+//     fn fetch_setup(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+//     fn fetch_run(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+//     fn fetch_dispose(&self, me: Arc<System>, world: &World) -> Option<RunnerFn>;
+// }
+
+macro_rules! impl_data {
+    ( $($ty:ident),* ) => {
+        impl<$($ty),*> TypeIds for ( $( $ty , )* ) where $( $ty: TypeIds),*{
+            fn type_ids() -> Vec<(TypeId, TypeId)> {
+                let mut arr = Vec::new();
+                $(arr.extend_from_slice( &$ty::type_ids() );)*
+                arr
+            }
+        }
+
+        impl<$($ty),*> Fetch for ( $( $ty , )* ) where $( $ty: Fetch),*{
+            fn fetch(world: &World) -> Self {
+                ( $($ty::fetch(world),)* )
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'a, $($ty),*> Borrow<'a> for ( $( $ty , )* ) where $( $ty: Borrow<'a>),*{
+            type Target = ( $($ty::Target,)* );
+            fn borrow(&'a self) -> Self::Target {
+                let ($($ty,)*) = self;
+                ( $($ty.borrow(),)* )
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<'a, $($ty),*> BorrowMut<'a> for ( $( $ty , )* ) where $( $ty: BorrowMut<'a>),*{
+            type Target = ( $($ty::Target,)* );
+            fn borrow_mut(&'a self) -> Self::Target {
+                let ( $($ty,)* ) = self;
+                ( $($ty.borrow_mut(),)* )
+            }
+        }
+
+        impl<'a, $($ty),*> SystemData<'a> for ( $( $ty , )* ) where $( $ty : SystemData<'a> ),*{
+            type FetchTarget = ($($ty::FetchTarget,)*);
+        }
+
+        impl<'a, $($ty),*> SystemMutData<'a> for ( $( $ty , )* ) where $( $ty : SystemMutData<'a> ),*{
+            type FetchTarget = ($($ty::FetchTarget,)*);
+        } 
+    };
 }
 
+impl_data!(A);
+impl_data!(A, B);
+impl_data!(A, B, C);
+impl_data!(A, B, C, D);
+impl_data!(A, B, C, D, E);
+impl_data!(A, B, C, D, E, F);
+impl_data!(A, B, C, D, E, F, G);
+impl_data!(A, B, C, D, E, F, G, H);
+impl_data!(A, B, C, D, E, F, G, H, I);
+impl_data!(A, B, C, D, E, F, G, H, I, J);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
 // Node{};
 // CharNode{};

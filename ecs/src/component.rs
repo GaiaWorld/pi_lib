@@ -2,6 +2,7 @@
 use std::{
     sync::Arc,
     marker::PhantomData,
+    any::TypeId,
 };
 
 pub use any::ArcAny;
@@ -12,7 +13,7 @@ use map::{Map};
 
 use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use entity::CellEntity;
-use world::{Fetch, World, Borrow, BorrowMut};
+use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
 
 pub trait Component: Sized + Share {
@@ -86,16 +87,16 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         })
     }
     pub fn get(&mut self, id: usize) -> Option<&C> {
-        self.map.get(id)
+        self.map.get(&id)
     }
     pub fn get_mut(&mut self, id: usize) -> Option<&mut C> {
-        self.map.get_mut(id)
+        self.map.get_mut(&id)
     }
     pub unsafe fn get_unchecked(&mut self, id: usize) -> &C {
-        self.map.get_unchecked(id)
+        self.map.get_unchecked(&id)
     }
     pub unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut C {
-        self.map.get_unchecked_mut(id)
+        self.map.get_unchecked_mut(&id)
     }
     pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
         let r = self.map.insert(id, c);
@@ -122,6 +123,12 @@ impl<E: Share, C: Component> Fetch for ShareMultiCase<E, C> {
     }
 }
 
+impl<E: Share, C: Component> TypeIds for ShareMultiCase<E, C> {
+    fn type_ids() -> Vec<(TypeId, TypeId)> {
+        vec![(TypeId::of::<E>(), TypeId::of::<C>())]
+    }
+}
+
 impl<'a, E: Share, C: Component> Borrow<'a> for ShareMultiCase<E, C> {
     type Target = &'a MultiCaseImpl<E, C>;
     fn borrow(&'a self) -> Self::Target {
@@ -135,3 +142,5 @@ impl<'a, E: Share, C: Component> BorrowMut<'a> for ShareMultiCase<E, C> {
         unsafe {&mut * (&mut *self.0.borrow_mut() as *mut MultiCaseImpl<E, C>)}
     }
 }
+
+
