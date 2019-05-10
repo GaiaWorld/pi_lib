@@ -6,23 +6,22 @@
 extern crate ecs;
 extern crate map;
 extern crate pointer;
+#[macro_use]
+extern crate ecs_derive;
 
 use ecs::component::{ Component, MultiCaseImpl};
 use ecs::system::{Runner, MultiCaseListener};
 use ecs::monitor::{CreateEvent};
 use map::vecmap::VecMap;
 
-struct Position{}
-
-impl Component for Position{
-    type Strorage = VecMap<Self>;
-}
+#[derive(Component)]
+pub struct Position{}
 
 // Entry
-struct Node;
+pub struct Node;
 
 
-struct SystemDemo;
+pub struct SystemDemo;
 
 impl<'a> Runner<'a> for SystemDemo{
     type ReadData = &'a MultiCaseImpl<Node, Position>;

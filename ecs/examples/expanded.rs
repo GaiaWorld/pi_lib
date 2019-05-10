@@ -21,7 +21,7 @@ use map::vecmap::VecMap;
 struct Position{}
 
 impl Component for Position{
-    type Strorage = VecMap<Self>;
+    type Storage = VecMap<Self>;
 }
 
 
