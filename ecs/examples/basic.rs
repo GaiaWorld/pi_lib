@@ -8,7 +8,8 @@ extern crate map;
 extern crate pointer;
 
 use ecs::component::{ Component, MultiCaseImpl};
-use ecs::system::{Runner, MultiCaseListener, CreateEvent};
+use ecs::system::{Runner, MultiCaseListener};
+use ecs::monitor::{CreateEvent};
 use map::vecmap::VecMap;
 
 struct Position{}

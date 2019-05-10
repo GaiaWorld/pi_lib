@@ -13,7 +13,8 @@ use pointer::cell::{TrustCell};
 
 use system::{System};
 use entity::{Entity, EntityImpl, CellEntity};
-use component::{SingleCase, MultiCase, CellMultiCase, MultiCaseImpl, Component};
+use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
+use single::{SingleCase, CellSingleCase};
 use dispatch::Dispatcher;
 use Share;
 
@@ -132,26 +133,38 @@ impl World {
     pub fn remove_dispatcher(&mut self, name: &Atom) -> Option<Arc<Dispatcher>> {
         self.runner.remove(name)
     }
-    pub fn fetch_entity<T: 'static>(&self) -> Option<Arc<Entity>> {
+    pub fn fetch_entity<T: Share>(&self) -> Option<Arc<CellEntity<T>>> {
         let id = TypeId::of::<T>();
-        match self.entity.get(&id) {
-            Some(v) => Some(v.clone()),
-            _ => None
+        let r = match self.entity.get(&id) {
+            Some(v) => v.clone(),
+            _ => return None
+        };
+        match r.downcast() {
+            Ok(r) => Some(r),
+            Err(_) => panic!("downcast err"),
         }
     }
-    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<SingleCase>> {
+    pub fn fetch_single<T: Share>(&self) -> Option<Arc<CellSingleCase<T>>> {
         let id = TypeId::of::<T>();
-        match self.single.get(&id) {
-            Some(v) => Some(v.clone()),
-            _ => None
+        let r = match self.single.get(&id) {
+            Some(v) => v.clone(),
+            _ => return None
+        };
+        match r.downcast() {
+            Ok(r) => Some(r),
+            Err(_) => panic!("downcast err"),
         }
     }
-    pub fn fetch_multi<E: Share, C: Component>(&self) -> Option<Arc<MultiCase>> {
+    pub fn fetch_multi<E: Share, C: Component>(&self) -> Option<Arc<CellMultiCase<E, C>>> {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
-        match self.multi.get(&(eid, cid)) {
-            Some(v) => Some(v.clone()),
-            _ => None
+        let r = match self.multi.get(&(eid, cid)) {
+            Some(v) => v.clone(),
+            _ => return None
+        };
+        match r.downcast() {
+            Ok(r) => Some(r),
+            Err(_) => panic!("downcast err"),
         }
     }
 

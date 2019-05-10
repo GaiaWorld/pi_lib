@@ -11,8 +11,9 @@ use std::sync::Arc;
 
 use pointer::cell::{TrustCell};
 
-use ecs::component::{ Component, MultiCaseImpl, CellMultiCase};
-use ecs::system::{Runner, System, RunnerFn, CreateEvent, SystemData, SystemMutData, Notify, MultiCaseListener, DisposeFn};
+use ecs::component::{ Component, MultiCaseImpl};
+use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn};
+use ecs::monitor::{Notify, CreateEvent};
 use listener::{FnListener};
 use ecs::world:: { World, Fetch, Borrow, BorrowMut, TypeIds};
 use map::vecmap::VecMap;
@@ -52,24 +53,6 @@ struct CellSystemDemo{
     dispose_listener_fn: Option<DisposeFn>,
 }
 
-impl SystemDemo {
-    fn fetch_setup_single_create<T>(me: Arc<TrustCell<Self>>, world: &World) -> Result<(), String>{
-        let read = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::ReadData as SystemData>::FetchTarget::fetch(world);
-        let write = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::WriteData as SystemMutData>::FetchTarget::fetch(world);
-        let f = FnListener(Arc::new( move |e: &CreateEvent| {
-            let read_data = read.borrow();
-            let write = write.borrow_mut();
-            me.borrow_mut().listen(e, read_data, write);
-        }));
-        let setup_target: Arc<CellMultiCase<Node, Position>> = match world.fetch_multi::<Node, Position>().unwrap().downcast() {
-            Ok(r) => r,
-            Err(_) => return Err("downcast err".to_string()),
-        };
-        Notify::add_create(&*setup_target, f);
-        Ok(())
-    }
-}
-
 impl System for CellSystemDemo {
     fn setup(&mut self, me: Arc<System>, world: &World){
         let me: Arc<Self> = match me.downcast() {
@@ -86,10 +69,7 @@ impl System for CellSystemDemo {
                 let write_data = write.borrow_mut();
                 me.owner.borrow_mut().listen(e, read_data, write_data);
             }));
-            let setup_target: Arc<CellMultiCase<Node, Position>> = match world.fetch_multi::<Node, Position>().unwrap().downcast() {
-                Ok(r) => r,
-                Err(_) => panic!("downcast err".to_string()),
-            };
+            let setup_target = world.fetch_multi::<Node, Position>().unwrap();
             Notify::add_create(&*setup_target, f.clone());
             f
         },);
@@ -111,10 +91,7 @@ impl System for CellSystemDemo {
 
         //dispose
         self.dispose_listener_fn =  Some(FnListener(Arc::new(move |world: &World| {
-            let setup_target: Arc<CellMultiCase<Node, Position>> = match world.fetch_multi::<Node, Position>().unwrap().downcast() {
-                Ok(r) => r,
-                Err(_) => panic!("downcast err".to_string()),
-            };
+            let setup_target = world.fetch_multi::<Node, Position>().unwrap();
             Notify::remove_create(&*setup_target, &f1);
         })));
     }

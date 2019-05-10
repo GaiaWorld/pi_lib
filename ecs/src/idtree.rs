@@ -9,8 +9,8 @@ use pointer::cell::TrustCell;
 use Share;
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
-use component::SingleCase;
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
+use single::SingleCase;
 
 pub type CellIdTree<T> = TrustCell<IdTree<VecMap<Node<T>>>>;
 impl<T> Notify for CellIdTree<T> {

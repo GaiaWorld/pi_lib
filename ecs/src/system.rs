@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 use world::{ World, Fetch, TypeIds};
-use listener::{Listener as LibListener, FnListeners};
 pub use listener::FnListener;
 
 pub trait Runner<'a> {
@@ -22,20 +21,6 @@ pub trait SystemData<'a> where Self: std::marker::Sized{
 
 pub trait SystemMutData<'a> where Self: std::marker::Sized{
     type FetchTarget: Fetch + TypeIds;
-}
-
-pub struct CreateEvent{
-    pub id: usize,
-}
-
-pub struct DeleteEvent{
-    pub id: usize,
-}
-
-pub struct ModifyEvent{
-    pub id: usize,
-    pub field: &'static str,
-    pub index: usize, // 一般无意义。 只有在数组或向量的元素被修改时，才有意义
 }
 
 /// E 是Entity的类型， C是组件类型， EV是事件类型
@@ -61,56 +46,8 @@ pub trait SingleCaseListener<'a, C, EV> {
     fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
 }
 
-pub type CreateListeners = FnListeners<CreateEvent>;
-pub type DeleteListeners = FnListeners<DeleteEvent>;
-pub type ModifyListeners = FnListeners<ModifyEvent>;
-pub type CreateFn = FnListener<CreateEvent>;
-pub type DeleteFn = FnListener<DeleteEvent>;
-pub type ModifyFn = FnListener<ModifyEvent>;
 pub type RunnerFn = FnListener<()>;
 pub type DisposeFn = FnListener<World>;
-
-
-#[derive(Default)]
-pub struct NotifyImpl {
-    pub create: CreateListeners,
-    pub delete: DeleteListeners,
-    pub modify: ModifyListeners,
-}
-impl NotifyImpl {
-    pub fn create_event(&self, id: usize) {
-        let e = CreateEvent{
-            id: id,
-        };
-        self.create.listen(&e);
-    }
-    pub fn delete_event(&self, id: usize) {
-        let e = DeleteEvent{
-            id: id,
-        };
-        self.delete.listen(&e);
-    }
-    pub fn modify_event(&self, id: usize, field: &'static str, index: usize) {
-        let e = ModifyEvent{
-            id: id,
-            field: field,
-            index: index,
-        };
-        self.modify.listen(&e);
-    }
-}
-
-pub trait Notify {
-    fn add_create(&self, CreateFn);
-    fn add_delete(&self, DeleteFn);
-    fn add_modify(&self, ModifyFn);
-    fn create_event(&self, id: usize);
-    fn delete_event(&self, id: usize);
-    fn modify_event(&self, id: usize, field: &'static str, index: usize);
-    fn remove_create(&self, &CreateFn);
-    fn remove_delete(&self, &DeleteFn);
-    fn remove_modify(&self, &ModifyFn);
-}
 
 pub trait System: any::ArcAny { 
     fn setup(&mut self, me: Arc<System>, world: &World);
@@ -122,35 +59,29 @@ impl_downcast_arc!(System);
 
 #[macro_export(local_inner_macros)]
 macro_rules! impl_system {
-    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, CreateEvent) => {$crate::system::Notify::add_create(&*$setup_target, $f.clone())};
-    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, CreateEvent) => {$crate::system::Notify::add_create(&*$setup_target, $f.clone())};
-    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, ModifyEvent) => {$crate::system::Notify::add_modify(&*$setup_target, $f.clone())};
-    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, ModifyEvent) => {$crate::system::Notify::add_modify(&*$setup_target, $f.clone())};
-    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, DeleteEvent) => {$crate::system::Notify::add_delete(&*$setup_target, $f.clone())};
-    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, DeleteEvent) => {$crate::system::Notify::add_delete(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, CreateEvent) => {$crate::monitor::Notify::add_create(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, CreateEvent) => {$crate::monitor::Notify::add_create(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, ModifyEvent) => {$crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, ModifyEvent) => {$crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, DeleteEvent) => {$crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, DeleteEvent) => {$crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())};
 
-    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, CreateEvent) => {$crate::system::Notify::remove_create(&*$setup_target, $f)};
-    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, CreateEvent) => {$crate::system::Notify::remove_create(&*$setup_target, $f)};
-    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, ModifyEvent) => {$crate::system::Notify::remove_modify(&*$setup_target, $f)};
-    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, ModifyEvent) => {$crate::system::Notify::remove_modify(&*$setup_target, $f)};
-    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, DeleteEvent) => {$crate::system::Notify::remove_delete(&*$setup_target, $f)};
-    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, DeleteEvent) => {$crate::system::Notify::remove_delete(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, CreateEvent) => {$crate::monitor::Notify::remove_create(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, CreateEvent) => {$crate::monitor::Notify::remove_create(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, ModifyEvent) => {$crate::monitor::Notify::remove_modify(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, ModifyEvent) => {$crate::monitor::Notify::remove_modify(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, DeleteEvent) => {$crate::monitor::Notify::remove_delete(&*$setup_target, $f)};
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, DeleteEvent) => {$crate::monitor::Notify::remove_delete(&*$setup_target, $f)};
 
     // fetch_single fetch_multi fetch_entry
     (@setup_target_ty $setup_target:ident, $w:ident, SingleCaseListener, $c:ty, $ev:ty) => {
-        let setup_target: std::sync::Arc<$crate::component::SingleCase<$c>> = match $w.fetch_single::<$c>().unwrap().downcast() {
-            Ok(r) => r,
-            Err(_) => std::panic!("downcast err".to_string()),
-        };
+        let $setup_target = $w.fetch_single::<$c>().unwrap();
     };
     (@setup_target_ty $setup_target:ident, $w:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
-        let $setup_target: std::sync::Arc<$crate::component::CellMultiCase<$e, $c>> = match $w.fetch_multi::<$e, $c>().unwrap().downcast() {
-            Ok(r) => r,
-            Err(_) => std::panic!("downcast err".to_string()),
-        };
+        let $setup_target = $w.fetch_multi::<$e, $c>().unwrap();
     };
     (@setup_target_ty $setup_target:ident, $w:ident, EntityListener, $e:ty, $ev:ty) => {
-        let $setup_target = $w.fetch_entry::<$e>().unwrap()
+        let $setup_target = $w.fetch_entity::<$e>().unwrap();
     };
     
     //每一个listenner setup
@@ -158,7 +89,7 @@ macro_rules! impl_system {
         let me1 = $me.clone();
         let read = <<<$system as $crate::system::$sign<'_, $($gen),*>>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::world::Fetch>::fetch($world);
         let write = <<<$system as $crate::system::$sign<'_, $($gen),*>>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::world::Fetch>::fetch($world);
-        let f = $crate::system::FnListener(std::sync::Arc::new( move |e| {
+        let f = $crate::monitor::FnListener(std::sync::Arc::new( move |e| {
             let read_data = $crate::world::Borrow::borrow(&read);
             let write_data = $crate::world::BorrowMut::borrow_mut(&write);
             me1.owner.borrow_mut().listen(e, read_data, write_data);
@@ -206,7 +137,7 @@ macro_rules! impl_system {
             let write_data = $crate::world::BorrowMut::borrow_mut(&write);
             $s.owner.borrow_mut().setup(read_data, write_data);
         }
-        $s.run_fn = Some($crate::system::FnListener(std::sync::Arc::new( move |e: &()| {
+        $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
             let read_data = $crate::world::Borrow::borrow(&read);
             let write_data = $crate::world::BorrowMut::borrow_mut(&write);
             $me.owner.borrow_mut().run(read_data, write_data);
@@ -262,7 +193,7 @@ macro_rules! impl_system {
                 impl_system!(@runner_setup self world me $system $has_runner);
 
                 //dispose
-                self.dispose_listener_fn = Some($crate::system::FnListener(std::sync::Arc::new(move |world: &$crate::world::World| {
+                self.dispose_listener_fn = Some($crate::monitor::FnListener(std::sync::Arc::new(move |world: &$crate::world::World| {
                     impl_system!(@listener_dispose 0; listen_arr world me $system $($t)*);
                 })));
             }

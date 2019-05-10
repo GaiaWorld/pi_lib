@@ -18,15 +18,13 @@ pub mod system;
 pub mod entity;
 pub mod component;
 pub mod dispatch;
+pub mod single;
+pub mod monitor;
 
 pub mod idtree;
 pub mod idtree_sys;
 pub mod dirty;
 
-pub trait Share: Send + Sync + 'static {
+pub trait Share: Send + Sync + 'static {}
 
-}
-
-impl<T: Send + Sync + 'static> Share for T {
-
-}
+impl<T: Send + Sync + 'static> Share for T {}

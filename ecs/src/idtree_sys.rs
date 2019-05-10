@@ -9,8 +9,8 @@ use pointer::cell::TrustCell;
 use Share;
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
-use component::SingleCase;
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
+use single::SingleCase;
 use idtree::IdTree;
 use entity::Entity;
 

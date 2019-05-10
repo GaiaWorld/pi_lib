@@ -12,7 +12,8 @@ use slab::Slab;
 
 
 use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
+use system::{SystemData, SystemMutData};
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use component::MultiCase;
 use Share;
 
@@ -128,10 +129,7 @@ pub type ShareEntity<T> = Arc<CellEntity<T>>;
 
 impl<T: Share> Fetch for ShareEntity<T> {
     fn fetch(world: &World) -> Self {
-        match world.fetch_entity::<T>().unwrap().downcast() {
-            Ok(r) => r,
-            Err(_) => panic!("downcast err"),
-        }
+        world.fetch_entity::<T>().unwrap()
     }
 }
 

@@ -6,12 +6,13 @@ use std::{
     ops::Deref,
 };
 
-pub use any::ArcAny;
+use any::ArcAny;
 use pointer::cell::{TrustCell};
 use map::{Map};
 
 
-use system::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, SystemData, SystemMutData};
+use system::{SystemData, SystemMutData};
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
 use entity::CellEntity;
 use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
@@ -20,17 +21,18 @@ pub trait Component: Sized + Share {
     type Strorage: Map<Key=usize, Val=Self> + Default + Share;
 }
 
-
-pub trait SingleCase: Notify + ArcAny {
-}
-impl_downcast_arc!(SingleCase);
-
 pub trait MultiCase: Notify + ArcAny {
     fn delete(&self, id: usize);
 }
 impl_downcast_arc!(MultiCase);
 
 pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
+
+impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
+    fn delete(&self, id: usize) {
+        self.borrow_mut().delete(id)
+    }
+}
 // TODO 以后用宏生成
 impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
     fn add_create(&self, listener: CreateFn) {
@@ -59,11 +61,6 @@ impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
     }
     fn remove_modify(&self, listener: &ModifyFn) {
         self.borrow_mut().notify.modify.delete(listener);
-    }
-}
-impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
-    fn delete(&self, id: usize) {
-        self.borrow_mut().delete(id)
     }
 }
 
@@ -97,6 +94,15 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     pub unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut C {
         self.map.get_unchecked_mut(&id)
     }
+    pub fn get_write(&mut self, id: usize) -> Option<Write<C>> {
+        match self.map.get_mut(&id) {
+            Some(r) => Some(Write::new(r, &self.notify)),
+            None => None,
+        }
+    }
+    pub unsafe fn get_unchecked_write(&mut self, id: usize) -> Write<C> {
+        Write::new(self.map.get_unchecked_mut(&id), &self.notify)
+    }
     pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
         let r = self.map.insert(id, c);
         match r {
@@ -122,10 +128,7 @@ pub type ShareMultiCase<E, C> = Arc<CellMultiCase<E, C>>;
 
 impl<E: Share, C: Component> Fetch for ShareMultiCase<E, C> {
     fn fetch(world: &World) -> Self {
-        match world.fetch_multi::<E, C>().unwrap().downcast() {
-            Ok(r) => r,
-            Err(_) => panic!("downcast err"),
-        }
+        world.fetch_multi::<E, C>().unwrap()
     }
 }
 
@@ -148,5 +151,3 @@ impl<'a, E: Share, C: Component> BorrowMut<'a> for ShareMultiCase<E, C> {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>)}
     }
 }
-
-
