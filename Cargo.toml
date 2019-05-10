@@ -32,6 +32,7 @@ members = [
   "pointer",
   "map",
   "ecs",
+  "ecs_derive",
   "listener",
   "debug_info",
   "any",
