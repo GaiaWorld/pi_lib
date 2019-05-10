@@ -23,9 +23,16 @@ impl<T> IdTree<T> {
     pub unsafe fn get_unchecked(&self, id: usize) -> &Node<T> {
       self.map.get_unchecked(id)
     }
-    pub unsafe fn set_bind(&mut self, id: usize, bind: T) -> Option<T> {
+    pub unsafe fn set_bind(&mut self, id: usize, bind: T, notify: Option<&NotifyImpl>) -> Option<T> {
       match self.map.get_mut(id) {
-        Some(n) => Some(replace(&mut n.bind, bind)),
+        Some(n) =>{
+          let r = Some(replace(&mut n.bind, bind));
+          match notify {
+            Some(n) => n.modify_event(id, "", 0),
+            _ => ()
+          };
+          r
+        },
         _ => None
       }
     }
@@ -33,7 +40,7 @@ impl<T> IdTree<T> {
       self.map.insert(id, Node::new(bind));
     }
     /// index为0表示插入到子节点队列前， 如果index大于子节点队列长度，则插入到子节点队列最后。parent如果为0 表示设置为根节点。 如果parent的layer大于0，表示在树上，则会发出创建事件
-    pub fn insert_child(&mut self, id: usize, parent: usize, mut index: usize, notify: &NotifyImpl) {
+    pub fn insert_child(&mut self, id: usize, parent: usize, mut index: usize, notify: Option<&NotifyImpl>) {
       if parent > 0 {
           let (layer, prev, next) = match self.map.get(parent) {
             Some(n) => {
@@ -66,11 +73,14 @@ impl<T> IdTree<T> {
           _ => panic!("invalid id: {}", id)
         };
         self.insert_tree(head, 2);
-        notify.create_event(parent);
+        match notify {
+            Some(n) => n.create_event(id),
+            _ => ()
+        };
       }
     }
     /// 根据InsertType插入到brother的前或后。 brother的layer大于0，表示在树上，则会发出创建事件
-    pub fn insert_brother(&mut self, id: usize, brother: usize, insert: InsertType, notify: &NotifyImpl) {
+    pub fn insert_brother(&mut self, id: usize, brother: usize, insert: InsertType, notify: Option<&NotifyImpl>) {
         let (parent, layer, prev, next) = match self.map.get(brother) {
           Some(n) => match insert {
             InsertType::Front => (n.parent, n.layer, n.prev, brother),
@@ -81,7 +91,7 @@ impl<T> IdTree<T> {
       self.insert_node(id, parent, layer, prev, next, notify)
     }
     /// 如果的节点的layer大于0，表示在树上，则会发出移除事件
-    pub fn remove(&mut self, id: usize, notify: &NotifyImpl) {
+    pub fn remove(&mut self, id: usize, notify: Option<&NotifyImpl>) {
       let (parent, layer, count, prev, next, head) = match self.map.get(id) {
         Some(n) => {
           if n.parent == 0 && n.layer == 0 {
@@ -92,7 +102,10 @@ impl<T> IdTree<T> {
         _ => panic!("invalid id: {}", id)
       };
       if layer > 0 {
-        notify.delete_event(id);
+        match notify {
+            Some(n) => n.delete_event(id),
+            _ => ()
+        };
         self.remove_tree(head);
       }
       if parent > 0 {
@@ -105,7 +118,7 @@ impl<T> IdTree<T> {
       node.next = 0;
     }
     /// 销毁子节点， recursive表示是否递归销毁
-    pub fn destroy(&mut self, id: usize, recursive: bool, notify: &NotifyImpl) {
+    pub fn destroy(&mut self, id: usize, recursive: bool, notify: Option<&NotifyImpl>) {
       let (parent, layer, count, prev, next, mut head) = match self.map.get(id) {
         Some(n) => {
           if n.parent == 0 && n.layer == 0 {
@@ -116,7 +129,10 @@ impl<T> IdTree<T> {
         _ => panic!("invalid id: {}", id)
       };
       if layer > 0 {
-        notify.delete_event(id);
+        match notify {
+            Some(n) => n.delete_event(id),
+            _ => ()
+        };
         if recursive {
           self.recursive_destroy(id, head);
         }else {
@@ -159,7 +175,7 @@ impl<T> IdTree<T> {
       }
     }
     // 插入节点
-    fn insert_node(&mut self, id: usize, parent: usize, layer: usize, prev: usize, next: usize, notify: &NotifyImpl) {
+    fn insert_node(&mut self, id: usize, parent: usize, layer: usize, prev: usize, next: usize, notify: Option<&NotifyImpl>) {
       let (head, count) = match self.map.get_mut(id) {
         Some(n) =>{
           if n.parent > 0 {
@@ -199,7 +215,10 @@ impl<T> IdTree<T> {
       self.modify_count(p, count as isize);
       if layer > 0 {
         self.insert_tree(head, layer + 1);
-        notify.create_event(parent);
+        match notify {
+            Some(n) => n.create_event(id),
+            _ => ()
+        };
       }
     }
     // 插入到树上， 就是递归设置每个子节点的layer
@@ -333,7 +352,7 @@ impl<'a, T> Iterator for ChildrenIterator<'a, T> {
 
 #[test]
 fn test11(){
-    let n = NotifyImpl::default();
+    let n = None;
     let mut tree: IdTree<usize> =IdTree::default();
     tree.create(1, 1);
     tree.create(11, 2);
@@ -344,17 +363,17 @@ fn test11(){
     tree.create(122, 3);
     tree.create(123, 3);
     tree.create(124, 3);
-    tree.insert_child(11, 1, 10, &n);
-    tree.insert_child(12, 1, 10, &n);
-    tree.insert_child(111, 11, 0, &n);
-    tree.insert_child(112, 11, 1, &n);
-    tree.insert_child(122, 12, 1, &n);
-    tree.insert_brother(121, 122, InsertType::Front, &n);
-    tree.insert_brother(123, 122, InsertType::Back, &n);
-    tree.insert_child(124, 12, 8, &n);
-    tree.insert_child(1, 0, 0, &n);
+    tree.insert_child(11, 1, 10, n);
+    tree.insert_child(12, 1, 10, n);
+    tree.insert_child(111, 11, 0, n);
+    tree.insert_child(112, 11, 1, n);
+    tree.insert_child(122, 12, 1, n);
+    tree.insert_brother(121, 122, InsertType::Front, n);
+    tree.insert_brother(123, 122, InsertType::Back, n);
+    tree.insert_child(124, 12, 8, n);
+    tree.insert_child(1, 0, 0, n);
     test_println(&tree);
-    tree.destroy(12, true, &n);
+    tree.destroy(12, true, n);
     test_println(&tree);
     for i in tree.iter(unsafe{tree.get_unchecked(1)}.children.head) {
       println!("i: {}", i);
