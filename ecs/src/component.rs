@@ -18,7 +18,7 @@ use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
 use Share;
 
 pub trait Component: Sized + Share {
-    type Strorage: Map<Key=usize, Val=Self> + Default + Share;
+    type Storage: Map<Key=usize, Val=Self> + Default + Share;
 }
 
 pub trait MultiCase: Notify + ArcAny {
@@ -65,7 +65,7 @@ impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
 }
 
 pub struct MultiCaseImpl<E: Share, C: Component> {
-    map: C::Strorage,
+    map: C::Storage,
     notify: NotifyImpl,
     entity: Arc<CellEntity<E>>,
     bit_index: usize,
@@ -75,7 +75,7 @@ pub struct MultiCaseImpl<E: Share, C: Component> {
 impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> TrustCell<Self>{
         TrustCell::new(MultiCaseImpl{
-            map: C::Strorage::default(),
+            map: C::Storage::default(),
             notify: NotifyImpl::default(),
             entity: entity,
             bit_index: bit_index,
@@ -96,12 +96,12 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     }
     pub fn get_write(&mut self, id: usize) -> Option<Write<C>> {
         match self.map.get_mut(&id) {
-            Some(r) => Some(Write::new(r, &self.notify)),
+            Some(r) => Some(Write::new(id, r, &self.notify)),
             None => None,
         }
     }
     pub unsafe fn get_unchecked_write(&mut self, id: usize) -> Write<C> {
-        Write::new(self.map.get_unchecked_mut(&id), &self.notify)
+        Write::new(id, self.map.get_unchecked_mut(&id), &self.notify)
     }
     pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
         let r = self.map.insert(id, c);
