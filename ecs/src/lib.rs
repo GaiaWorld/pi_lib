@@ -14,6 +14,7 @@ extern crate im;
 pub extern crate paste;
 
 pub mod world;
+#[macro_use]
 pub mod system;
 pub mod entity;
 pub mod component;

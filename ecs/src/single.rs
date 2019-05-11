@@ -102,7 +102,7 @@ impl<T: Share> Fetch for ShareSingleCase<T> {
 
 impl<T: Share> TypeIds for ShareSingleCase<T> {
     fn type_ids() -> Vec<(TypeId, TypeId)> {
-        vec![(TypeId::of::<T>(), TypeId::of::<T>())]
+        vec![(TypeId::of::<()>(), TypeId::of::<T>())]
     }
 }
 

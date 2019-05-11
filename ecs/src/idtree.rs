@@ -166,9 +166,16 @@ impl<T> IdTree<T> {
         self.remove_node(parent, count + 1, prev, next)
       }
     }
-    /// 迭代指定节点的所有递归子元素
+    /// 迭代指定节点的所有子元素
     pub fn iter(&self, node_children_head: usize) -> ChildrenIterator<T> {
       ChildrenIterator{
+        inner: &self.map,
+        head: node_children_head,
+      }
+    }
+    /// 迭代指定节点的所有递归子元素
+    pub fn recursive_iter(&self, node_children_head: usize) -> RecursiveIterator<T> {
+      RecursiveIterator{
         inner: &self.map,
         arr: [node_children_head, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
         len: if node_children_head == 0 {0}else{1},
@@ -320,13 +327,33 @@ pub struct NodeList {
   pub len: usize,
 }
 
+
 pub struct ChildrenIterator<'a, T> {
+    inner: &'a VecMap<Node<T>>,
+    head: usize,
+}
+
+impl<'a, T> Iterator for ChildrenIterator<'a, T> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+      if self.head == 0 {
+        return None
+      }
+      let r = Some(self.head);
+      let n = unsafe {self.inner.get_unchecked(self.head)};
+      self.head = n.next;
+      r
+    }
+}
+
+pub struct RecursiveIterator<'a, T> {
     inner: &'a VecMap<Node<T>>,
     arr: [usize; 32],
     len: usize,
 }
 
-impl<'a, T> Iterator for ChildrenIterator<'a, T> {
+impl<'a, T> Iterator for RecursiveIterator<'a, T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -334,9 +361,9 @@ impl<'a, T> Iterator for ChildrenIterator<'a, T> {
         return None
       }
       self.len -= 1;
-      let node = self.arr[self.len];
-      let r = Some(node);
-      let n = unsafe {self.inner.get_unchecked(node)};
+      let head = self.arr[self.len];
+      let r = Some(head);
+      let n = unsafe {self.inner.get_unchecked(head)};
       if n.next > 0 {
         self.arr[self.len] = n.next;
         self.len += 1;
