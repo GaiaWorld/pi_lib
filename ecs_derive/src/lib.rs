@@ -25,9 +25,16 @@ use syn::{
 /// struct Pos(f32, f32, f32);
 /// ```
 #[proc_macro_derive(Component, attributes(storage))]
+pub fn component_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = impl_component(&ast, false);
+    gen.into()
+}
+
+#[proc_macro]
 pub fn component(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
-    let gen = impl_component(&ast);
+    let gen = impl_component(&ast, true);
     gen.into()
 }
 
@@ -46,7 +53,7 @@ impl Parse for StorageAttribute {
     }
 }
 
-fn impl_component(ast: &DeriveInput) -> proc_macro2::TokenStream {
+fn impl_component(ast: &DeriveInput, is_deref: bool) -> proc_macro2::TokenStream {
     let name = &ast.ident;
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
@@ -61,7 +68,7 @@ fn impl_component(ast: &DeriveInput) -> proc_macro2::TokenStream {
         })
         .unwrap_or_else(|| parse_quote!(VecMap));
 
-    let write = impl_write(ast, &ast.generics);
+    let write = impl_write(ast, &ast.generics, is_deref);
 
     quote! {
         impl #impl_generics Component for #name #ty_generics #where_clause {
@@ -72,12 +79,12 @@ fn impl_component(ast: &DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
-fn impl_write(ast: &DeriveInput, generics: &syn::Generics) -> proc_macro2::TokenStream {
+fn impl_write(ast: &DeriveInput, generics: &syn::Generics, is_deref: bool) -> proc_macro2::TokenStream {
     let name = &ast.ident;
 
     let write_trait_name = ident(&(name.to_string() + "Write"));
     let trait_def = SetGetFuncs(ast);
-    let trait_impl = SetGetFuncsImpl(ast);
+    let trait_impl = SetGetFuncsImpl(ast, is_deref);
 
     let mut generics1 = generics.clone();
     generics1.params.insert(0, syn::GenericParam::Lifetime(syn::LifetimeDef::new(syn::Lifetime::new("'a", proc_macro2::Span::call_site()))));
@@ -99,7 +106,7 @@ fn ident(sym: &str) -> syn::Ident {
     syn::Ident::new(sym, quote::__rt::Span::call_site())
 }
 
-struct SetGetFuncsImpl<'a>(&'a syn::DeriveInput);
+struct SetGetFuncsImpl<'a>(&'a syn::DeriveInput, bool);
 
 impl<'a> ToTokens for SetGetFuncsImpl<'a> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
@@ -116,27 +123,46 @@ impl<'a> ToTokens for SetGetFuncsImpl<'a> {
                             let set_name = ident(&("set_".to_string() + field_name.clone().to_string().as_str()));
                             let ty = &field.ty;
                             // set field
-                            tokens.extend(quote! {
-                                fn #set_name(&mut self, value: #ty) {
-                                    self.value.#field_name = value; // TODO?
-                                    self.notify.modify_event(self.id, #field_name_str, 0);
-                                } 
-                            });
+                            if self.1 {
+                                tokens.extend(quote! {
+                                    fn #set_name(&mut self, value: #ty) {
+                                        (self.value.0).#field_name = value; // TODO?
+                                        self.notify.modify_event(self.id, #field_name_str, 0);
+                                    } 
+                                });
+                            }else {
+                                tokens.extend(quote! {
+                                    fn #set_name(&mut self, value: #ty) {
+                                        self.value.#field_name = value; // TODO?
+                                        self.notify.modify_event(self.id, #field_name_str, 0);
+                                    } 
+                                });
+                            }
                         }
                     },
                     syn::Fields::Unnamed(fields) => {
-                        let mut i = 0;
+                        let mut i: usize = 0;
                         for field in fields.unnamed.iter() {
                             let set_name = ident(&("set_".to_string() + i.to_string().as_str()));
                             let ty = &field.ty;
+                            let index = syn::Index::from(i);
                             // set index
-                            tokens.extend(quote! {
-                                fn #set_name(&mut self, value: #ty) {
-                                    self.value.#i = value; // TODO?
-                                    self.notify.modify_event(self.id, "", i);
-                                } 
-                            });
-                            i += 0;
+                            if self.1 {
+                                tokens.extend(quote! {
+                                    fn #set_name(&mut self, value: #ty) {
+                                        (self.value.0).#index = value; // TODO?
+                                        self.notify.modify_event(self.id, "", #i);
+                                    } 
+                                });
+                            }else {
+                                tokens.extend(quote! {
+                                    fn #set_name(&mut self, value: #ty) {
+                                        self.value.#index = value; // TODO?
+                                        self.notify.modify_event(self.id, "", #i);
+                                    } 
+                                });
+                            }
+                            i += 1;
                         }
                     },
                     syn::Fields::Unit => panic!("Unit Can not be Component"),
@@ -171,20 +197,20 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
                             let ty = &field.ty;
                             // set field def
                             tokens.extend(quote! {
-                                fn #set_name(&mut self, value: #ty);
+                                fn #set_name(&mut self, #ty);
                             });
                         }
                     },
                     syn::Fields::Unnamed(fields) => {
-                        let mut i = 0;
+                        let mut i: usize = 0;
                         for field in fields.unnamed.iter() {
                             let set_name = ident(&("set_".to_string() + i.to_string().as_str()));
                             let ty = &field.ty;
                             // set index def
                             tokens.extend(quote! {
-                                fn #set_name(&mut self, value: #ty);
+                                fn #set_name(&mut self, #ty);
                             });
-                            i += 0;
+                            i += 1;
                         }
                     },
                     syn::Fields::Unit => panic!("Unit Can not be Component"),

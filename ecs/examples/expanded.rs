@@ -12,8 +12,8 @@ use std::sync::Arc;
 use pointer::cell::{TrustCell};
 
 use ecs::component::{ Component, MultiCaseImpl};
-use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn};
-use ecs::monitor::{Notify, CreateEvent};
+use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn, SingleCaseListener};
+use ecs::monitor::{Notify, CreateEvent, DeleteEvent};
 use listener::{FnListener};
 use ecs::world:: { World, Fetch, Borrow, BorrowMut, TypeIds};
 use map::vecmap::VecMap;
@@ -35,19 +35,33 @@ impl<'a> Runner<'a> for SystemDemo{
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn setup(&mut self, read: Self::ReadData, write: Self::WriteData) {}
-    fn run(&mut self, read: Self::ReadData, write: Self::WriteData) {}
-    fn dispose(&mut self, read: Self::ReadData, write: Self::WriteData) {}
+    fn setup(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
+    fn run(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
+    fn dispose(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
 }
 
 impl<'a> MultiCaseListener<'a, Node, Position, CreateEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn listen(&mut self, event: &CreateEvent, read: Self::ReadData, write: Self::WriteData) {}
+    fn listen(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {}
 }
 
-struct CellSystemDemo{
+impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
+    type ReadData = &'a MultiCaseImpl<Node, Position>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {}
+}
+
+impl<'a> SingleCaseListener<'a, Node, DeleteEvent> for SystemDemo {
+    type ReadData = &'a MultiCaseImpl<Node, Position>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn slisten(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {}
+}
+
+pub struct CellSystemDemo{
     owner: TrustCell<SystemDemo>,
     run_fn: Option<RunnerFn>,
     dispose_listener_fn: Option<DisposeFn>,
@@ -67,6 +81,7 @@ impl System for CellSystemDemo {
             let f = FnListener(Arc::new( move |e: &CreateEvent| {
                 let read_data = read.borrow();
                 let write_data = write.borrow_mut();
+                // <MultiCaseListener<'_, Node, Position, DeleteEvent>>::listen(&mut *me.owner.borrow_mut(), e, read_data, write_data);
                 me.owner.borrow_mut().listen(e, read_data, write_data);
             }));
             let setup_target = world.fetch_multi::<Node, Position>().unwrap();
@@ -82,7 +97,7 @@ impl System for CellSystemDemo {
             let write_data = write.borrow_mut();
             self.owner.borrow_mut().setup(read_data, write_data);
         }
-        self.run_fn = Some(FnListener(Arc::new( move |e: &()| {
+        self.run_fn = Some(FnListener(Arc::new( move |_e: &()| {
             let read_data = read.borrow();
             let write_data = write.borrow_mut();
             me.owner.borrow_mut().run(read_data, write_data);
@@ -128,7 +143,11 @@ impl System for CellSystemDemo {
 
         (read_ids, write_ids)
     }
-    fn fetch_run(&self, world: &World) -> Option<RunnerFn>{
+    fn fetch_run(&self) -> Option<RunnerFn>{
         self.run_fn.clone()
     }
+}
+
+fn main() { 
+    println!("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 }

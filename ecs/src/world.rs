@@ -212,6 +212,7 @@ macro_rules! impl_trait {
     };
 }
 
+impl_trait!();
 impl_trait!(A);
 impl_trait!(A, B);
 impl_trait!(A, B, C);
