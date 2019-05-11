@@ -110,7 +110,7 @@ impl System for CellSystemDemo {
             Notify::remove_create(&*setup_target, &f1);
         })));
     }
-    fn dispose(&mut self, world: &World){
+    fn dispose(&self, world: &World){
         match &self.dispose_listener_fn {
             Some(f) => f.0(world),
             None => (),
@@ -123,8 +123,8 @@ impl System for CellSystemDemo {
         let write_data = write.borrow_mut();
         self.owner.borrow_mut().dispose(read_data, write_data);
 
-        self.dispose_listener_fn = None;
-        self.run_fn = None;
+        // self.dispose_listener_fn = None;
+        // self.run_fn = None;
 
     }
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>){
