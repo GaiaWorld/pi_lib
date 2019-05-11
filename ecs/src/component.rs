@@ -30,7 +30,7 @@ pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
 
 impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
-        self.borrow_mut().delete(id)
+        self.borrow_mut().remove(id)
     }
 }
 // TODO 以后用宏生成
@@ -105,6 +105,7 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     }
     pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
         let r = self.map.insert(id, c);
+        self.entity.borrow_mut().mark(id, self.bit_index);
         match r {
             Some(_) => self.notify.modify_event(id, "", 0),
             _ => self.notify.create_event(id),
@@ -112,6 +113,11 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         r
     }
     pub fn delete(&mut self, id: usize) {
+        self.entity.borrow_mut().un_mark(id, self.bit_index);
+        self.notify.delete_event(id);
+        self.map.remove(&id);
+    }
+    fn remove(&mut self, id: usize) {
         self.notify.delete_event(id);
         self.map.remove(&id);
     }

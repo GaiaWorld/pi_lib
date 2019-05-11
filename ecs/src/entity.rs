@@ -102,6 +102,16 @@ impl<T> EntityImpl<T> {
         self.notify.create_event(id);
         id
     }
+    pub fn mark(&mut self, id: usize, bit_index: usize) {
+        let mask = self.slab.get_mut(id).unwrap();
+        *mask |= 1<<bit_index;
+    }
+    pub fn un_mark(&mut self, id: usize, bit_index: usize) {
+        match self.slab.get_mut(id) {
+            Some(mask) => *mask &= !(1<<bit_index),
+            _ => ()
+        }
+    }
     pub fn delete(&mut self, id: usize) {
         let mask = self.slab.remove(id);
         self.notify.delete_event(id);
