@@ -1,24 +1,27 @@
 
 use std::{
-  mem::{replace},
   marker::PhantomData,
 };
 
-use map::{Map, vecmap::VecMap};
-use pointer::cell::TrustCell;
+
+use system::{SingleCaseListener};
+use monitor::{DeleteEvent};
+use single::SingleCaseImpl;
+use idtree::IdTree;
+use entity::EntityImpl;
 use Share;
 
+#[derive(Debug, Clone, Default)]
+struct IdTreeSys<E>(PhantomData<E>);
 
-use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
-use single::SingleCase;
-use idtree::IdTree;
-use entity::Entity;
+impl<'a, T: Share, E: Share> SingleCaseListener<'a, IdTree<T>, DeleteEvent> for IdTreeSys<E> {
+    type ReadData = &'a SingleCaseImpl<IdTree<T>>;
+    type WriteData = &'a mut EntityImpl<E>;
 
-struct IdTreeSys;
-
-// impl<'a> SingleCaseListener<'a, IdTree, DeleteEvent> for IdTreeSys {
-//     type ReadData = &'a IdTree;
-//     type WriteData = &'a mut Entity;
-
-//     fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {}
-// }
+    fn listen(&mut self, event: &DeleteEvent, read: Self::ReadData, write: Self::WriteData) {
+      write.delete(event.id);
+      for id in read.iter(event.id) {
+        write.delete(id)
+      }
+    }
+}
