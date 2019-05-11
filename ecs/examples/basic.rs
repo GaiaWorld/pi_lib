@@ -6,16 +6,26 @@
 extern crate ecs;
 extern crate map;
 extern crate pointer;
-#[macro_use]
-extern crate ecs_derive;
 
 use ecs::component::{ Component, MultiCaseImpl};
-use ecs::system::{Runner, MultiCaseListener};
-use ecs::monitor::{CreateEvent};
+use ecs::single::SingleCaseImpl;
+use ecs::system::{Runner, MultiCaseListener, SingleCaseListener, EntityListener};
+use ecs::monitor::{CreateEvent, ModifyEvent, DeleteEvent};
 use map::vecmap::VecMap;
 
-#[derive(Component)]
-pub struct Position{}
+
+pub struct Position{
+    pub value: usize,
+}
+
+impl Component for Position{
+    type Storage = VecMap<Self>;
+}
+
+
+pub struct View{
+    pub value: usize,
+}
 
 // Entry
 pub struct Node;
@@ -34,9 +44,63 @@ impl<'a> Runner<'a> for SystemDemo{
 
 impl<'a> MultiCaseListener<'a, Node, Position, CreateEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
-    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+    type WriteData = (&'a mut MultiCaseImpl<Node, Position>);
 
     fn listen(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {}
+}
+
+impl<'a> MultiCaseListener<'a, Node, Position, ModifyEvent> for SystemDemo {
+    type ReadData = ();
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn listen(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
+}
+
+impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
+    type ReadData = &'a MultiCaseImpl<Node, Position>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
+}
+
+impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
+    type ReadData = &'a MultiCaseImpl<Node, Position>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn slisten(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
+}
+
+impl<'a> EntityListener<'a, Node, ModifyEvent> for SystemDemo {
+    type ReadData = &'a SingleCaseImpl<View>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn elisten(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
+}
+
+impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
+    type ReadData = &'a SingleCaseImpl<View>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn elisten(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
+}
+
+impl<'a> EntityListener<'a, Node, DeleteEvent> for SystemDemo {
+    type ReadData = &'a SingleCaseImpl<View>;
+    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+
+    fn elisten(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
+
+    }
 }
 
 
@@ -45,9 +109,15 @@ impl_system!{
     true,
     {
         MultiCaseListener<Node, Position, CreateEvent>
+        MultiCaseListener<Node, Position, DeleteEvent>
+        MultiCaseListener<Node, Position, ModifyEvent>
+        SingleCaseListener<View, ModifyEvent>
+        EntityListener<Node, CreateEvent>
+        EntityListener<Node, ModifyEvent>
+        EntityListener<Node, DeleteEvent>
     }
 }
 
 fn main() { 
-    
+
 }
