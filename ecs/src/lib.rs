@@ -30,6 +30,7 @@ pub use system::{Runner, SingleCaseListener, MultiCaseListener, EntityListener, 
 pub use component::{Component, MultiCaseImpl};
 pub use single::{SingleCaseImpl};
 pub use monitor::{CreateEvent, ModifyEvent, DeleteEvent};
+pub use dispatch::{SeqDispatcher, Dispatcher};
 
 use std::any::TypeId;
 

@@ -10,7 +10,7 @@ extern crate atom;
 
 use atom::Atom;
 
-use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, BorrowMut, World};
+use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, BorrowMut, World, SeqDispatcher, Dispatcher};
 use map::vecmap::VecMap;
 
 #[derive(Debug)]
@@ -136,6 +136,11 @@ fn main() {
     let write = unsafe { positions.get_unchecked_write(e) };
     write.value.x = 10.0;
     write.notify.modify_event(1, "x", 0);
+
+
+    let mut dispatch = SeqDispatcher::default();
+    dispatch.build("system_demo".to_string(), &world);
+    dispatch.run();
 
     //free entity
     world.free_entity::<Node>(e);
