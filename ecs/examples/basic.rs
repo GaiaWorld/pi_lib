@@ -13,9 +13,10 @@ use ecs::system::{Runner, MultiCaseListener, SingleCaseListener, EntityListener}
 use ecs::monitor::{CreateEvent, ModifyEvent, DeleteEvent};
 use map::vecmap::VecMap;
 
-
+#[derive(Debug)]
 pub struct Position{
-    pub value: usize,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Component for Position{
@@ -44,17 +45,19 @@ impl<'a> Runner<'a> for SystemDemo{
 
 impl<'a> MultiCaseListener<'a, Node, Position, CreateEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
-    type WriteData = (&'a mut MultiCaseImpl<Node, Position>);
+    type WriteData = ();
 
-    fn listen(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {}
+    fn listen(&mut self, event: &CreateEvent, read: Self::ReadData, _write: Self::WriteData) {
+        println!("listen Position create. id:{}, position: {:?}", event.id, read.get(event.id));
+    }
 }
 
 impl<'a> MultiCaseListener<'a, Node, Position, ModifyEvent> for SystemDemo {
-    type ReadData = ();
-    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+    type ReadData = &'a MultiCaseImpl<Node, Position>;
+    type WriteData = ();
 
-    fn listen(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
-
+    fn listen(&mut self, event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+        println!("listen Position modity. id:{}, position: {:?}", event.id, read.get(event.id));
     }
 }
 

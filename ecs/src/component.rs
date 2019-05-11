@@ -82,13 +82,13 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
             marker: PhantomData,
         })
     }
-    pub fn get(&mut self, id: usize) -> Option<&C> {
+    pub fn get(&self, id: usize) -> Option<&C> {
         self.map.get(&id)
     }
     pub fn get_mut(&mut self, id: usize) -> Option<&mut C> {
         self.map.get_mut(&id)
     }
-    pub unsafe fn get_unchecked(&mut self, id: usize) -> &C {
+    pub unsafe fn get_unchecked(&self, id: usize) -> &C {
         self.map.get_unchecked(&id)
     }
     pub unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut C {

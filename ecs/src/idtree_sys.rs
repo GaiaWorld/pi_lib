@@ -17,7 +17,7 @@ impl<'a, T: Share, E: Share> EntityListener<'a, E, DeleteEvent> for IdTreeSys<E>
     type ReadData = &'a SingleCaseImpl<IdTree<T>>;
     type WriteData = &'a mut EntityImpl<E>;
 
-    fn listen(&mut self, event: &DeleteEvent, read: Self::ReadData, write: Self::WriteData) {
+    fn slisten(&mut self, event: &DeleteEvent, read: Self::ReadData, write: Self::WriteData) {
       write.delete(event.id);
       for id in read.iter(event.id) {
         write.delete(id)
