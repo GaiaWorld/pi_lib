@@ -10,7 +10,7 @@ use pointer::cell::{TrustCell};
 
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
-use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
+use {Fetch, Borrow, BorrowMut, TypeIds, World};
 use Share;
 
 pub trait SingleCase: Notify + ArcAny {

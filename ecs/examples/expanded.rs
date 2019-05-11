@@ -15,7 +15,7 @@ use ecs::component::{ Component, MultiCaseImpl};
 use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn, SingleCaseListener};
 use ecs::monitor::{Notify, CreateEvent, DeleteEvent};
 use listener::{FnListener};
-use ecs::world:: { World, Fetch, Borrow, BorrowMut, TypeIds};
+use ecs::{ World, Fetch, Borrow, BorrowMut, TypeIds};
 use map::vecmap::VecMap;
 
 struct Position{}

@@ -14,7 +14,7 @@ use map::{Map};
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
 use entity::CellEntity;
-use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
+use {Fetch, Borrow, BorrowMut, TypeIds, World};
 use Share;
 
 pub trait Component: Sized + Share {

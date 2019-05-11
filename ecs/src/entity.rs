@@ -11,7 +11,7 @@ use pointer::cell::TrustCell;
 use slab::Slab;
 
 
-use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
+use {Fetch, Borrow, BorrowMut, TypeIds, World};
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use component::MultiCase;
