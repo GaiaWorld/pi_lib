@@ -51,7 +51,7 @@ pub type DisposeFn = FnListener<World>;
 
 pub trait System: any::ArcAny { 
     fn setup(&mut self, me: Arc<System>, world: &World);
-    fn dispose(&mut self, world: &World);
+    fn dispose(&self, world: &World);
     fn fetch_run(&self) -> Option<RunnerFn>;
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
 }
@@ -189,7 +189,7 @@ macro_rules! impl_system {
         let read_data = $crate::world::Borrow::borrow(&read);
         let write_data = $crate::world::BorrowMut::borrow_mut(&write);
         $s.owner.borrow_mut().dispose(read_data, write_data);
-        $s.run_fn = None;
+        // $s.run_fn = None;
     };
     (@runner_dispose $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
 
@@ -200,6 +200,15 @@ macro_rules! impl_system {
                 owner: pointer::cell::TrustCell<$system<$($sg),*>>,
                 run_fn: Option<$crate::system::RunnerFn>,
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
+            }
+            impl<$($sg),*> [<Cell $system>]<$($sg),*> {
+                fn new(sys: $system<$($sg),*>) -> Self{
+                    Self {
+                        owner: pointer::cell::TrustCell::new(sys),
+                        run_fn: None,
+                        dispose_listener_fn: None,
+                    }
+                }
             }
         
             impl<$($sg),*> $crate::system::System for [<Cell $system>]<$($sg),*> {
@@ -235,12 +244,12 @@ macro_rules! impl_system {
                     })));
                 }
 
-                fn dispose(&mut self, world: &$crate::world::World) {
+                fn dispose(&self, world: &$crate::world::World) {
                     match &self.dispose_listener_fn {
                         Some(f) => f.0(world),
                         None => (),
                     };
-                    self.dispose_listener_fn = None;
+                    // self.dispose_listener_fn = None;
 
                     // runner dispose
                     impl_system!(@runner_dispose self world $system <$($sg),*>, $has_runner);
