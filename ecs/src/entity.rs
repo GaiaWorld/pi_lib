@@ -118,8 +118,7 @@ impl<T> EntityImpl<T> {
         if mask == 0 {
             return
         }
-
-        println!("mask--------------{}, {}, {}, {}, {}", mask, self.components.len(), mask.trailing_zeros(), mask.leading_zeros(), size_of::<usize>());
+        
         // 依次删除对应的组件
         for i in mask.trailing_zeros() as usize..size_of::<usize>()*8-(mask.leading_zeros() as usize)+1 {
             if mask & (1<<i) != 0 {
