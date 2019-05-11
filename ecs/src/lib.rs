@@ -23,7 +23,6 @@ pub mod single;
 pub mod monitor;
 
 pub mod idtree;
-pub mod idtree_sys;
 pub mod dirty;
 
 pub trait Share: Send + Sync + 'static {}

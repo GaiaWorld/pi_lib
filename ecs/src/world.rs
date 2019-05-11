@@ -72,7 +72,7 @@ impl World {
                     Ok(r) => {
                         let r: Arc<CellEntity<E>> = r;
                         let rc = r.clone();
-                        let mut entity = BorrowMut::borrow_mut(&r);
+                        let entity = BorrowMut::borrow_mut(&r);
                         let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
                         entity.register_component(m.clone());
                         match self.multi.insert((eid, cid), m) {
@@ -86,17 +86,24 @@ impl World {
             _ => panic!("need registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, eid),
         }
     }
-    pub fn register_system<T>(&mut self, name: Atom, sys: T) {
-        let t = TrustCell::new(sys);
-        
-        // 如果是Runner则调用setup方法， 获取所有实现了监听器的类型，动态注册到对应的组件监听器上Atom
+    pub fn register_system<T:System>(&mut self, name: Atom, sys: T) {
+        // 调用setup方法， 将所有实现了监听器的类型，动态注册到对应的组件监听器上
+        let t = Arc::new(sys);
+        let tc = t.clone();
+        let ptr = Arc::into_raw(t) as usize as *mut T;
+        System::setup(unsafe{&mut *ptr}, tc, self);
+        self.system.insert(name, unsafe{ Arc::from_raw(ptr)});
     }
     pub fn get_system(&self, name: &Atom) -> Option<&Arc<System>> {
         self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {
-        // 要求该system不能在dispatcher中， 取消所有的监听器
-        // 如果是Runner则调用dispose方法
+        // 如果该system在dispatcher中，需要自己去释放
+        // 用dispose方法， 取消所有的监听器
+        match self.system.remove(name) {
+            Some(sys) => sys.dispose(self),
+            _ => ()
+        }
     }
     pub fn create_entity<E: Share>(&self) -> usize {
         let id = TypeId::of::<E>();
