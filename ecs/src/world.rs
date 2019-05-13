@@ -16,28 +16,9 @@ use entity::{Entity, EntityImpl, CellEntity};
 use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use single::{SingleCase, CellSingleCase};
 use dispatch::Dispatcher;
-use Share;
+use { Share, BorrowMut};
 
-
-pub trait Fetch: Sized + 'static {
-    fn fetch(world: &World) -> Self;
-}
-
-pub trait Borrow<'a> {
-    type Target;
-    fn borrow(&'a self) -> Self::Target;
-}
-
-pub trait BorrowMut<'a> {
-    type Target;
-    fn borrow_mut(&'a self) -> Self::Target;
-}
-
-pub trait TypeIds {
-    fn type_ids() -> Vec<(TypeId, TypeId)>;
-}
-
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct World {
     entity: HashMap<TypeId, Arc<Entity>>,
     single: HashMap<TypeId, Arc<SingleCase>>,
@@ -182,67 +163,3 @@ impl World {
         }
     }
 }
-
-macro_rules! impl_trait {
-    ( $($ty:ident),* ) => {
-        impl<$($ty),*> TypeIds for ( $( $ty , )* ) where $( $ty: TypeIds),*{
-            fn type_ids() -> Vec<(TypeId, TypeId)> {
-                let mut arr = Vec::new();
-                $(arr.extend_from_slice( &$ty::type_ids() );)*
-                arr
-            }
-        }
-
-        impl<$($ty),*> Fetch for ( $( $ty , )* ) where $( $ty: Fetch),*{
-            fn fetch(world: &World) -> Self {
-                ( $($ty::fetch(world),)* )
-            }
-        }
-
-        #[allow(non_snake_case)]
-        impl<'a, $($ty),*> Borrow<'a> for ( $( $ty , )* ) where $( $ty: Borrow<'a>),*{
-            type Target = ( $($ty::Target,)* );
-            fn borrow(&'a self) -> Self::Target {
-                let ($($ty,)*) = self;
-                ( $($ty.borrow(),)* )
-            }
-        }
-
-        #[allow(non_snake_case)]
-        impl<'a, $($ty),*> BorrowMut<'a> for ( $( $ty , )* ) where $( $ty: BorrowMut<'a>),*{
-            type Target = ( $($ty::Target,)* );
-            fn borrow_mut(&'a self) -> Self::Target {
-                let ( $($ty,)* ) = self;
-                ( $($ty.borrow_mut(),)* )
-            }
-        }
-    };
-}
-
-impl_trait!();
-impl_trait!(A);
-impl_trait!(A, B);
-impl_trait!(A, B, C);
-impl_trait!(A, B, C, D);
-impl_trait!(A, B, C, D, E);
-impl_trait!(A, B, C, D, E, F);
-impl_trait!(A, B, C, D, E, F, G);
-impl_trait!(A, B, C, D, E, F, G, H);
-impl_trait!(A, B, C, D, E, F, G, H, I);
-impl_trait!(A, B, C, D, E, F, G, H, I, J);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
-impl_trait!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);

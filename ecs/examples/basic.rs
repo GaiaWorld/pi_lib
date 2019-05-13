@@ -6,12 +6,11 @@
 extern crate ecs;
 extern crate map;
 extern crate pointer;
+extern crate atom;
 
-use ecs::component::{ Component, MultiCaseImpl};
-use ecs::single::SingleCaseImpl;
-use ecs::system::{Runner, MultiCaseListener, SingleCaseListener, EntityListener};
-use ecs::monitor::{CreateEvent, ModifyEvent, DeleteEvent};
-use ecs::world::World;
+use atom::Atom;
+
+use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, BorrowMut, World, SeqDispatcher, Dispatcher};
 use map::vecmap::VecMap;
 
 #[derive(Debug)]
@@ -37,10 +36,12 @@ pub struct SystemDemo;
 
 impl<'a> Runner<'a> for SystemDemo{
     type ReadData = &'a MultiCaseImpl<Node, Position>;
-    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
+    type WriteData = ();
 
     fn setup(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
-    fn run(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
+    fn run(&mut self, _read: Self::ReadData, _write: Self::WriteData) {
+        println!("run SystemDemo");
+    }
     fn dispose(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
 }
 
@@ -71,26 +72,19 @@ impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
     }
 }
 
-impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
-    type ReadData = &'a SingleCaseImpl<View>;
-    type WriteData = ();
+//只有修改事件
+// impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
+//     type ReadData = &'a SingleCaseImpl<View>;
+//     type WriteData = ();
 
-    fn slisten(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
-        println!("slisten View modify. view: {:?}", &read.value);
-    }
-}
+//     fn slisten(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+//         println!("slisten View modify. view: {:?}", &read.value);
+//     }
+// }
 
-impl<'a> EntityListener<'a, Node, ModifyEvent> for SystemDemo {
-    type ReadData = &'a SingleCaseImpl<View>;
-    type WriteData = &'a mut MultiCaseImpl<Node, Position>;
-
-    fn elisten(&mut self, event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
-        println!("elisten Node modify. node: {:?}", event.id);
-    }
-}
-
+//只有创建和删除事件
 impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
-    type ReadData = &'a SingleCaseImpl<View>;
+    type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
     fn elisten(&mut self, event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
@@ -99,7 +93,7 @@ impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
 }
 
 impl<'a> EntityListener<'a, Node, DeleteEvent> for SystemDemo {
-    type ReadData = &'a SingleCaseImpl<View>;
+    type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
     fn elisten(&mut self, event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
@@ -115,14 +109,39 @@ impl_system!{
         MultiCaseListener<Node, Position, CreateEvent>
         MultiCaseListener<Node, Position, DeleteEvent>
         MultiCaseListener<Node, Position, ModifyEvent>
-        SingleCaseListener<View, ModifyEvent>
+        // SingleCaseListener<View, ModifyEvent>
         EntityListener<Node, CreateEvent>
-        EntityListener<Node, ModifyEvent>
         EntityListener<Node, DeleteEvent>
     }
 }
 
 fn main() { 
-    // let world = World::new();
-    // let system_demo = CellSystemDemo::
+    let mut world = World::default();
+    let system_demo = CellSystemDemo::new(SystemDemo);
+
+    world.register_entity::<Node>();
+    world.register_multi::<Node, Position>();
+    // world.register_single::<View>(View{value: 6});
+
+    world.register_system(Atom::from("system_demo"), system_demo);
+
+    // create entity, component
+    let e = world.create_entity::<Node>();
+    let position = Position {x: 5.0, y: 5.0};
+    let positions = world.fetch_multi::<Node, Position>().unwrap();
+    let positions = BorrowMut::borrow_mut(&positions);
+    positions.insert(e, position);
+
+    // modify component
+    let write = unsafe { positions.get_unchecked_write(e) };
+    write.value.x = 10.0;
+    write.notify.modify_event(1, "x", 0);
+
+
+    let mut dispatch = SeqDispatcher::default();
+    dispatch.build("system_demo".to_string(), &world);
+    dispatch.run();
+
+    //free entity
+    world.free_entity::<Node>(e);
 }

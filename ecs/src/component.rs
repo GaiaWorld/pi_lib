@@ -9,12 +9,12 @@ use std::{
 use any::ArcAny;
 use pointer::cell::{TrustCell};
 use map::{Map};
-
+use listener::Listener;
 
 use system::{SystemData, SystemMutData};
-use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteListeners, DeleteEvent};
 use entity::CellEntity;
-use world::{Fetch, World, Borrow, BorrowMut, TypeIds};
+use {Fetch, Borrow, BorrowMut, TypeIds, World};
 use Share;
 
 pub trait Component: Sized + Share {
@@ -30,7 +30,11 @@ pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
 
 impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
-        self.borrow_mut().remove(id)
+        let delete = self.borrow_mut().remove(id);
+        let e = DeleteEvent{
+            id: id,
+        };
+        delete.listen(&e);
     }
 }
 impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
@@ -116,9 +120,9 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         self.notify.delete_event(id);
         self.map.remove(&id);
     }
-    fn remove(&mut self, id: usize) {
-        self.notify.delete_event(id);
+    fn remove(&mut self, id: usize) -> DeleteListeners {
         self.map.remove(&id);
+        self.notify.delete.clone()
     }
 }
 
