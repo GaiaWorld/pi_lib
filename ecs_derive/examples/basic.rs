@@ -30,6 +30,34 @@ component!{
     }
 }
 
+
+#[derive(Write)]
+pub struct Single{
+    x: usize,
+    y: usize,
+}
+
+#[derive(Write)]
+pub struct Single1(String, f32);
+
+pub struct Single2{
+    x: usize,
+    y: usize,
+}
+
+write!{
+    pub struct Single2{
+        x: usize,
+        y: usize,
+    }
+}
+
+pub struct Single3(String, f32);
+
+write!{
+    pub struct Single3(String, f32);
+}
+
 fn main() { 
 
 }

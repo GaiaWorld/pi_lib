@@ -14,7 +14,7 @@ use pointer::cell::{TrustCell};
 use system::{System};
 use entity::{Entity, EntityImpl, CellEntity};
 use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
-use single::{SingleCase, CellSingleCase};
+use single::{SingleCase, CellSingleCase, SingleCaseImpl};
 use dispatch::Dispatcher;
 use { Share, BorrowMut};
 
@@ -36,10 +36,10 @@ impl World {
         }
     }
     /// 注册单例组件
-    pub fn register_single<C: SingleCase>(&mut self, c: C) {
-        let id = TypeId::of::<C>();
-        match self.single.insert(id, Arc::new(c)) {
-            Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<C>()}, id),
+    pub fn register_single<T: Share>(&mut self, t: T) {
+        let id = TypeId::of::<T>();
+        match self.single.insert(id, Arc::new(SingleCaseImpl::new(t))) {
+            Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<T>()}, id),
             _ => ()
         }
     }
