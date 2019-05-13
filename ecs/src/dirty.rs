@@ -6,15 +6,16 @@ pub struct LayerDirty {
     count: usize,            // 脏节点数量
     start: usize,            // 脏节点的起始层
 }
-
-impl LayerDirty {
-    pub fn new() -> LayerDirty {
+impl Default for LayerDirty {
+    fn default() -> LayerDirty {
         LayerDirty {
             dirtys: vec![Vec::new()],
             count: 0,
             start: usize::max_value(),
         }
     }
+}
+impl LayerDirty {
     // 设置节点脏
     pub fn mark(&mut self, id: usize, layer: usize) {
         self.count += 1;
