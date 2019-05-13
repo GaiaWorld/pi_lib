@@ -31,6 +31,20 @@ pub fn component_derive(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
+#[proc_macro_derive(Write)]
+pub fn write_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = impl_write(&ast, &ast.generics, false);
+    gen.into()
+}
+
+#[proc_macro]
+pub fn write(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = impl_component(&ast, false);
+    gen.into()
+}
+
 #[proc_macro]
 pub fn component(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();

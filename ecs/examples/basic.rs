@@ -73,14 +73,14 @@ impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
 }
 
 //只有修改事件
-// impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
-//     type ReadData = &'a SingleCaseImpl<View>;
-//     type WriteData = ();
+impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
+    type ReadData = &'a SingleCaseImpl<View>;
+    type WriteData = ();
 
-//     fn slisten(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
-//         println!("slisten View modify. view: {:?}", &read.value);
-//     }
-// }
+    fn slisten(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+        println!("slisten View modify. view: {:?}", &read.value);
+    }
+}
 
 //只有创建和删除事件
 impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
@@ -109,7 +109,7 @@ impl_system!{
         MultiCaseListener<Node, Position, CreateEvent>
         MultiCaseListener<Node, Position, DeleteEvent>
         MultiCaseListener<Node, Position, ModifyEvent>
-        // SingleCaseListener<View, ModifyEvent>
+        SingleCaseListener<View, ModifyEvent>
         EntityListener<Node, CreateEvent>
         EntityListener<Node, DeleteEvent>
     }
@@ -121,7 +121,7 @@ fn main() {
 
     world.register_entity::<Node>();
     world.register_multi::<Node, Position>();
-    // world.register_single::<View>(View{value: 6});
+    world.register_single::<View>(View{value: 6});
 
     world.register_system(Atom::from("system_demo"), system_demo);
 
@@ -135,7 +135,14 @@ fn main() {
     // modify component
     let write = unsafe { positions.get_unchecked_write(e) };
     write.value.x = 10.0;
-    write.notify.modify_event(1, "x", 0);
+    write.notify.modify_event(write.id, "x", 0);
+
+    //modify single
+    let view = world.fetch_single::<View>().unwrap();
+    let view = BorrowMut::borrow_mut(&view);
+    let write = view.get_write();
+    write.value.value = 10;
+    write.notify.modify_event(write.id, "value", 0);
 
 
     let mut dispatch = SeqDispatcher::default();
