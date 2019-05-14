@@ -37,7 +37,6 @@ impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
         delete.listen(&e);
     }
 }
-// TODO 以后用宏生成
 impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
