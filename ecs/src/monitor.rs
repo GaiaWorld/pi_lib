@@ -22,7 +22,7 @@ pub type CreateFn = FnListener<CreateEvent>;
 pub type DeleteFn = FnListener<DeleteEvent>;
 pub type ModifyFn = FnListener<ModifyEvent>;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct NotifyImpl {
     pub create: CreateListeners,
     pub delete: DeleteListeners,

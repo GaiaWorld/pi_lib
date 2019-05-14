@@ -77,8 +77,8 @@ impl<T: Share> SingleCaseImpl<T> {
             notify: NotifyImpl::default(),
         })
     }
-    pub fn get_notify(&self) -> &NotifyImpl{
-        &self.notify
+    pub fn get_notify(&self) -> NotifyImpl{
+        self.notify.clone()
     }
     pub fn get_write(&mut self) -> Write<T>{
         Write::new(0, &mut self.value, &self.notify)

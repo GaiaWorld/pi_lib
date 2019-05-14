@@ -118,9 +118,8 @@ impl<T> EntityImpl<T> {
         if mask == 0 {
             return
         }
-        
         // 依次删除对应的组件
-        for i in mask.trailing_zeros() as usize..size_of::<usize>()*8-(mask.leading_zeros() as usize)+1 {
+        for i in mask.trailing_zeros() as usize..(size_of::<usize>() <<3 )-(mask.leading_zeros() as usize) {
             if mask & (1<<i) != 0 {
                 self.components[i].delete(id)
             }

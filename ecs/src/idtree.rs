@@ -3,7 +3,7 @@ use std::{
   mem::{replace},
 };
 
-use map::{vecmap::VecMap};
+use map::{Map, vecmap::VecMap};
 use monitor::{NotifyImpl};
 
 pub enum InsertType{
