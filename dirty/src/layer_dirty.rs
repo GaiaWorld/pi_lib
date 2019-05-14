@@ -8,7 +8,6 @@ use map::vecmap::{VecMap};
 #[derive(Default)]
 pub struct LayerDirtyMark {
     pub dirtys: Vec<Vec<usize>>, //Vec<Vec<node_id>>, 脏节点
-    pub dirty_mark_list: VecMap<bool>,
     pub count: usize, //脏节点数量
     pub start_layer: usize, //脏节点的起始层 
 }
@@ -16,27 +15,17 @@ pub struct LayerDirtyMark {
 impl LayerDirtyMark {
     pub fn new() -> LayerDirtyMark{
         // 默认id为1的node为根， 根的创建没有事件， 因此默认插入根的脏
-        let mut dirty_mark_list = VecMap::new();
         let mut dirtys = Vec::new();
-        dirtys.push(Vec::new());
-        dirtys[0].push(1);
-        dirty_mark_list.insert(1, true);
 
         LayerDirtyMark{
             dirtys,
-            dirty_mark_list,
             count: 1,
             start_layer: 0,
         }
     }
 
     pub fn marked_dirty(&mut self, id: usize, layer: usize) {
-        let dirty_mark = unsafe{self.dirty_mark_list.get_unchecked_mut(id)};
-        if *dirty_mark == true {
-            return;
-        }
-        *dirty_mark = true;
-
+        let layer = layer - 1;
         if self.start_layer > layer {
             self.start_layer = layer;
         }
@@ -50,22 +39,14 @@ impl LayerDirtyMark {
         self.count += 1;
     }
 
-    // 将脏标记设置为false
-    pub unsafe fn cancel_dirty_mark(&mut self, id: usize) {
-        let dirty_mark = self.dirty_mark_list.get_unchecked_mut(id);
-        *dirty_mark = true;
-    }
-
     pub fn delete_dirty(&mut self, id: usize, layer: usize){
-        let dirty_mark = unsafe{self.dirty_mark_list.get_unchecked_mut(id)};
-        if *dirty_mark == true {
-            let vec = &mut self.dirtys[layer];
-            for i in 0..vec.len() {
-                if vec[i] == id {
-                    vec.swap_remove(i);
-                    self.count -= 1;
-                    break;
-                }
+        let layer = layer - 1;
+        let vec = &mut self.dirtys[layer];
+        for i in 0..vec.len() {
+            if vec[i] == id {
+                vec.swap_remove(i);
+                self.count -= 1;
+                break;
             }
         }
     }
@@ -104,7 +85,14 @@ impl<'a> Iterator for Iter<'a> {
         }
         let mut layer = self.layer;
         loop {
-            let id = self.dirtys[self.layer][self.index];
+            
+            let vec = &self.dirtys[layer];
+            if vec.len() <= self.index {
+                layer += 1;
+                self.index = 0;
+                continue;
+            }
+            let id = vec[self.index];
 
             self.index += 1;
             if self.index == self.dirtys[layer].len() {
@@ -113,6 +101,7 @@ impl<'a> Iterator for Iter<'a> {
             }
 
             self.layer = layer;
+            self.count -=1;
             return Some(id);
         }
     }

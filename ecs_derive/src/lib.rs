@@ -31,17 +31,10 @@ pub fn component_derive(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
-#[proc_macro_derive(Write)]
-pub fn write_derive(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    let gen = impl_write(&ast, &ast.generics, false);
-    gen.into()
-}
-
-// #[proc_macro_derive(TupleDeref)]
-// pub fn tuple_derive(input: TokenStream) -> TokenStream {
+// #[proc_macro_derive(Write)]
+// pub fn write_derive(input: TokenStream) -> TokenStream {
 //     let ast = syn::parse(input).unwrap();
-//     let gen = impl_deref(&ast);
+//     let gen = impl_write(&ast, &ast.generics, false);
 //     gen.into()
 // }
 
@@ -117,53 +110,11 @@ fn impl_write(ast: &DeriveInput, generics: &syn::Generics, is_deref: bool) -> pr
             #trait_def
         }
 
-        impl#impl_generics #write_trait_name#ty_generics #where_clause for ecs::monitor::Write<'a, #name #ty_generics> #where_clause {
+        impl#impl_generics #write_trait_name#ty_generics for ecs::monitor::Write<'a, #name #ty_generics> #where_clause {
             #trait_impl
         }
     }
 }
-
-// fn impl_deref(ast: &DeriveInput) -> proc_macro2::TokenStream {
-//     let name = &ast.ident;
-//     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
-
-//     let ty = match &ast.data {
-//         syn::Data::Struct(s) => {
-//             let fields = &s.fields;
-//             match fields {
-//                 syn::Fields::Unnamed(fields) => {
-//                     match fields.unnamed.first() {
-//                         Some(r) => {
-//                             match r {
-//                                 syn::punctuated::Pair::End(r) => &r.ty,
-//                                 _ => panic!("tuple len must is 1"),
-//                             }
-//                         },
-//                         None => panic!("tuple len must is 1"),
-//                     } 
-//                 },
-//                 _ => panic!("it's not tuple"),
-//             }
-//         },
-//         _ => panic!("it's not tuple")
-//     };
-
-//     quote! {
-//         impl #impl_generics  std::ops::Deref for #name #ty_generics #where_clause {
-//             type Target = #ty;
-
-//             fn deref(&self) -> &Self::Target{
-//                 &self.0
-//             }
-//         }
-
-//         impl #impl_generics  std::ops::Deref for #name #ty_generics #where_clause {
-//             fn deref_mut(&mut self) -> &mut Self::Target{
-//                 &mut self.0
-//             }
-//         }
-//     }
-// }
 
 
 fn ident(sym: &str) -> syn::Ident {
