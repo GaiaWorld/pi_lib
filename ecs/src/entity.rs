@@ -114,7 +114,7 @@ impl<T> EntityImpl<T> {
     }
     pub fn delete(&mut self, id: usize) {
         let mask = self.slab.remove(id);
-        self.notify.delete_event(id);
+        self.notify.modify_event(id, "", 0);
         if mask == 0 {
             return
         }
@@ -124,6 +124,7 @@ impl<T> EntityImpl<T> {
                 self.components[i].delete(id)
             }
         }
+        self.notify.delete_event(id);
     }
 
 }

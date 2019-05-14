@@ -12,32 +12,19 @@ pub enum InsertType{
 }
 
 #[derive(Default)]
-pub struct IdTree<T> {
-  map: VecMap<Node<T>>,
+pub struct IdTree {
+  map: VecMap<Node>,
 }
 
-impl<T> IdTree<T> {
-    pub fn get(&self, id: usize) -> Option<&Node<T>> {
+impl IdTree {
+    pub fn get(&self, id: usize) -> Option<&Node> {
       self.map.get(id)
     }
-    pub unsafe fn get_unchecked(&self, id: usize) -> &Node<T> {
+    pub unsafe fn get_unchecked(&self, id: usize) -> &Node {
       self.map.get_unchecked(id)
     }
-    pub unsafe fn set_bind(&mut self, id: usize, bind: T, notify: Option<&NotifyImpl>) -> Option<T> {
-      match self.map.get_mut(id) {
-        Some(n) =>{
-          let r = Some(replace(&mut n.bind, bind));
-          match notify {
-            Some(n) => n.modify_event(id, "", 0),
-            _ => ()
-          };
-          r
-        },
-        _ => None
-      }
-    }
-    pub fn create(&mut self, id: usize, bind: T) {
-      self.map.insert(id, Node::new(bind));
+    pub fn create(&mut self, id: usize) {
+      self.map.insert(id, Node::default());
     }
     /// index为0表示插入到子节点队列前， 如果index大于子节点队列长度，则插入到子节点队列最后。parent如果为0 表示设置为根节点。 如果parent的layer大于0，表示在树上，则会发出创建事件
     pub fn insert_child(&mut self, id: usize, parent: usize, mut index: usize, notify: Option<&NotifyImpl>) {
@@ -91,15 +78,15 @@ impl<T> IdTree<T> {
       self.insert_node(id, parent, layer, prev, next, notify)
     }
     /// 如果的节点的layer大于0，表示在树上，则会发出移除事件
-    pub fn remove(&mut self, id: usize, notify: Option<&NotifyImpl>) {
+    pub fn remove(&mut self, id: usize, notify: Option<&NotifyImpl>) -> Option<usize> {
       let (parent, layer, count, prev, next, head) = match self.map.get(id) {
         Some(n) => {
           if n.parent == 0 && n.layer == 0 {
-            return
+            return Some(n.layer)
           }
           (n.parent, n.layer, n.count, n.prev, n.next, n.children.head)
         },
-        _ => panic!("invalid id: {}", id)
+        _ => return None
       };
       if layer > 0 {
         match notify {
@@ -116,6 +103,7 @@ impl<T> IdTree<T> {
       node.layer = 0;
       node.prev = 0;
       node.next = 0;
+      Some(layer)
     }
     /// 销毁子节点， recursive表示是否递归销毁
     pub fn destroy(&mut self, id: usize, recursive: bool, notify: Option<&NotifyImpl>) {
@@ -167,14 +155,14 @@ impl<T> IdTree<T> {
       }
     }
     /// 迭代指定节点的所有子元素
-    pub fn iter(&self, node_children_head: usize) -> ChildrenIterator<T> {
+    pub fn iter(&self, node_children_head: usize) -> ChildrenIterator {
       ChildrenIterator{
         inner: &self.map,
         head: node_children_head,
       }
     }
     /// 迭代指定节点的所有递归子元素
-    pub fn recursive_iter(&self, node_children_head: usize) -> RecursiveIterator<T> {
+    pub fn recursive_iter(&self, node_children_head: usize) -> RecursiveIterator {
       RecursiveIterator{
         inner: &self.map,
         arr: [node_children_head, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
@@ -299,8 +287,7 @@ impl<T> IdTree<T> {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Node<T> {
-  pub bind: T,             // 绑定
+pub struct Node {
   pub parent: usize,       // 父节点
   pub layer: usize,        // 表示第几层，如果不在根上，则为0。 在根上，则起步为1
   pub count: usize,        // 所有的递归子节点的总数量
@@ -308,19 +295,7 @@ pub struct Node<T> {
   pub next: usize,         // 后ab节点
   pub children: NodeList, // 子节点列表
 }
-impl<T> Node<T> {
-  fn new(bind: T) -> Node<T> {
-    Node {
-      bind: bind,
-      parent: 0,
-      layer: 0,
-      count: 0,
-      prev: 0,
-      next: 0,
-      children: NodeList::default(),
-    }
-  }
-}
+
 #[derive(Debug, Clone, Default)]
 pub struct NodeList {
   pub head: usize,
@@ -328,13 +303,13 @@ pub struct NodeList {
 }
 
 
-pub struct ChildrenIterator<'a, T> {
-    inner: &'a VecMap<Node<T>>,
+pub struct ChildrenIterator<'a> {
+    inner: &'a VecMap<Node>,
     head: usize,
 }
 
-impl<'a, T> Iterator for ChildrenIterator<'a, T> {
-    type Item = (usize, &'a Node<T>);
+impl<'a> Iterator for ChildrenIterator<'a> {
+    type Item = (usize, &'a Node);
 
     fn next(&mut self) -> Option<Self::Item> {
       if self.head == 0 {
@@ -347,14 +322,14 @@ impl<'a, T> Iterator for ChildrenIterator<'a, T> {
     }
 }
 
-pub struct RecursiveIterator<'a, T> {
-    inner: &'a VecMap<Node<T>>,
+pub struct RecursiveIterator<'a> {
+    inner: &'a VecMap<Node>,
     arr: [usize; 32],
     len: usize,
 }
 
-impl<'a, T> Iterator for RecursiveIterator<'a, T> {
-    type Item = (usize, &'a Node<T>);
+impl<'a> Iterator for RecursiveIterator<'a> {
+    type Item = (usize, &'a Node);
 
     fn next(&mut self) -> Option<Self::Item> {
       if self.len == 0 {
@@ -380,16 +355,16 @@ impl<'a, T> Iterator for RecursiveIterator<'a, T> {
 #[test]
 fn test11(){
     let n = None;
-    let mut tree: IdTree<usize> =IdTree::default();
-    tree.create(1, 1);
-    tree.create(11, 2);
-    tree.create(12, 3);
-    tree.create(111, 4);
-    tree.create(112, 5);
-    tree.create(121, 3);
-    tree.create(122, 3);
-    tree.create(123, 3);
-    tree.create(124, 3);
+    let mut tree: IdTree =IdTree::default();
+    tree.create(1);
+    tree.create(11);
+    tree.create(12);
+    tree.create(111);
+    tree.create(112);
+    tree.create(121);
+    tree.create(122);
+    tree.create(123);
+    tree.create(124);
     tree.insert_child(11, 1, 10, n);
     tree.insert_child(12, 1, 10, n);
     tree.insert_child(111, 11, 0, n);
@@ -407,7 +382,7 @@ fn test11(){
     }
 }
 #[cfg(test)]
-fn test_println(tree: &IdTree<usize>){
+fn test_println(tree: &IdTree){
   println!("--------------------------------");
   for i in 1..200{
       match tree.get(i) {
