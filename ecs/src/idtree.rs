@@ -3,7 +3,7 @@ use std::{
   mem::{replace},
 };
 
-use map::{Map, vecmap::VecMap};
+use map::{vecmap::VecMap};
 use monitor::{NotifyImpl};
 
 pub enum InsertType{
@@ -334,14 +334,14 @@ pub struct ChildrenIterator<'a, T> {
 }
 
 impl<'a, T> Iterator for ChildrenIterator<'a, T> {
-    type Item = usize;
+    type Item = (usize, &'a Node<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
       if self.head == 0 {
         return None
       }
-      let r = Some(self.head);
       let n = unsafe {self.inner.get_unchecked(self.head)};
+      let r = Some((self.head, n));
       self.head = n.next;
       r
     }
@@ -354,7 +354,7 @@ pub struct RecursiveIterator<'a, T> {
 }
 
 impl<'a, T> Iterator for RecursiveIterator<'a, T> {
-    type Item = usize;
+    type Item = (usize, &'a Node<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
       if self.len == 0 {
@@ -362,8 +362,8 @@ impl<'a, T> Iterator for RecursiveIterator<'a, T> {
       }
       self.len -= 1;
       let head = self.arr[self.len];
-      let r = Some(head);
       let n = unsafe {self.inner.get_unchecked(head)};
+      let r = Some((head, n));
       if n.next > 0 {
         self.arr[self.len] = n.next;
         self.len += 1;
@@ -402,7 +402,7 @@ fn test11(){
     test_println(&tree);
     tree.destroy(12, true, n);
     test_println(&tree);
-    for i in tree.iter(unsafe{tree.get_unchecked(1)}.children.head) {
+    for (i, _) in tree.iter(unsafe{tree.get_unchecked(1)}.children.head) {
       println!("i: {}", i);
     }
 }
