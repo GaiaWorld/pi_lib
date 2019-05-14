@@ -10,9 +10,9 @@ pub trait Runner<'a> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn setup(&mut self, read: Self::ReadData, write: Self::WriteData);
+    fn setup(&mut self, _read: Self::ReadData, _write: Self::WriteData){}
     fn run(&mut self, read: Self::ReadData, write: Self::WriteData);
-    fn dispose(&mut self, read: Self::ReadData, write: Self::WriteData);
+    fn dispose(&mut self, _read: Self::ReadData, _write: Self::WriteData){}
 }
 
 pub trait SystemData<'a> where Self: std::marker::Sized{
