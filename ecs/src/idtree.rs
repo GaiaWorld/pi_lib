@@ -1,8 +1,3 @@
-
-use std::{
-  mem::{replace},
-};
-
 use map::{vecmap::VecMap};
 use monitor::{NotifyImpl};
 
@@ -169,6 +164,7 @@ impl IdTree {
         len: if node_children_head == 0 {0}else{1},
       }
     }
+
     // 插入节点
     fn insert_node(&mut self, id: usize, parent: usize, layer: usize, prev: usize, next: usize, notify: Option<&NotifyImpl>) {
       let (head, count) = match self.map.get_mut(id) {
