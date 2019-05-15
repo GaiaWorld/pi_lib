@@ -31,12 +31,12 @@ pub fn component_derive(input: TokenStream) -> TokenStream {
     gen.into()
 }
 
-// #[proc_macro_derive(Write)]
-// pub fn write_derive(input: TokenStream) -> TokenStream {
-//     let ast = syn::parse(input).unwrap();
-//     let gen = impl_write(&ast, &ast.generics, false);
-//     gen.into()
-// }
+#[proc_macro_derive(Write)]
+pub fn write_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = impl_write(&ast, &ast.generics, false);
+    gen.into()
+}
 
 #[proc_macro]
 pub fn write(input: TokenStream) -> TokenStream {
@@ -180,7 +180,7 @@ impl<'a> ToTokens for SetGetFuncsImpl<'a> {
                             i += 1;
                         }
                     },
-                    syn::Fields::Unit => panic!("Unit Can not be Component"),
+                    syn::Fields::Unit => (),
                 };
             },
             _ => ()
@@ -229,7 +229,7 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
                             i += 1;
                         }
                     },
-                    syn::Fields::Unit => panic!("Unit Can not be Component"),
+                    syn::Fields::Unit => (),
                 };
             },
             _ => ()
