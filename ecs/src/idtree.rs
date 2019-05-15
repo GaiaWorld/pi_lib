@@ -89,6 +89,11 @@ impl IdTree {
             _ => ()
         };
         self.remove_tree(head);
+      }else{
+        match notify {
+            Some(n) => n.modify_event(id, "remove", parent),
+            _ => ()
+        };
       }
       if parent > 0 {
         self.remove_node(parent, count + 1, prev, next)
@@ -133,16 +138,22 @@ impl IdTree {
             self.remove_tree(child);
           }
         }
-      }else if recursive {
-        self.recursive_destroy(id, head);
       }else{
-        self.map.remove(id);
-        while head > 0 {
-          let n = unsafe { self.map.get_unchecked_mut(head) };
-          n.parent = 0;
-          head = n.next;
-          n.prev = 0;
-          n.next = 0;
+        match notify {
+            Some(n) => n.modify_event(id, "remove", parent),
+            _ => ()
+        };
+        if recursive {
+          self.recursive_destroy(id, head);
+        }else{
+          self.map.remove(id);
+          while head > 0 {
+            let n = unsafe { self.map.get_unchecked_mut(head) };
+            n.parent = 0;
+            head = n.next;
+            n.prev = 0;
+            n.next = 0;
+          }
         }
       }
       if parent > 0 {
@@ -208,6 +219,11 @@ impl IdTree {
         self.insert_tree(head, layer + 1);
         match notify {
             Some(n) => n.create_event(id),
+            _ => ()
+        };
+      }else{
+        match notify {
+            Some(n) => n.modify_event(id, "add", parent),
             _ => ()
         };
       }
