@@ -36,14 +36,14 @@ pub trait EntityListener<'a, E, EV> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn elisten(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
+    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
 }
 /// 单例组件监听器， EV是事件类型
 pub trait SingleCaseListener<'a, C, EV> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn slisten(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
+    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
 }
 
 pub type RunnerFn = FnListener<()>;
@@ -109,14 +109,17 @@ macro_rules! impl_system {
     };
 
     // 
-    (@call_listen $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, SingleCaseListener, $c:ty, $ev:ty) => {
-        $me1.owner.borrow_mut().slisten($e1, $read_data, $write_data);
+    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, SingleCaseListener, $c:ty, $ev:ty) => {
+        <$system as ecs::SingleCaseListener<'_, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+        // $me1.borrow_mut1().slisten($e1, $read_data, $write_data);
     };
-    (@call_listen $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
-        $me1.owner.borrow_mut().listen($e1, $read_data, $write_data);
+    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
+        <$system as ecs::MultiCaseListener<'_, $e, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+        // $me1.borrow_mut1().listen($e1, $read_data, $write_data);
     };
-    (@call_listen $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, EntityListener, $e:ty, $ev:ty) => {
-        $me1.owner.borrow_mut().elisten($e1, $read_data, $write_data);
+    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, EntityListener, $e:ty, $ev:ty) => {
+        <$system as ecs::EntityListener<'_, $e, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+        // $me1.borrow_mut1().elisten($e1, $read_data, $write_data);
     };
     
     //每一个listenner setup
@@ -128,7 +131,7 @@ macro_rules! impl_system {
             
             let read_data = $crate::Borrow::borrow(&read);
             let write_data = $crate::BorrowMut::borrow_mut(&write);
-            impl_system!(@call_listen e, me1, read_data, write_data, $sign, $($gen),*);
+            impl_system!(@call_listen $system, e, me1, read_data, write_data, $sign, $($gen),*);
         }));
         impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen),*);
         impl_system!(@add_monitor setup_target, f, $($gen),*);
@@ -172,15 +175,15 @@ macro_rules! impl_system {
         {
             let read_data = $crate::Borrow::borrow(&read);
             let write_data = $crate::BorrowMut::borrow_mut(&write);
-            $s.owner.borrow_mut().setup(read_data, write_data);
+            $s.borrow_mut1().setup(read_data, write_data);
         }
         $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
             let read_data = $crate::Borrow::borrow(&read);
             let write_data = $crate::BorrowMut::borrow_mut(&write);
-            $me.owner.borrow_mut().run(read_data, write_data);
+            $me.borrow_mut1().run(read_data, write_data);
         })))
     };
-    (@runner_setup $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
+    (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
 
     //runner dispose
     (@runner_dispose $s:ident $world:ident $system: tt <$($sg:ty),*>, true) => {
@@ -188,7 +191,7 @@ macro_rules! impl_system {
         let write = <<<$system <$($sg),*> as $crate::system::Runner>::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::Fetch>::fetch($world);
         let read_data = $crate::Borrow::borrow(&read);
         let write_data = $crate::BorrowMut::borrow_mut(&write);
-        $s.owner.borrow_mut().dispose(read_data, write_data);
+        $s.borrow_mut1().dispose(read_data, write_data);
         // $s.run_fn = None;
     };
     (@runner_dispose $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
@@ -208,6 +211,10 @@ macro_rules! impl_system {
                         run_fn: None,
                         dispose_listener_fn: None,
                     }
+                }
+
+                fn borrow_mut1(&self) -> &mut $system<$($sg),*>{
+                    unsafe {&mut * (&mut * self.owner.borrow_mut() as *mut $system<$($sg),*>)}
                 }
             }
         
@@ -231,7 +238,7 @@ macro_rules! impl_system {
                         Err(_) => std::panic!("downcast err".to_string()),
                     };
 
-                    let mut listen_arr = Vec::new();
+                    let mut listen_arr: Vec<(usize, usize)> = Vec::new();
                     //listen setup
                     impl_system!(@listener_setup listen_arr world me $system <$($sg),*>, $($t)*);
 

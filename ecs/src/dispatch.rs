@@ -34,8 +34,10 @@ impl Dispatcher for SeqDispatcher {
         // 简单实现
         for k in names.iter() {
             let sys = world.get_system(&k).unwrap();
-            let run = sys.fetch_run().unwrap();
-            self.vec.push_back(run);
+            match sys.fetch_run() {
+                Some(run) => self.vec.push_back(run),
+                None => ()
+            }
         }
         
         

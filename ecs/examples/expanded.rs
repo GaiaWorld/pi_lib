@@ -58,7 +58,7 @@ impl<'a> SingleCaseListener<'a, Node, DeleteEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn slisten(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {}
+    fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {}
 }
 
 pub struct CellSystemDemo{
@@ -82,7 +82,7 @@ impl System for CellSystemDemo {
                 let read_data = read.borrow();
                 let write_data = write.borrow_mut();
                 // <MultiCaseListener<'_, Node, Position, DeleteEvent>>::listen(&mut *me.owner.borrow_mut(), e, read_data, write_data);
-                me.owner.borrow_mut().listen(e, read_data, write_data);
+                // me.owner.borrow_mut().listen(e, read_data, write_data);
             }));
             let setup_target = world.fetch_multi::<Node, Position>().unwrap();
             Notify::add_create(&*setup_target, f.clone());

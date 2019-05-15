@@ -92,7 +92,7 @@ impl World {
             Some(v) => match v.clone().downcast() {
                 Ok(r) => {
                     let rc: Arc<CellEntity<E>> = r;
-                    rc.borrow_mut().create()
+                    BorrowMut::borrow_mut(&rc).create()
                 },
                 Err(_) => panic!("downcast err")
             }
@@ -105,7 +105,7 @@ impl World {
             Some(v) => match v.clone().downcast() {
                 Ok(r) => {
                     let r: Arc<CellEntity<E>> = r;
-                    r.borrow_mut().delete(id);
+                    BorrowMut::borrow_mut(&r).delete(id);
                 },
                 Err(_) => panic!("downcast err")
             },

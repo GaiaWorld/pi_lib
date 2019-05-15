@@ -77,7 +77,7 @@ impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
     type ReadData = &'a SingleCaseImpl<View>;
     type WriteData = ();
 
-    fn slisten(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
         println!("slisten View modify. view: {:?}", &read.value);
     }
 }
@@ -87,7 +87,7 @@ impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
     type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn elisten(&mut self, event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
         println!("elisten Node create. node: {:?}", event.id);
     }
 }
@@ -96,7 +96,7 @@ impl<'a> EntityListener<'a, Node, DeleteEvent> for SystemDemo {
     type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn elisten(&mut self, event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
         println!("elisten Node delete. node: {:?}", event.id);
     }
 }

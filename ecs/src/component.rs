@@ -108,10 +108,12 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     }
     pub fn insert(&mut self, id: usize, c: C) -> Option<C> {
         let r = self.map.insert(id, c);
-        self.entity.borrow_mut().mark(id, self.bit_index);
         match r {
             Some(_) => self.notify.modify_event(id, "", 0),
-            _ => self.notify.create_event(id),
+            _ => {
+                self.entity.borrow_mut().mark(id, self.bit_index);
+                self.notify.create_event(id);
+            },
         }
         r
     }

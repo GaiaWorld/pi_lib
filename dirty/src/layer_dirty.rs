@@ -85,7 +85,6 @@ impl<'a> Iterator for Iter<'a> {
         }
         let mut layer = self.layer;
         loop {
-            
             let vec = &self.dirtys[layer];
             if vec.len() <= self.index {
                 layer += 1;

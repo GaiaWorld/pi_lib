@@ -187,9 +187,10 @@ impl<'a> ToTokens for SetGetFuncsImpl<'a> {
         };
         // modify
         tokens.extend(quote! {
-            fn modify<F: Fn(&mut #name#ty_generics)>(&mut self, callback: F) {
-                callback(self.value);
-                self.notify.modify_event(self.id, "", 0);
+            fn modify<F: Fn(&mut #name#ty_generics) -> bool>(&mut self, callback: F) {
+                if callback(self.value) {
+                    self.notify.modify_event(self.id, "", 0);
+                }
             } 
         });
     }
@@ -235,7 +236,7 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
         };
         // modify def
         tokens.extend(quote! {
-            fn modify<F: Fn(&mut #name#ty_generics)>(&mut self, callback: F); 
+            fn modify<F: Fn(&mut #name#ty_generics) -> bool>(&mut self, callback: F); 
         });
     }
 }
