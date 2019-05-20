@@ -1,6 +1,6 @@
-extern crate util;
+extern crate compress;
 
-use util::{CompressLevel, compress, uncompress};
+use compress::{CompressLevel, compress, uncompress};
 
 #[test]
 fn test_lz4() {

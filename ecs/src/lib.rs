@@ -23,7 +23,6 @@ pub mod single;
 pub mod monitor;
 
 pub mod idtree;
-pub mod dirty;
 
 pub use world::World;
 pub use system::{Runner, SingleCaseListener, MultiCaseListener, EntityListener, System};
