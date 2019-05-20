@@ -51,7 +51,7 @@ impl<T: Clone + PartialEq> Listeners<T> {
 impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
     fn listen(&self, e: &E) {
         for l in self.0.iter() {
-            l.listen(e)
+            l.listen(e);
         }
     }
 }

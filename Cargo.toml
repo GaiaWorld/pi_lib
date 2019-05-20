@@ -38,4 +38,5 @@ members = [
   "any",
   "dirty",
   "compress",
+  "hashmap",
 ]

@@ -102,11 +102,11 @@ fn impl_write(ast: &DeriveInput, generics: &syn::Generics, is_deref: bool) -> pr
 
     let mut generics1 = generics.clone();
     generics1.params.insert(0, syn::GenericParam::Lifetime(syn::LifetimeDef::new(syn::Lifetime::new("'a", proc_macro2::Span::call_site()))));
-    let (_, ty_generics, where_clause) = generics.split_for_impl();
+    let (trait_generics, ty_generics, where_clause) = generics.split_for_impl();
     let (impl_generics, _, _) = generics1.split_for_impl();
 
     quote! {
-        pub trait #write_trait_name#ty_generics #where_clause {
+        pub trait #write_trait_name#trait_generics #where_clause {
             #trait_def
         }
 
