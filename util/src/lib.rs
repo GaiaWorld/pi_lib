@@ -2,10 +2,6 @@
  * 通用函数库
  */
 
-use std::{
-    process,
-};
-
 // 为Vec增加的新方法
 pub trait VecIndex {
 	type Item;
@@ -41,21 +37,7 @@ pub fn err_string<T, E: ToString>(err: Result<T, E>) -> Result<T, String>{
 	}
 }
 
-// 为Option增加的新方法
-pub trait Fetch {
-	type Item;
-	fn fetch(self) -> Self::Item;
-}
-impl<T> Fetch for Option<T> {
-    type Item = T;
-	#[inline]
-	fn fetch(self) -> Self::Item{
-        match self {
-            Some(t) => t,
-            _ => process::abort(),
-        }
-	}
-}
+
 // 为Option增加的新方法
 pub trait FetchDefault {
 	type Item: Default;
