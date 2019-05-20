@@ -640,7 +640,7 @@ fn is_async(id: isize) -> bool{
 #[cfg(test)]
 extern crate time;
 #[cfg(test)]
-use time::now_millis;
+use time::run_millis;
 // #[cfg(test)]
 // use std::thread;
 // #[cfg(test)]
@@ -761,51 +761,51 @@ fn test(){
 fn test_effect(){
     let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Box::new(|| {}));
 
-    let time = now_millis();
+    let time = run_millis();
     for i in 1..100001 {
         task_pool.push_dyn_async(i, i);
     }
-    println!("push_dyn_async-------{} ", now_millis() - time );
+    println!("push_dyn_async-------{} ", run_millis() - time );
 
-    let time = now_millis();
+    let time = run_millis();
     for i in 1..100001 {
         task_pool.push_static_async(i, i);
     }
-    println!("push_static_async-------{} ", now_millis() - time );
+    println!("push_static_async-------{} ", run_millis() - time );
 
-    let time = now_millis();
+    let time = run_millis();
     for i in 1..1001 {
         task_pool.create_dyn_queue(i);
     }
     for i in 1..1001 {
         task_pool.create_static_queue(i);
     }
-    println!("create_queue-------{} ", now_millis() - time );
+    println!("create_queue-------{} ", run_millis() - time );
 
     //task_pool.push_dyn_back(1, to_queue_id(1));
-    let time = now_millis();
+    let time = run_millis();
     for queue_id in 1..1001 {
         for i in 1..101 {
             task_pool.push_dyn_back(i, to_queue_id(queue_id));
         }
     }
-    println!("push_dyn_back-------{} ", now_millis() - time );
+    println!("push_dyn_back-------{} ", run_millis() - time );
 
-    let time = now_millis();
+    let time = run_millis();
     for queue_id in 1..1001 {
         for i in 1..101 {
             task_pool.push_static_back(i, to_static_queue_id(queue_id));
         }
     }
-    println!("push_static_back-------{} ", now_millis() - time );
+    println!("push_static_back-------{} ", run_millis() - time );
 
-    let time = now_millis();
+    let time = run_millis();
     for i in 1..100001 {
         task_pool.remove_async(to_async_id(i));
     }
-    println!("remove_async-------{} ", now_millis() - time );
+    println!("remove_async-------{} ", run_millis() - time );
 
-     let time = now_millis();
+     let time = run_millis();
     for queue_id in 1..1001 {
         let q = (queue_id - 1) * 100;
         for i in 0..100 {
@@ -813,5 +813,5 @@ fn test_effect(){
             task_pool.remove_sync(to_queue_id(queue_id), to_sync_id(q + i + 1));
         }
     }
-    println!("remove_sync-------{} ", now_millis() - time );
+    println!("remove_sync-------{} ", run_millis() - time );
 }
