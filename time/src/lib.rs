@@ -20,37 +20,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 
-/*
-* 获取当前本地时间的秒数
-*/
-pub fn now_second() -> i64 {
-	get_time().sec
-}
-
-/*
-* 获取当前本地时间的毫秒数
-*/
-pub fn now_millisecond() -> i64 {
-    let time = get_time();
-	time.sec * 1000 + (time.nsec / 1000000) as i64
-}
-
-/*
-* 获取当前本地时间的微秒数
-*/
-pub fn now_microsecond() -> i64 {
-    let time = get_time();
-	time.sec * 1000000 + (time.nsec / 1000) as i64
-}
-
-/*
-* 获取当前本地时间的纳秒数
-*/
-pub fn now_nanosecond() -> i128 {
-    let time = get_time();
-    (time.sec * 1000000000) as i128 + time.nsec as i128
-}
-
 lazy_static! {
 	static ref START: Instant = Instant::now();
 	static ref START_SECS: u64 = SystemTime::UNIX_EPOCH.elapsed().unwrap().as_secs();
