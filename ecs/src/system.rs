@@ -205,7 +205,7 @@ macro_rules! impl_system {
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
             }
             impl<$($sg),*> [<Cell $system>]<$($sg),*> {
-                fn new(sys: $system<$($sg),*>) -> Self{
+                pub fn new(sys: $system<$($sg),*>) -> Self{
                     Self {
                         owner: pointer::cell::TrustCell::new(sys),
                         run_fn: None,

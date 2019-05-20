@@ -29,7 +29,7 @@ pub use world::World;
 pub use system::{Runner, SingleCaseListener, MultiCaseListener, EntityListener, System};
 pub use component::{Component, MultiCaseImpl};
 pub use single::{SingleCaseImpl};
-pub use monitor::{CreateEvent, ModifyEvent, DeleteEvent};
+pub use monitor::{CreateEvent, ModifyEvent, DeleteEvent, Write};
 pub use dispatch::{SeqDispatcher, Dispatcher};
 
 use std::any::TypeId;

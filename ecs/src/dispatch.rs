@@ -69,7 +69,7 @@ impl Dispatcher for SeqDispatcher {
         // }
     }
     fn run(&self) {
-        self.vec.listen(&())
+        self.vec.listen(&());
     }
 }
 
