@@ -41,14 +41,14 @@ pub trait Fetch: Sized + 'static {
     fn fetch(world: &World) -> Self;
 }
 
-pub trait Borrow<'a> {
+pub trait Lend<'a> {
     type Target;
-    fn borrow(&'a self) -> Self::Target;
+    fn lend(&'a self) -> Self::Target;
 }
 
-pub trait BorrowMut<'a> {
+pub trait LendMut<'a> {
     type Target;
-    fn borrow_mut(&'a self) -> Self::Target;
+    fn lend_mut(&'a self) -> Self::Target;
 }
 
 pub trait TypeIds {
@@ -72,35 +72,35 @@ macro_rules! impl_trait {
         }
 
         #[allow(non_snake_case)]
-        impl<'a, $($ty),*> Borrow<'a> for ( $( $ty , )* ) where $( $ty: Borrow<'a>),*{
+        impl<'a, $($ty),*> Lend<'a> for ( $( $ty , )* ) where $( $ty: Lend<'a>),*{
             type Target = ( $($ty::Target,)* );
-            fn borrow(&'a self) -> Self::Target {
+            fn lend(&'a self) -> Self::Target {
                 let ($($ty,)*) = self;
-                ( $($ty.borrow(),)* )
+                ( $($ty.lend(),)* )
             }
         }
 
         #[allow(non_snake_case)]
-        impl<'a, $($ty),*> BorrowMut<'a> for ( $( $ty , )* ) where $( $ty: BorrowMut<'a>),*{
+        impl<'a, $($ty),*> LendMut<'a> for ( $( $ty , )* ) where $( $ty: LendMut<'a>),*{
             type Target = ( $($ty::Target,)* );
-            fn borrow_mut(&'a self) -> Self::Target {
+            fn lend_mut(&'a self) -> Self::Target {
                 let ( $($ty,)* ) = self;
-                ( $($ty.borrow_mut(),)* )
+                ( $($ty.lend_mut(),)* )
             }
         }
     };
 }
 
-impl<'a> BorrowMut<'a> for () {
+impl<'a> LendMut<'a> for () {
     type Target = ();
-    fn borrow_mut(&'a self) -> Self::Target {
+    fn lend_mut(&'a self) -> Self::Target {
         ()
     }
 }
 
-impl<'a> Borrow<'a> for () {
+impl<'a> Lend<'a> for () {
     type Target = ();
-    fn borrow(&'a self) -> Self::Target {
+    fn lend(&'a self) -> Self::Target {
         ()
     }
 }

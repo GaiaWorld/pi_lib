@@ -15,7 +15,7 @@ use ecs::component::{ Component, MultiCaseImpl};
 use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn, SingleCaseListener};
 use ecs::monitor::{Notify, CreateEvent, DeleteEvent};
 use listener::{FnListener};
-use ecs::{ World, Fetch, Borrow, BorrowMut, TypeIds};
+use ecs::{ World, Fetch, Lend, LendMut, TypeIds};
 use map::vecmap::VecMap;
 
 struct Position{}
@@ -93,13 +93,13 @@ impl System for CellSystemDemo {
         let read = <<SystemDemo as Runner>::ReadData as SystemData>::FetchTarget::fetch(world);
         let write = <<SystemDemo as Runner>::WriteData as SystemMutData>::FetchTarget::fetch(world);
         {
-            let read_data = read.borrow();
-            let write_data = write.borrow_mut();
+            let read_data = read.lend();
+            let write_data = write.lend_mut();
             self.owner.borrow_mut().setup(read_data, write_data);
         }
         self.run_fn = Some(FnListener(Arc::new( move |_e: &()| {
-            let read_data = read.borrow();
-            let write_data = write.borrow_mut();
+            let read_data = read.lend();
+            let write_data = write.lend_mut();
             me.owner.borrow_mut().run(read_data, write_data);
         })));
         
@@ -119,8 +119,8 @@ impl System for CellSystemDemo {
         // runner dispose
         let read = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::ReadData as SystemData>::FetchTarget::fetch(world);
         let write = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::WriteData as SystemMutData>::FetchTarget::fetch(world);
-        let read_data = read.borrow();
-        let write_data = write.borrow_mut();
+        let read_data = read.lend();
+        let write_data = write.lend_mut();
         self.owner.borrow_mut().dispose(read_data, write_data);
 
         // self.dispose_listener_fn = None;

@@ -10,7 +10,7 @@ extern crate atom;
 
 use atom::Atom;
 
-use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, BorrowMut, World, SeqDispatcher, Dispatcher};
+use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, LendMut, World, SeqDispatcher, Dispatcher};
 use map::vecmap::VecMap;
 
 #[derive(Debug)]
@@ -129,7 +129,7 @@ fn main() {
     let e = world.create_entity::<Node>();
     let position = Position {x: 5.0, y: 5.0};
     let positions = world.fetch_multi::<Node, Position>().unwrap();
-    let positions = BorrowMut::borrow_mut(&positions);
+    let positions = LendMut::lend_mut(&positions);
     positions.insert(e, position);
 
     // modify component
@@ -139,7 +139,7 @@ fn main() {
 
     //modify single
     let view = world.fetch_single::<View>().unwrap();
-    let view = BorrowMut::borrow_mut(&view);
+    let view = LendMut::lend_mut(&view);
     let write = view.get_write();
     write.value.value = 10;
     write.notify.modify_event(write.id, "value", 0);

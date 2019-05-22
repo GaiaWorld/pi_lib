@@ -14,7 +14,7 @@ use listener::Listener;
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteListeners, DeleteEvent};
 use entity::CellEntity;
-use {Fetch, Borrow, BorrowMut, TypeIds, World};
+use {Fetch, Lend, LendMut, TypeIds, World};
 use Share;
 
 pub trait Component: Sized + Share {
@@ -149,16 +149,16 @@ impl<E: Share, C: Component> TypeIds for ShareMultiCase<E, C> {
     }
 }
 
-impl<'a, E: Share, C: Component> Borrow<'a> for ShareMultiCase<E, C> {
+impl<'a, E: Share, C: Component> Lend<'a> for ShareMultiCase<E, C> {
     type Target = &'a MultiCaseImpl<E, C>;
-    fn borrow(&'a self) -> Self::Target {
+    fn lend(&'a self) -> Self::Target {
         unsafe {&* (&* self.deref().borrow() as *const MultiCaseImpl<E, C>)}
     }
 }
 
-impl<'a, E: Share, C: Component> BorrowMut<'a> for ShareMultiCase<E, C> {
+impl<'a, E: Share, C: Component> LendMut<'a> for ShareMultiCase<E, C> {
     type Target = &'a mut MultiCaseImpl<E, C>;
-    fn borrow_mut(&'a self) -> Self::Target {
+    fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>)}
     }
 }
