@@ -61,7 +61,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
                 loop {
                     thread::sleep(Duration::from_millis(sleep_time));
                     let mut now = run_millis();
-                    now = run_zero(&s);//运行0毫秒任务
+                    now = run_zero(&s, now);//运行0毫秒任务
                     loop {
                         let mut r = {
                             let mut s = s.lock().unwrap();
@@ -74,7 +74,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
                             }
                         };
                         now = run_task(&s, &mut r);
-                        now = run_zero(&s);//运行0毫秒任务
+                        now = run_zero(&s, now);//运行0毫秒任务
                     }
                 }
 		});
@@ -176,8 +176,7 @@ impl Statistics{
 }
 
 
-fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>) -> u64{
-    let mut now = 0;
+fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> u64{
     loop {
         let mut r = {
             let mut s = timer.lock().unwrap();
