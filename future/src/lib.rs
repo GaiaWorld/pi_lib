@@ -2,7 +2,7 @@
 
 extern crate futures;
 extern crate npnc;
-extern crate util;
+extern crate time;
 extern crate atom;
 extern crate worker;
 

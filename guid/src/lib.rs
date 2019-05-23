@@ -11,7 +11,7 @@ extern crate time;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use time::{now_nanos, start_secs};
+use time::{run_nanos, start_secs};
 
 // 全局唯一ID
 #[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -57,7 +57,7 @@ impl GuidGen {
 			node_time
 		};
 		GuidGen {
-			time: AtomicU64::new(now_nanos()),
+			time: AtomicU64::new(run_nanos()),
 			node_time: time,
 			node_id: node_id,
 		}
@@ -71,7 +71,7 @@ impl GuidGen {
 	// 分配全局唯一时间
 	#[inline]
 	pub fn time(&self) -> u64 {
-		let now = now_nanos();
+		let now = run_nanos();
 		loop {
 			let t = self.time.load(Ordering::Relaxed);
 			if t < now {

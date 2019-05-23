@@ -7,6 +7,6 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 futures = "0.1.23"
 npnc = "*"
 
-util = {path="../util"}
+time = {path="../time"}
 atom = {path="../atom"}
 worker = {path="../worker"}

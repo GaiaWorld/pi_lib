@@ -6,7 +6,7 @@ use futures::*;
 use npnc::ConsumeError;
 use npnc::bounded::spsc::{Producer, Consumer};
 
-use util::now_millisecond;
+use time::now_millisecond;
 
 /*
 * 未来任务
@@ -27,7 +27,7 @@ impl<T: Send + 'static, E: Send + 'static> FutTask<T, E> {
     pub fn new(uid: usize, timeout: u32, inner: Arc<Consumer<Result<T, E>>>, sender: Arc<Producer<task::Task>>) -> Self {
         FutTask {
             uid: uid,
-            timeout: now_millisecond() + timeout as i64,
+            timeout: now_millisecond() as i64 + timeout as i64,
             inner: inner,
             sender: sender,
         }
@@ -44,7 +44,7 @@ impl<T: Send + 'static, E: Send + 'static> Future for FutTask<T, E> {
     type Error = E;
 
     fn poll(&mut self) -> Poll<T, E> {
-        if self.timeout < now_millisecond() {
+        if self.timeout < now_millisecond() as i64 {
             resume_unwind(Box::new("future task timeout")) //超时
         } else {
             match self.inner.consume() {
