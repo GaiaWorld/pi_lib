@@ -37,4 +37,6 @@ members = [
   "debug_info",
   "any",
   "dirty",
+  "compress",
+  "hashmap",
 ]

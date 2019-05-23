@@ -1,0 +1,7 @@
+[package]
+name = "densevec"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+map = {path="../map"}

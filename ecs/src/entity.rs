@@ -11,7 +11,7 @@ use pointer::cell::TrustCell;
 use slab::Slab;
 
 
-use {Fetch, Borrow, BorrowMut, TypeIds, World};
+use {Fetch, Lend, LendMut, TypeIds, World};
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use component::MultiCase;
@@ -150,16 +150,16 @@ impl<T: Share> TypeIds for ShareEntity<T> {
     }
 }
 
-impl<'a, T: Share> Borrow<'a> for ShareEntity<T> {
+impl<'a, T: Share> Lend<'a> for ShareEntity<T> {
     type Target = &'a EntityImpl<T>;
-    fn borrow(&'a self) -> Self::Target {
+    fn lend(&'a self) -> Self::Target {
         unsafe {&* (&*self.deref().borrow() as *const EntityImpl<T>)}
     }
 }
 
-impl<'a, T: Share> BorrowMut<'a> for ShareEntity<T> {
+impl<'a, T: Share> LendMut<'a> for ShareEntity<T> {
     type Target = &'a mut EntityImpl<T>;
-    fn borrow_mut(&'a self) -> Self::Target {
+    fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut EntityImpl<T>)}
     }
 }

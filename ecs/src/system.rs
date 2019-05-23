@@ -129,8 +129,8 @@ macro_rules! impl_system {
         let write = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen),*>>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::Fetch>::fetch($world);
         let f = $crate::monitor::FnListener(std::sync::Arc::new( move |e| {
             
-            let read_data = $crate::Borrow::borrow(&read);
-            let write_data = $crate::BorrowMut::borrow_mut(&write);
+            let read_data = $crate::Lend::lend(&read);
+            let write_data = $crate::LendMut::lend_mut(&write);
             impl_system!(@call_listen $system, e, me1, read_data, write_data, $sign, $($gen),*);
         }));
         impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen),*);
@@ -173,13 +173,13 @@ macro_rules! impl_system {
         let read = <<<$system <$($sg),*> as $crate::system::Runner>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
         let write = <<<$system <$($sg),*> as $crate::system::Runner>::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::Fetch>::fetch($world);
         {
-            let read_data = $crate::Borrow::borrow(&read);
-            let write_data = $crate::BorrowMut::borrow_mut(&write);
+            let read_data = $crate::Lend::lend(&read);
+            let write_data = $crate::LendMut::lend_mut(&write);
             $s.borrow_mut1().setup(read_data, write_data);
         }
         $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
-            let read_data = $crate::Borrow::borrow(&read);
-            let write_data = $crate::BorrowMut::borrow_mut(&write);
+            let read_data = $crate::Lend::lend(&read);
+            let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
         })))
     };
@@ -189,8 +189,8 @@ macro_rules! impl_system {
     (@runner_dispose $s:ident $world:ident $system: tt <$($sg:ty),*>, true) => {
         let read = <<<$system <$($sg),*> as $crate::system::Runner>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
         let write = <<<$system <$($sg),*> as $crate::system::Runner>::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::Fetch>::fetch($world);
-        let read_data = $crate::Borrow::borrow(&read);
-        let write_data = $crate::BorrowMut::borrow_mut(&write);
+        let read_data = $crate::Lend::lend(&read);
+        let write_data = $crate::LendMut::lend_mut(&write);
         $s.borrow_mut1().dispose(read_data, write_data);
         // $s.run_fn = None;
     };
@@ -205,7 +205,7 @@ macro_rules! impl_system {
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
             }
             impl<$($sg),*> [<Cell $system>]<$($sg),*> {
-                fn new(sys: $system<$($sg),*>) -> Self{
+                pub fn new(sys: $system<$($sg),*>) -> Self{
                     Self {
                         owner: pointer::cell::TrustCell::new(sys),
                         run_fn: None,

@@ -10,7 +10,7 @@ use pointer::cell::{TrustCell};
 
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
-use {Fetch, Borrow, BorrowMut, TypeIds, World};
+use {Fetch, Lend, LendMut, TypeIds, World};
 use Share;
 
 pub trait SingleCase: Notify + ArcAny {
@@ -106,16 +106,17 @@ impl<T: Share> TypeIds for ShareSingleCase<T> {
     }
 }
 
-impl<'a, T: Share> Borrow<'a> for ShareSingleCase<T> {
+impl<'a, T: Share> Lend<'a> for ShareSingleCase<T> {
     type Target = &'a SingleCaseImpl<T>;
-    fn borrow(&'a self) -> Self::Target {
+    fn lend(&'a self) -> Self::Target {
         unsafe {&* (&* self.deref().borrow() as *const SingleCaseImpl<T>)}
     }
 }
 
-impl<'a, T: Share> BorrowMut<'a> for ShareSingleCase<T> {
+
+impl<'a, T: Share> LendMut<'a> for ShareSingleCase<T> {
     type Target = &'a mut SingleCaseImpl<T>;
-    fn borrow_mut(&'a self) -> Self::Target {
+    fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut SingleCaseImpl<T>)}
     }
 }

@@ -1,7 +1,8 @@
 [package]
-name = "util"
+name = "compress"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
+lz4 = "*"
 libc = "*"

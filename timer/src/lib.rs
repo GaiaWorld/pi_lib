@@ -22,7 +22,7 @@ use atom::Atom;
 use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
 use wheel::slab_wheel::Wheel;
 use wheel::wheel::Item;
-use time::{now_millis};
+use time::{run_millis};
 
 lazy_static! {
     //定时器数量
@@ -55,12 +55,12 @@ impl<T: 'static + Send + Runer> Timer<T>{
             .spawn(move ||{
                 let mut sleep_time = {
                     let mut lock = s.lock().unwrap();
-                    lock.wheel.set_time(now_millis());
+                    lock.wheel.set_time(run_millis());
                     lock.clock_ms
                 };
                 loop {
                     thread::sleep(Duration::from_millis(sleep_time));
-                    let mut now = now_millis();
+                    let mut now = run_millis();
                     now = run_zero(&s, now);//运行0毫秒任务
                     loop {
                         let mut r = {
@@ -206,8 +206,7 @@ fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item
 
     TIMER_RUN_COUNT.sum(1);
     TIMER_RUN_TIME.timing(start);
-
-    now_millis()
+    run_millis()
 }
 #[test]
 fn test(){

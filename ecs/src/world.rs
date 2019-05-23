@@ -16,7 +16,7 @@ use entity::{Entity, EntityImpl, CellEntity};
 use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use single::{SingleCase, CellSingleCase, SingleCaseImpl};
 use dispatch::Dispatcher;
-use { Share, BorrowMut};
+use { Share, LendMut};
 
 #[derive(Default, Clone)]
 pub struct World {
@@ -53,7 +53,7 @@ impl World {
                     Ok(r) => {
                         let r: Arc<CellEntity<E>> = r;
                         let rc = r.clone();
-                        let entity = BorrowMut::borrow_mut(&r);
+                        let entity = LendMut::lend_mut(&r);
                         let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
                         entity.register_component(m.clone());
                         match self.multi.insert((eid, cid), m) {
@@ -92,7 +92,7 @@ impl World {
             Some(v) => match v.clone().downcast() {
                 Ok(r) => {
                     let rc: Arc<CellEntity<E>> = r;
-                    BorrowMut::borrow_mut(&rc).create()
+                    LendMut::lend_mut(&rc).create()
                 },
                 Err(_) => panic!("downcast err")
             }
@@ -105,7 +105,7 @@ impl World {
             Some(v) => match v.clone().downcast() {
                 Ok(r) => {
                     let r: Arc<CellEntity<E>> = r;
-                    BorrowMut::borrow_mut(&r).delete(id);
+                    LendMut::lend_mut(&r).delete(id);
                 },
                 Err(_) => panic!("downcast err")
             },

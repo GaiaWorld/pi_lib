@@ -57,12 +57,12 @@ impl LayerDirty {
         while self.start < len {
             let vec = unsafe { self.dirtys.get_unchecked_mut(self.start) };
             let c = vec.len();
+            self.start += 1;
             if c == 0 {
                 continue;
             }
             self.count -= c;
             vec.clear();
-            self.start += 1;
         }
     }
 }
