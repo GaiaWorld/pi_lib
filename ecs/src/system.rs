@@ -239,14 +239,11 @@ macro_rules! impl_system {
                         Ok(r) => r,
                         Err(_) => std::panic!("downcast err".to_string()),
                     };
-
                     let mut listen_arr: Vec<(usize, usize)> = Vec::new();
                     //listen setup
                     impl_system!(@listener_setup listen_arr world me $system <$($sg),*>, $($t)*);
-
                     //runner setup
                     impl_system!(@runner_setup self world me $system <$($sg),*>, $has_runner);
-
                     //dispose
                     self.dispose_listener_fn = Some($crate::monitor::FnListener(std::sync::Arc::new(move |world: &$crate::world::World| {
                         impl_system!(@listener_dispose 0; listen_arr world me $system <$($sg),*>, $($t)*);

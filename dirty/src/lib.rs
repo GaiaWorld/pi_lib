@@ -18,6 +18,7 @@ impl Default for LayerDirty {
 impl LayerDirty {
     // 设置节点脏
     pub fn mark(&mut self, id: usize, layer: usize) {
+        println!("mark dirty, id: {}, layer:{}", id, layer);
         self.count += 1;
         if self.start > layer {
             self.start = layer;
@@ -44,7 +45,7 @@ impl LayerDirty {
     pub fn iter(&self) -> DirtyIterator {
         DirtyIterator {
             inner: self,
-            layer: self.start + 1,
+            layer: self.start,
             iter: if self.count == 0 {
                 self.dirtys[0].iter()
             } else {

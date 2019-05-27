@@ -92,9 +92,9 @@ impl<T> EntityImpl<T> {
         self.components.len()
     }
     pub fn register_component(&mut self, component: Arc<MultiCase>) {
-        if self.components.len() >= size_of::<u64>() {
-            panic!("components overflow")
-        }
+        // if self.components.len() >= size_of::<u64>() {
+        //     panic!("components overflow")
+        // }
         self.components.push(component);
     }
     pub fn create(&mut self) -> usize {
