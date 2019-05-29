@@ -42,14 +42,18 @@ impl LayerDirty {
     }
     // 迭代方法
     pub fn iter(&self) -> DirtyIterator {
-        DirtyIterator {
-            inner: self,
-            layer: self.start,
-            iter: if self.count == 0 {
-                self.dirtys[0].iter()
-            } else {
-                self.dirtys[self.start].iter()
-            },
+        if self.count == 0 {
+            DirtyIterator {
+                inner: self,
+                layer: self.start,
+                iter: self.dirtys[0].iter(),
+            }
+        } else {
+             DirtyIterator {
+                inner: self,
+                layer: self.start + 1,
+                iter: self.dirtys[self.start].iter(),
+            }
         }
     }
     pub fn clear(&mut self) {
@@ -81,8 +85,8 @@ impl<'a> Iterator for DirtyIterator<'a> {
         let mut r = self.iter.next();
         if r == None {
             let len = self.inner.dirtys.len();
-            while self.layer + 1 < len {
-                let vec = unsafe { self.inner.dirtys.get_unchecked(self.layer + 1) };
+            while self.layer < len {
+                let vec = unsafe { self.inner.dirtys.get_unchecked(self.layer) };
                 self.layer += 1;
                 if vec.len() > 0 {
                     self.iter = vec.iter();
