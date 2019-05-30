@@ -16,6 +16,10 @@ impl Default for LayerDirty {
     }
 }
 impl LayerDirty {
+    // 数量
+    pub fn count(&self) -> usize {
+        self.count
+    }
     // 设置节点脏
     pub fn mark(&mut self, id: usize, layer: usize) {
         self.count += 1;
