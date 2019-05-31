@@ -33,7 +33,10 @@ impl Dispatcher for SeqDispatcher {
     fn init(&mut self, mut names: Vec<Atom>, world: &World) {
         // 简单实现
         for k in names.iter() {
-            let sys = world.get_system(&k).unwrap();
+            let sys = match world.get_system(&k) {
+                Some(r) => r,
+                None => panic!("system is not exist:{}", **k),
+            };
             match sys.fetch_run() {
                 Some(run) => self.vec.push_back(run),
                 None => ()

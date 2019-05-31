@@ -92,7 +92,7 @@ impl<T> EntityImpl<T> {
         self.components.len()
     }
     pub fn register_component(&mut self, component: Arc<MultiCase>) {
-        if self.components.len() >= size_of::<u64>() {
+        if self.components.len() >= size_of::<u64>()<<3 {
             panic!("components overflow")
         }
         self.components.push(component);
@@ -119,7 +119,7 @@ impl<T> EntityImpl<T> {
             return
         }
         // 依次删除对应的组件
-        for i in mask.trailing_zeros() as usize..(size_of::<usize>() <<3 )-(mask.leading_zeros() as usize) {
+        for i in mask.trailing_zeros() as usize..(size_of::<u64>() <<3 )-(mask.leading_zeros() as usize) {
             if mask & (1<<i) != 0 {
                 self.components[i].delete(id)
             }

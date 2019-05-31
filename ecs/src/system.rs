@@ -109,32 +109,32 @@ macro_rules! impl_system {
     };
 
     // 
-    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, SingleCaseListener, $c:ty, $ev:ty) => {
-        <$system as ecs::SingleCaseListener<'_, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+    (@call_listen $system:tt<$($sg:ty),*>, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, SingleCaseListener, $c:ty, $ev:ty) => {
+        <$system<$($sg),*> as ecs::SingleCaseListener<'_, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
         // $me1.borrow_mut1().slisten($e1, $read_data, $write_data);
     };
-    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
-        <$system as ecs::MultiCaseListener<'_, $e, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+    (@call_listen $system:tt<$($sg:ty),*>, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
+        <$system<$($sg),*> as ecs::MultiCaseListener<'_, $e, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
         // $me1.borrow_mut1().listen($e1, $read_data, $write_data);
     };
-    (@call_listen $system:tt, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, EntityListener, $e:ty, $ev:ty) => {
-        <$system as ecs::EntityListener<'_, $e, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
+    (@call_listen $system:tt<$($sg:ty),*>, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, EntityListener, $e:ty, $ev:ty) => {
+        <$system<$($sg),*> as ecs::EntityListener<'_, $e, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
         // $me1.borrow_mut1().elisten($e1, $read_data, $write_data);
     };
     
     //每一个listenner setup
-    (@listener_setup $arr:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt < $($gen:tt),* > $($t:tt)* ) => {
+    (@listener_setup $arr:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt <$($gen:tt $(<$($g:ty),*>)*),*> $($t:tt)* ) => {
         let me1 = $me.clone();
-        let read = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen),*>>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
-        let write = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen),*>>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::Fetch>::fetch($world);
+        let read = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen$(<$($g),*>)*),* >>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
+        let write = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen$(<$($g),*>)*),* >>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::Fetch>::fetch($world);
         let f = $crate::monitor::FnListener(std::sync::Arc::new( move |e| {
             
             let read_data = $crate::Lend::lend(&read);
             let write_data = $crate::LendMut::lend_mut(&write);
-            impl_system!(@call_listen $system, e, me1, read_data, write_data, $sign, $($gen),*);
+            impl_system!(@call_listen $system <$($sg),*>, e, me1, read_data, write_data, $sign, $($gen$(<$($g),*>)*),* );
         }));
-        impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen),*);
-        impl_system!(@add_monitor setup_target, f, $($gen),*);
+        impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen$(<$($g),*>)*),* );
+        impl_system!(@add_monitor setup_target, f, $($gen$(<$($g),*>)*),* );
         let ptr: (usize, usize) = unsafe {std::mem::transmute(std::sync::Arc::into_raw(f.0))};
         $arr.push(ptr); // 裸指针
         impl_system!(@listener_setup $arr $world $me $system <$($sg),*>, $($t)*);
@@ -142,9 +142,9 @@ macro_rules! impl_system {
     (@listener_setup $arr:ident $world:ident $me:ident $system: tt <$($sg:ty),*>,) => {};
 
     //每一个listenner dispose
-    (@listener_dispose $i:expr; $f:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt < $($gen:tt),* > $($t:tt)* ) => {
-        impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen),*);
-        impl_system!(@remove_monitor setup_target, &$f[$i], $($gen),*); 
+    (@listener_dispose $i:expr; $f:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt <$($gen:tt $(<$($g:ty),*>)*),*> $($t:tt)* ) => {
+        impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen$(<$($g),*>)*),* );
+        impl_system!(@remove_monitor setup_target, &$f[$i], $($gen$(<$($g),*>)*),* ); 
         impl_system!(@listener_dispose $i+1; $f $world $me $system <$($sg),*>, $($t)*);
     };
     (@listener_dispose $i:expr; $f:ident $world:ident $me:ident $system: tt <$($sg:ty),*>,) => {};
@@ -196,15 +196,17 @@ macro_rules! impl_system {
     };
     (@runner_dispose $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
 
-    ($system:tt, $has_runner: tt, {$($t: tt)*}) => {impl_system!($system<>, $has_runner, {$($t)*} );};
-    ($system:tt<$($sg:ty),*>, $has_runner: tt, {$($t: tt)*}) => {
+    ($system:tt<$($sg:ty),*> where [$($sg_impl:tt)+], $has_runner: tt, {$($t: tt)*}) => {impl_system!(@impls $system<$($sg),*> where [$($sg_impl)+], $has_runner, {$($t)*} );};
+    ($system:tt<$($sg:ty),*>, $has_runner: tt, {$($t: tt)*}) => {impl_system!(@impls $system<$($sg),*> where [], $has_runner, {$($t)*} );};
+    ($system:tt, $has_runner: tt, {$($t: tt)*}) => {impl_system!(@impls $system<> where [], $has_runner, {$($t)*} );};
+    (@impls $system:tt<$($sg:ty),*> where [$($sg_impl:tt)*], $has_runner: tt, {$($t: tt)*}) => {
         $crate::paste::item! {
-            pub struct [<Cell $system>] <$($sg),*> {
+            pub struct [<Cell $system>] <$($sg_impl)*> {
                 owner: pointer::cell::TrustCell<$system<$($sg),*>>,
                 run_fn: Option<$crate::system::RunnerFn>,
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
             }
-            impl<$($sg),*> [<Cell $system>]<$($sg),*> {
+            impl<$($sg_impl)*> [<Cell $system>]<$($sg),*> {
                 pub fn new(sys: $system<$($sg),*>) -> Self{
                     Self {
                         owner: pointer::cell::TrustCell::new(sys),
@@ -218,7 +220,7 @@ macro_rules! impl_system {
                 }
             }
         
-            impl<$($sg),*> $crate::system::System for [<Cell $system>]<$($sg),*> {
+            impl<$($sg_impl)*> $crate::system::System for [<Cell $system>]<$($sg),*> {
                 fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
                     let mut read_ids = Vec::new();
                     let mut write_ids = Vec::new();
@@ -237,14 +239,11 @@ macro_rules! impl_system {
                         Ok(r) => r,
                         Err(_) => std::panic!("downcast err".to_string()),
                     };
-
                     let mut listen_arr: Vec<(usize, usize)> = Vec::new();
                     //listen setup
                     impl_system!(@listener_setup listen_arr world me $system <$($sg),*>, $($t)*);
-
                     //runner setup
                     impl_system!(@runner_setup self world me $system <$($sg),*>, $has_runner);
-
                     //dispose
                     self.dispose_listener_fn = Some($crate::monitor::FnListener(std::sync::Arc::new(move |world: &$crate::world::World| {
                         impl_system!(@listener_dispose 0; listen_arr world me $system <$($sg),*>, $($t)*);

@@ -16,6 +16,10 @@ impl Default for LayerDirty {
     }
 }
 impl LayerDirty {
+    // 数量
+    pub fn count(&self) -> usize {
+        self.count
+    }
     // 设置节点脏
     pub fn mark(&mut self, id: usize, layer: usize) {
         self.count += 1;
@@ -42,14 +46,18 @@ impl LayerDirty {
     }
     // 迭代方法
     pub fn iter(&self) -> DirtyIterator {
-        DirtyIterator {
-            inner: self,
-            layer: self.start + 1,
-            iter: if self.count == 0 {
-                self.dirtys[0].iter()
-            } else {
-                self.dirtys[self.start].iter()
-            },
+        if self.count == 0 {
+            DirtyIterator {
+                inner: self,
+                layer: self.start,
+                iter: self.dirtys[0].iter(),
+            }
+        } else {
+             DirtyIterator {
+                inner: self,
+                layer: self.start + 1,
+                iter: self.dirtys[self.start].iter(),
+            }
         }
     }
     pub fn clear(&mut self) {
