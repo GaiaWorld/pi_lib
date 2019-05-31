@@ -1,4 +1,5 @@
 use std::panic;
+use std::thread;
 use std::thread::park_timeout;
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, Condvar};
@@ -294,7 +295,7 @@ fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) 
                 }
             },
         };
-        println!("!!!> {} Run Error, time: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, task, reason);
+        println!("!!!> {} Run Error, time: {:?}, thread: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task, reason);
     } else {
         //执行任务成功
         let elapsed = time.elapsed();
@@ -303,7 +304,7 @@ fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) 
             worker.slow_counter.sum(1);
             worker.slow_timer.timing(time);
 
-            println!("===> Slow {}, time: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, task);
+            println!("===> Slow {}, time: {:?}, thread: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task);
         }
     }
 }
