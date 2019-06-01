@@ -245,12 +245,10 @@ impl Worker {
                 }
                 wake = w;
             }
-            let now = Instant::now();
             //获取任务
             if let Some(t) = tasks.pop() {
                 //有任务
                 base_task = t;
-                println!("===> Work Get Task, time: {:?}, task: {:?}", Instant::now() - now, task);
             } else {
                 //没有任务，则重置唤醒状态，立即解锁，并处理控制状态
                 *wake = false;
