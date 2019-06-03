@@ -107,7 +107,9 @@ impl GetView for [u8] {
 	}
 
 	fn get_lu16(&self, offset: usize) -> u16{
-		unsafe { u16::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u16)) }
+		let r: (u8, u8) = (self[offset], self[offset + 1]);
+		u16::from_le(unsafe {transmute(r)})
+		// unsafe { u16::from_le(*(self.as_ptr().wrapping_offset(offset as isize) as *const u16)) }
 	}
 
 	fn get_lu32(&self, offset: usize) -> u32{
