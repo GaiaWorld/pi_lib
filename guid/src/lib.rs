@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use time::{run_nanos, start_secs};
 
 // 全局唯一ID
-#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Guid(pub u128);
 
 impl Guid {
