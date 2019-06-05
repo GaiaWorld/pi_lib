@@ -5,8 +5,8 @@ use std::{
     intrinsics::type_name,
 };
 
-
-use im::hashmap::HashMap;
+use fnv::FnvHashMap;
+// use im::hashmap::HashMap;
 
 use atom::Atom;
 use pointer::cell::{TrustCell};
@@ -20,11 +20,11 @@ use { Share, LendMut};
 
 #[derive(Default, Clone)]
 pub struct World {
-    entity: HashMap<TypeId, Arc<Entity>>,
-    single: HashMap<TypeId, Arc<SingleCase>>,
-    multi: HashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: HashMap<Atom, Arc<System>>,
-    runner: HashMap<Atom, Arc<Dispatcher>>,
+    entity: FnvHashMap<TypeId, Arc<Entity>>,
+    single: FnvHashMap<TypeId, Arc<SingleCase>>,
+    multi: FnvHashMap<(TypeId, TypeId), Arc<MultiCase>>,
+    system: FnvHashMap<Atom, Arc<System>>,
+    runner: FnvHashMap<Atom, Arc<Dispatcher>>,
 }
 
 impl World {

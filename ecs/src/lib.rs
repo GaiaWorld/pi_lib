@@ -10,7 +10,7 @@ extern crate pointer;
 #[macro_use]
 extern crate any;
 
-extern crate im;
+// extern crate im;
 pub extern crate paste;
 
 pub mod world;

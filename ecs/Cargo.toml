@@ -13,7 +13,7 @@ listener = {path="../listener"}
 paste = "0.1"
 lazy_static = "*"
 fnv = "*"
-im = "*"
+# im = "*"
 
 [[example]]
 name = "expanded"
