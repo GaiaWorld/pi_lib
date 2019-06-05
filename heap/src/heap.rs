@@ -75,18 +75,18 @@ impl<T: Ord> Heap<T> {
 	//上朔， 使用时应该保证cur不会溢出
 	#[inline]
 	fn up< F:UintFactory>(&mut self, mut cur: usize, index_factory: &mut F){
-		if cur > 1{
+		if cur >= 1{
 			let arr = &mut self.0;
 			let mut parent = (cur - 1) >> 1;
-			if arr[cur].0.cmp(&arr[parent].0) != self.1 { return; }
+			if arr[cur].0.cmp(&arr[parent].0) != self.1 { return;}
 			let elem: (T, usize) = unsafe{ transmute_copy(&arr[cur])};
 			// 往上迭代
 			loop {
 				index_factory.store(arr[parent].1, cur);
 				let src = arr.as_mut_ptr();
 				unsafe{src.wrapping_offset(parent as isize).copy_to(src.wrapping_offset(cur as isize), 1)};
-				if parent == 0 { break; }
 				cur = parent;
+				if parent == 0 { break; }
 				parent = (cur - 1) >> 1;
 				if elem.0.cmp(&arr[parent].0) != self.1 { break; }
 			}

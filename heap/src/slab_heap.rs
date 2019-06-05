@@ -162,23 +162,23 @@ fn test(){
 }
 
 
-#[cfg(test)]
-use time::now_millis;
+// #[cfg(test)]
+// use time::now_millis;
 
-#[test]
-fn test_effic(){
-	let mut max_heap: SlabHeap<u32> = SlabHeap::new(Ordering::Greater);
+// #[test]
+// fn test_effic(){
+// 	let mut max_heap: SlabHeap<u32> = SlabHeap::new(Ordering::Greater);
 
-	let now = now_millis();
-	for i in 0..100000{
-		max_heap.push(i);
-	}
-	println!("push max_heap time{}",  now_millis() - now);
+// 	let now = now_millis();
+// 	for i in 0..100000{
+// 		max_heap.push(i);
+// 	}
+// 	println!("push max_heap time{}",  now_millis() - now);
 	
-	let mut min_heap: SlabHeap<u32> = SlabHeap::new(Ordering::Less);
-	let now = now_millis();
-	for i in 0..100000{
-		min_heap.push(i);
-	}
-	println!("push max_heap time{}",  now_millis() - now);
-}
+// 	let mut min_heap: SlabHeap<u32> = SlabHeap::new(Ordering::Less);
+// 	let now = now_millis();
+// 	for i in 0..100000{
+// 		min_heap.push(i);
+// 	}
+// 	println!("push max_heap time{}",  now_millis() - now);
+// }

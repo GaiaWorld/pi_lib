@@ -126,3 +126,25 @@ fn test(){
     assert_eq!(min_heap.pop().unwrap(), 90);
     assert_eq!(min_heap.pop().unwrap(), 100);
 }
+
+#[cfg(test)]
+#[derive(PartialEq, PartialOrd, Debug, Eq, Ord)]
+struct AA(isize, usize);
+
+#[test]
+fn test1(){
+	let mut min_heap: SimpleHeap<AA> = SimpleHeap::new(Ordering::Less);
+
+    min_heap.push(AA(3, 2));
+
+    println!("{:?}", min_heap);
+    min_heap.push(AA(2, 3));
+    println!("{:?}", min_heap);
+    min_heap.push(AA(1, 6));
+    println!("{:?}", min_heap);
+    // min_heap.push(AA(5, 8));
+    // min_heap.push(AA(10, 9));
+    // min_heap.push(AA(15, 20));
+
+    println!("{:?}, {:?}, {:?}", min_heap.pop(), min_heap.pop(), min_heap.pop());
+}
