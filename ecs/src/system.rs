@@ -50,7 +50,7 @@ pub type RunnerFn = FnListener<()>;
 pub type DisposeFn = FnListener<World>;
 
 pub trait System: any::ArcAny { 
-    fn setup(&mut self, me: Arc<System>, world: &World);
+    fn setup(&mut self, me: Arc<dyn System>, world: &World);
     fn dispose(&self, world: &World);
     fn fetch_run(&self) -> Option<RunnerFn>;
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);

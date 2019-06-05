@@ -20,7 +20,7 @@ use Share;
 
 pub trait Entity: Notify + ArcAny {
     fn get_mask(&self) -> usize;
-    fn register_component(&mut self, component: Arc<MultiCase>);
+    fn register_component(&mut self, component: Arc<dyn MultiCase>);
     fn create(&mut self) -> usize;
     fn delete(&mut self, id: usize);
 }
@@ -60,7 +60,7 @@ impl<T: Share> Entity for CellEntity<T> {
     fn get_mask(&self) -> usize {
         self.borrow().get_mask()
     }
-    fn register_component(&mut self, component: Arc<MultiCase>) {
+    fn register_component(&mut self, component: Arc<dyn MultiCase>) {
         self.borrow_mut().register_component(component)
     }
     fn create(&mut self) -> usize {
@@ -75,7 +75,7 @@ impl<T: Share> Entity for CellEntity<T> {
 
 pub struct EntityImpl<T>{
     slab: Slab<u64>, // 值usize 记录每个id所关联的component的掩码位
-    components: Vec<Arc<MultiCase>>, // 组件
+    components: Vec<Arc<dyn MultiCase>>, // 组件
     notify: NotifyImpl,
     marker: PhantomData<T>,
 }
@@ -91,7 +91,7 @@ impl<T> EntityImpl<T> {
     pub fn get_mask(&self) -> usize {
         self.components.len()
     }
-    pub fn register_component(&mut self, component: Arc<MultiCase>) {
+    pub fn register_component(&mut self, component: Arc<dyn MultiCase>) {
         if self.components.len() >= size_of::<u64>()<<3 {
             panic!("components overflow")
         }

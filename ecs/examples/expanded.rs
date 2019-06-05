@@ -68,19 +68,19 @@ pub struct CellSystemDemo{
 }
 
 impl System for CellSystemDemo {
-    fn setup(&mut self, me: Arc<System>, world: &World){
+    fn setup(&mut self, me: Arc<dyn System>, world: &World){
         let me: Arc<Self> = match me.downcast() {
             Ok(r) => r,
             Err(_) => panic!("downcast err".to_string()),
         };
         //listen
         let (f1,) = ({
-            let me = me.clone();
+            // let me = me.clone();
             let read = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::ReadData as SystemData>::FetchTarget::fetch(world);
             let write = <<SystemDemo as MultiCaseListener<'_, Node, Position, CreateEvent>>::WriteData as SystemMutData>::FetchTarget::fetch(world);
-            let f = FnListener(Arc::new( move |e: &CreateEvent| {
-                let read_data = read.borrow();
-                let write_data = write.borrow_mut();
+            let f = FnListener(Arc::new( move |_e: &CreateEvent| {
+                let _read_data = read.borrow();
+                let _write_data = write.borrow_mut();
                 // <MultiCaseListener<'_, Node, Position, DeleteEvent>>::listen(&mut *me.owner.borrow_mut(), e, read_data, write_data);
                 // me.owner.borrow_mut().listen(e, read_data, write_data);
             }));

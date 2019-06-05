@@ -1,11 +1,3 @@
-
-use std::{
-    any::TypeId,
-    collections::hash_map::Entry,
-};
-
-use fnv::{FnvHashMap};
-
 use atom::Atom;
 use listener::{FnListeners, Listener};
 
@@ -30,7 +22,7 @@ impl Dispatcher for SeqDispatcher {
         }
         self.init(v, world);
     }
-    fn init(&mut self, mut names: Vec<Atom>, world: &World) {
+    fn init(&mut self, names: Vec<Atom>, world: &World) {
         // 简单实现
         for k in names.iter() {
             let sys = match world.get_system(&k) {

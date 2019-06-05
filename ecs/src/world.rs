@@ -20,11 +20,11 @@ use { Share, LendMut};
 
 #[derive(Default, Clone)]
 pub struct World {
-    entity: FnvHashMap<TypeId, Arc<Entity>>,
-    single: FnvHashMap<TypeId, Arc<SingleCase>>,
-    multi: FnvHashMap<(TypeId, TypeId), Arc<MultiCase>>,
-    system: FnvHashMap<Atom, Arc<System>>,
-    runner: FnvHashMap<Atom, Arc<Dispatcher>>,
+    entity: FnvHashMap<TypeId, Arc<dyn Entity>>,
+    single: FnvHashMap<TypeId, Arc<dyn SingleCase>>,
+    multi: FnvHashMap<(TypeId, TypeId), Arc<dyn MultiCase>>,
+    system: FnvHashMap<Atom, Arc<dyn System>>,
+    runner: FnvHashMap<Atom, Arc<dyn Dispatcher>>,
 }
 
 impl World {
@@ -75,7 +75,7 @@ impl World {
         System::setup(unsafe{&mut *ptr}, tc, self);
         self.system.insert(name, unsafe{ Arc::from_raw(ptr)});
     }
-    pub fn get_system(&self, name: &Atom) -> Option<&Arc<System>> {
+    pub fn get_system(&self, name: &Atom) -> Option<&Arc<dyn System>> {
         self.system.get(name)
     }
     pub fn unregister_system(&mut self, name: &Atom) {
@@ -115,10 +115,10 @@ impl World {
     pub fn add_dispatcher<D: Dispatcher + 'static>(&mut self, name: Atom, dispatcher: D) {
         self.runner.insert(name, Arc::new(dispatcher));
     }
-    pub fn get_dispatcher(&self, name: &Atom) -> Option<&Arc<Dispatcher>> {
+    pub fn get_dispatcher(&self, name: &Atom) -> Option<&Arc<dyn Dispatcher>> {
         self.runner.get(name)
     }
-    pub fn remove_dispatcher(&mut self, name: &Atom) -> Option<Arc<Dispatcher>> {
+    pub fn remove_dispatcher(&mut self, name: &Atom) -> Option<Arc<dyn Dispatcher>> {
         self.runner.remove(name)
     }
     pub fn fetch_entity<T: Share>(&self) -> Option<Arc<CellEntity<T>>> {
