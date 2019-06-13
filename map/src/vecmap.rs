@@ -2,7 +2,7 @@
 use std::mem::{replace};
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ops::{Index, IndexMut};
-// use std::iter::IntoIterator;
+use std::slice::Iter;
 // use std::ops::Drop;
 // use std::ptr::write;
 
@@ -70,15 +70,9 @@ impl<T> VecMap<T> {
         self.len == 0
     }
 
-    // pub fn iter(&self) -> SlabIter<T> {
-    //     SlabIter {
-    //         entries: &self.entries,
-    //         signs: &self.vacancy_sign,
-    //         curr_index: 0,
-    //         len: self.len,
-    //         curr_len: 0,
-    //     }
-    // }
+    pub fn iter(&self) -> Iter<Option<T>> {
+        self.entries.iter()
+    }
 
     // pub fn iter_mut(&mut self) -> SlabIterMut<T> {
     //     SlabIterMut {
