@@ -117,11 +117,13 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         }
         r
     }
+    
     pub fn delete(&mut self, id: usize) {
         self.entity.borrow_mut().un_mark(id, self.bit_index);
         self.notify.delete_event(id);
         self.map.remove(&id);
     }
+
     fn remove(&mut self, id: usize) -> DeleteListeners {
         self.map.remove(&id);
         self.notify.delete.clone()

@@ -8,7 +8,7 @@ use std::{
 
 pub use any::ArcAny;
 use pointer::cell::TrustCell;
-use slab::Slab;
+use slab::{Slab, SlabIter};
 
 
 use {Fetch, Lend, LendMut, TypeIds, World};
@@ -127,6 +127,22 @@ impl<T> EntityImpl<T> {
         self.notify.delete_event(id);
     }
 
+    pub fn iter(&self) -> EntityIter {
+        EntityIter(self.slab.iter())
+    }
+}
+
+pub struct EntityIter<'a>(SlabIter<'a, u64>);
+
+impl<'a> Iterator for EntityIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        match self.0.next() {
+            Some(r) => Some(r.0),
+            None => None,
+        }
+    }
 }
 
 impl<'a, T: Share> SystemData<'a> for &'a EntityImpl<T> {
