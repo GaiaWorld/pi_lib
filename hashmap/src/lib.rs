@@ -6,8 +6,7 @@ use std::hash::Hash;
 use map::Map;
 use fnv::{FnvHashMap};
 
-
-pub struct HashMap<K, V>(FnvHashMap<K, V>);
+pub struct HashMap<K: Eq + Hash, V>(FnvHashMap<K, V>);
 
 impl<K: Hash + Eq, V> Map for HashMap<K, V>{
     type Key = K;
@@ -56,5 +55,11 @@ impl<K: Hash + Eq, V> Map for HashMap<K, V>{
     #[inline]
     fn remove(&mut self, key: &Self::Key) -> Option<Self::Val> {
         self.0.remove(key)
+    }
+}
+
+impl<K: Hash + Eq, V> Default for HashMap<K, V> {
+    fn default() -> Self{
+        HashMap(FnvHashMap::default())
     }
 }

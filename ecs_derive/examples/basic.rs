@@ -1,10 +1,12 @@
 extern crate ecs;
 extern crate map;
+extern crate hashmap;
 #[macro_use]
 extern crate ecs_derive;
 
 use ecs::component::{ Component};
 use map::vecmap::VecMap;
+use hashmap::HashMap;
 
 #[derive(Component)]
 pub struct Position{
