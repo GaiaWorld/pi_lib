@@ -30,11 +30,12 @@ pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
 
 impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
-        let delete = self.borrow_mut().remove(id);
+        let notify = self.borrow_mut().notify.delete.clone();
         let e = DeleteEvent{
             id: id,
         };
-        delete.listen(&e);
+        notify.listen(&e);
+        self.borrow_mut().map.remove(&id);
     }
 }
 impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
