@@ -13,6 +13,8 @@ extern crate any;
 // extern crate im;
 pub extern crate paste;
 
+pub extern crate time;
+
 pub mod world;
 #[macro_use]
 pub mod system;

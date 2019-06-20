@@ -1,9 +1,9 @@
 #[ macro_export ] 
 macro_rules! debug_println {
-    ($($ arg: tt)*)=>(if cfg!(debug_assertions){ println!($($ arg)*);})
+    ($($ arg: tt)*)=>(if cfg!(feature = "print"){ println!($($ arg)*);})
 }
 
 #[ macro_export ] 
 macro_rules! debug_print {
-    ($($ arg: tt)*)=>(if cfg!(debug_assertions){ print!($($ arg)*);})
+    ($($ arg: tt)*)=>(if cfg!(feature = "print"){ print!($($ arg)*);})
 }
