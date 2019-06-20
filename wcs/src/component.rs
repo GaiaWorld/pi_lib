@@ -47,7 +47,7 @@ impl<T: Sized, E, C: ComponentMgr> Handlers<T, E, C> {
                 Some(h) => {
                     h.handle(&event, mgr);
                 },
-                None => println!("handler has been lost"),
+                None => (),
             }
         }
     }

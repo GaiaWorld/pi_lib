@@ -25,6 +25,21 @@ impl IdTree {
     pub fn insert_child(&mut self, id: usize, parent: usize, mut index: usize, notify: Option<&NotifyImpl>) {
       if parent > 0 {
           let (layer, prev, next) = match self.map.get(parent) {
+            Some(n) if index >= n.children.len => {
+              (if n.layer > 0 {n.layer + 1}else{0}, n.children.tail, 0)
+            },
+            Some(n) if index + index >= n.children.len => {
+              let mut prev = n.children.tail;
+              let mut next = 0;
+              index = n.children.len - index;
+              while index > 0 && prev > 0 {
+                index -= 1;
+                next = prev;
+                let node = unsafe { self.map.get_unchecked(next) };
+                prev = node.prev;
+              }
+              (if n.layer > 0 {n.layer + 1}else{0}, prev, next)
+            },
             Some(n) => {
               let mut prev = 0;
               let mut next = n.children.head;
@@ -209,6 +224,9 @@ impl IdTree {
         if prev == 0 {
           node.children.head = id;
         }
+        if next == 0 {
+          node.children.tail = id;
+        }
         node.children.len += 1;
         node.count += count;
         node.parent
@@ -289,6 +307,9 @@ impl IdTree {
         if prev == 0 {
           node.children.head = next;
         }
+        if next == 0 {
+          node.children.tail = prev;
+        }
         node.children.len -= 1;
         node.count -= count;
         node.parent
@@ -311,6 +332,7 @@ pub struct Node {
 #[derive(Debug, Clone, Default)]
 pub struct NodeList {
   pub head: usize,
+  pub tail: usize,
   pub len: usize,
 }
 
