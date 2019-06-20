@@ -45,7 +45,7 @@ impl<C: ComponentMgr, E> World<C, E> {
         let system_group = match self.system_groups.get(name) {
             Some(v) => v,
             None => {
-                println!("run systems fail, it's bot exist, system_group_name: {}", name.as_ref());
+                // println!("run systems fail, it's bot exist, system_group_name: {}", name.as_ref());
                 return;
             },
         };

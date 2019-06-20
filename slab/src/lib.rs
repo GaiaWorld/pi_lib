@@ -29,6 +29,16 @@ impl<T> Default for Slab<T> {
         Slab::new()
     }
 }
+impl<T: Clone> Clone for Slab<T> {
+    fn clone(&self) -> Self {
+        Slab {
+            entries: self.entries.to_vec(),
+            vacancy_sign: self.vacancy_sign.to_vec(),
+            len: self.len,
+            next: self.next,
+        }
+    }
+}
 
 impl<T> Slab<T> {
 

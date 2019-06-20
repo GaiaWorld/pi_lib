@@ -18,7 +18,14 @@ impl<T> Default for VecMap<T> {
         VecMap::new()
     }
 }
-
+impl<T: Clone> Clone for VecMap<T> {
+    fn clone(&self) -> Self {
+        VecMap {
+            entries: self.entries.to_vec(),
+            len: self.len,
+        }
+    }
+}
 impl<T> VecMap<T> {
 
     pub fn new() -> Self {
