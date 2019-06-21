@@ -178,11 +178,11 @@ macro_rules! impl_system {
             $s.borrow_mut1().setup(read_data, write_data);
         }
         $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
-            let time = time::now_microsecond();
+            // let time = time::now_microsecond();
             let read_data = $crate::Lend::lend(&read);
             let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
-            std::println!("run------{}", time::now_microsecond() - time);
+            // std::println!("run------{}", time::now_microsecond() - time);
         })))
     };
     (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
