@@ -116,7 +116,7 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
                 self.notify.create_event(id);
             },
         }
-        r
+        None
     }
     
     pub fn delete(&mut self, id: usize) {
@@ -125,10 +125,10 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         self.map.remove(&id);
     }
 
-    fn remove(&mut self, id: usize) -> DeleteListeners {
-        self.map.remove(&id);
-        self.notify.delete.clone()
-    }
+    // fn remove(&mut self, id: usize) -> DeleteListeners {
+    //     self.map.remove(&id);
+    //     self.notify.delete.clone()
+    // }
 }
 
 impl<'a, E: Share, C: Component> SystemData<'a> for &'a MultiCaseImpl<E, C> {
@@ -154,6 +154,16 @@ impl<E: Share, C: Component> TypeIds for ShareMultiCase<E, C> {
 
 impl<'a, E: Share, C: Component> Lend<'a> for ShareMultiCase<E, C> {
     type Target = &'a MultiCaseImpl<E, C>;
+    type Target1 = usize;
+
+    fn lend1(&'a self) -> Self::Target1 {
+        &*self.deref().borrow() as *const MultiCaseImpl<E, C> as usize
+    }
+
+    fn lend2(&'a self, ptr: &Self::Target1) -> Self::Target {
+        unsafe { &* (*ptr as  *const MultiCaseImpl<E, C>) }
+    }
+
     fn lend(&'a self) -> Self::Target {
         unsafe {&* (&* self.deref().borrow() as *const MultiCaseImpl<E, C>)}
     }
@@ -161,6 +171,16 @@ impl<'a, E: Share, C: Component> Lend<'a> for ShareMultiCase<E, C> {
 
 impl<'a, E: Share, C: Component> LendMut<'a> for ShareMultiCase<E, C> {
     type Target = &'a mut MultiCaseImpl<E, C>;
+    type Target1 = usize;
+
+    fn lend_mut1(&'a self) -> Self::Target1 {
+        &mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C> as usize
+    }
+
+    fn lend_mut2(&'a self, ptr: &Self::Target1) -> Self::Target {
+        unsafe { &mut * (*ptr as  *mut MultiCaseImpl<E, C>) }
+    }
+
     fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>)}
     }

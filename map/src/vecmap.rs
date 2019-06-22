@@ -357,11 +357,41 @@ impl<T> Debug for VecMap<T> where T: Debug {
 //     }
 // }
 
-
 #[cfg(test)]
 extern crate time;
-// #[cfg(test)]
-// use time::now_millis;
+#[cfg(test)]
+use time::now_microsecond;
+#[cfg(test)]
+use std::time::Instant;
+#[test]
+fn test_time(){
+    let mut map: VecMap<[f32; 16]> = VecMap::new();
+    map.entries = Vec::with_capacity(0);
+
+    let mut arr = Vec::with_capacity(100000);
+    let time = Instant::now();
+    for i in 0..10000 {
+        arr.push(Some([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]));
+    }
+    println!("insert vec time: {:?}", Instant::now() - time);
+
+    let time = Instant::now();
+    for i in 1..10001 {
+        map.insert(i, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]);
+    }
+    println!("insert vecmap time: {:?}", Instant::now() - time);
+
+
+    let mut map: VecMap<f32> = VecMap::new();
+    map.entries = Vec::with_capacity(100000);
+
+    let time = Instant::now();
+    for i in 1..10001 {
+        map.insert(i, 1.0);
+    }
+    println!("insert vecmap time: {:?}", Instant::now() - time);
+
+}
 #[test]
 fn test(){
     let mut map: VecMap<u64> = VecMap::new();

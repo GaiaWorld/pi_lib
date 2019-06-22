@@ -168,6 +168,16 @@ impl<T: Share> TypeIds for ShareEntity<T> {
 
 impl<'a, T: Share> Lend<'a> for ShareEntity<T> {
     type Target = &'a EntityImpl<T>;
+    type Target1 = usize;
+
+    fn lend1(&'a self) -> Self::Target1 {
+        &*self.deref().borrow() as *const EntityImpl<T> as usize
+    }
+
+    fn lend2(&'a self, ptr: &usize) -> Self::Target {
+        unsafe { &* (*ptr as  *const EntityImpl<T>) }
+    }
+
     fn lend(&'a self) -> Self::Target {
         unsafe {&* (&*self.deref().borrow() as *const EntityImpl<T>)}
     }
@@ -175,6 +185,16 @@ impl<'a, T: Share> Lend<'a> for ShareEntity<T> {
 
 impl<'a, T: Share> LendMut<'a> for ShareEntity<T> {
     type Target = &'a mut EntityImpl<T>;
+    type Target1 = usize;
+
+    fn lend_mut1(&'a self) -> Self::Target1 {
+        &mut *self.deref().borrow_mut() as *mut  EntityImpl<T> as usize
+    }
+
+    fn lend_mut2(&'a self, ptr: &usize) -> Self::Target {
+        unsafe { &mut * (*ptr as  *mut  EntityImpl<T>) }
+    }
+
     fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut EntityImpl<T>)}
     }

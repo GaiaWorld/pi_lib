@@ -108,6 +108,16 @@ impl<T: Share> TypeIds for ShareSingleCase<T> {
 
 impl<'a, T: Share> Lend<'a> for ShareSingleCase<T> {
     type Target = &'a SingleCaseImpl<T>;
+    type Target1 = usize;
+
+    fn lend1(&'a self) -> Self::Target1 {
+        &*self.deref().borrow() as *const SingleCaseImpl<T> as usize
+    }
+
+    fn lend2(&'a self, ptr: &usize) -> Self::Target {
+        unsafe { &* (*ptr as  *const SingleCaseImpl<T>) }
+    }
+
     fn lend(&'a self) -> Self::Target {
         unsafe {&* (&* self.deref().borrow() as *const SingleCaseImpl<T>)}
     }
@@ -116,6 +126,16 @@ impl<'a, T: Share> Lend<'a> for ShareSingleCase<T> {
 
 impl<'a, T: Share> LendMut<'a> for ShareSingleCase<T> {
     type Target = &'a mut SingleCaseImpl<T>;
+    type Target1 = usize;
+
+    fn lend_mut1(&'a self) -> Self::Target1 {
+        &mut *self.deref().borrow_mut() as *mut SingleCaseImpl<T> as usize
+    }
+
+    fn lend_mut2(&'a self, ptr: &usize) -> Self::Target {
+        unsafe { &mut * (*ptr as  *mut SingleCaseImpl<T>) }
+    }
+
     fn lend_mut(&'a self) -> Self::Target {
         unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut SingleCaseImpl<T>)}
     }

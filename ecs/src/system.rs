@@ -127,10 +127,13 @@ macro_rules! impl_system {
         let me1 = $me.clone();
         let read = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen$(<$($g),*>)*),* >>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
         let write = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen$(<$($g),*>)*),* >>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::Fetch>::fetch($world);
+        let read_data = $crate::Lend::lend1(&read);
+        let write_data = $crate::LendMut::lend_mut1(&write);
         let f = $crate::monitor::FnListener(std::sync::Arc::new( move |e| {
-            
-            let read_data = $crate::Lend::lend(&read);
-            let write_data = $crate::LendMut::lend_mut(&write);
+            let read_data = $crate::Lend::lend2(&read, &read_data);
+            let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
+            // let read_data = $crate::Lend::lend(&read);
+            // let write_data = $crate::LendMut::lend_mut(&write);
             impl_system!(@call_listen $system <$($sg),*>, e, me1, read_data, write_data, $sign, $($gen$(<$($g),*>)*),* );
         }));
         impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen$(<$($g),*>)*),* );
@@ -172,17 +175,19 @@ macro_rules! impl_system {
     (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, true) => {
         let read = <<<$system <$($sg),*> as $crate::system::Runner>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
         let write = <<<$system <$($sg),*> as $crate::system::Runner>::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::Fetch>::fetch($world);
+        let read_data = $crate::Lend::lend1(&read);
+        let write_data = $crate::LendMut::lend_mut1(&write);
         {
-            let read_data = $crate::Lend::lend(&read);
-            let write_data = $crate::LendMut::lend_mut(&write);
+            let read_data = $crate::Lend::lend2(&read, &read_data);
+            let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             $s.borrow_mut1().setup(read_data, write_data);
         }
         $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
-            // let time = time::now_microsecond();
-            let read_data = $crate::Lend::lend(&read);
-            let write_data = $crate::LendMut::lend_mut(&write);
+            // let time = std::time::Instant::now();
+            let read_data = $crate::Lend::lend2(&read, &read_data);
+            let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             $me.borrow_mut1().run(read_data, write_data);
-            // std::println!("run------{}", time::now_microsecond() - time);
+            // std::println!("run------{:?}", std::time::Instant::now() - time);
         })))
     };
     (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
