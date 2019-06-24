@@ -15,6 +15,7 @@ pub extern crate paste;
 
 pub extern crate time;
 
+pub mod cell;
 pub mod world;
 #[macro_use]
 pub mod system;
@@ -28,8 +29,9 @@ pub mod idtree;
 
 pub use world::World;
 pub use system::{Runner, SingleCaseListener, MultiCaseListener, EntityListener, System};
-pub use component::{Component, MultiCaseImpl};
-pub use single::{SingleCaseImpl};
+pub use component::{Component, MultiCaseImpl, CellMultiCase};
+pub use single::{SingleCaseImpl, CellSingleCase};
+pub use entity::{EntityImpl, CellEntity};
 pub use monitor::{CreateEvent, ModifyEvent, DeleteEvent, Write};
 pub use dispatch::{SeqDispatcher, Dispatcher};
 

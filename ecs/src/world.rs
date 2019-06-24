@@ -9,7 +9,7 @@ use fnv::FnvHashMap;
 // use im::hashmap::HashMap;
 
 use atom::Atom;
-use pointer::cell::{TrustCell};
+// use pointer::cell::{TrustCell};
 
 use system::{System};
 use entity::{Entity, EntityImpl, CellEntity};
@@ -17,6 +17,7 @@ use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use single::{SingleCase, CellSingleCase, SingleCaseImpl};
 use dispatch::Dispatcher;
 use { Share, LendMut};
+use cell::StdCell;
 
 #[derive(Default, Clone)]
 pub struct World {
@@ -30,7 +31,7 @@ pub struct World {
 impl World {
     pub fn register_entity<E: Share>(&mut self) {
         let id = TypeId::of::<E>();
-        match self.entity.insert(id, Arc::new(TrustCell::new(EntityImpl::<E>::new()))) {
+        match self.entity.insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new()))) {
             Some(_) => panic!("duplicate registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
             _ => ()
         }

@@ -5,19 +5,20 @@ use std::{
 };
 
 use any::ArcAny;
-use pointer::cell::{TrustCell};
+// use pointer::cell::{StdCell};
 
 
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
 use {Fetch, Lend, LendMut, TypeIds, World};
 use Share;
+use cell::StdCell;
 
 pub trait SingleCase: Notify + ArcAny {
 }
 impl_downcast_arc!(SingleCase);
 
-pub type CellSingleCase<T> = TrustCell<SingleCaseImpl<T>>;
+pub type CellSingleCase<T> = StdCell<SingleCaseImpl<T>>;
 
 impl<T: Share> SingleCase for CellSingleCase<T> {}
 
@@ -71,8 +72,8 @@ impl<T: Share> DerefMut for SingleCaseImpl<T> {
 }
 
 impl<T: Share> SingleCaseImpl<T> {
-    pub fn new(value: T) -> TrustCell<Self>{
-        TrustCell::new(SingleCaseImpl{
+    pub fn new(value: T) -> StdCell<Self>{
+        StdCell::new(SingleCaseImpl{
             value,
             notify: NotifyImpl::default(),
         })

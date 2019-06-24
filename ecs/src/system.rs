@@ -180,12 +180,16 @@ macro_rules! impl_system {
         {
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
+            // let read_data = $crate::Lend::lend(&read);
+            // let write_data = $crate::LendMut::lend_mut(&write);
             $s.borrow_mut1().setup(read_data, write_data);
         }
         $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
-            // let time = std::time::Instant::now();
+            let time = std::time::Instant::now();
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
+            // let read_data = $crate::Lend::lend(&read);
+            // let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
             // std::println!("run------{:?}", std::time::Instant::now() - time);
         })))

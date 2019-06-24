@@ -7,7 +7,7 @@ use std::{
 };
 
 use any::ArcAny;
-use pointer::cell::{TrustCell};
+// use pointer::cell::{TrustCell};
 use map::{Map};
 use listener::Listener;
 
@@ -16,6 +16,7 @@ use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteLis
 use entity::CellEntity;
 use {Fetch, Lend, LendMut, TypeIds, World};
 use Share;
+use cell::StdCell;
 
 pub trait Component: Sized + Share {
     type Storage: Map<Key=usize, Val=Self> + Default + Share;
@@ -26,7 +27,7 @@ pub trait MultiCase: Notify + ArcAny {
 }
 impl_downcast_arc!(MultiCase);
 
-pub type CellMultiCase<E, C> = TrustCell<MultiCaseImpl<E, C>>;
+pub type CellMultiCase<E, C> = StdCell<MultiCaseImpl<E, C>>;
 
 impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
@@ -77,8 +78,8 @@ pub struct MultiCaseImpl<E: Share, C: Component> {
 }
 
 impl<E: Share, C: Component> MultiCaseImpl<E, C> {
-    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> TrustCell<Self>{
-        TrustCell::new(MultiCaseImpl{
+    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> StdCell<Self>{
+        StdCell::new(MultiCaseImpl{
             map: C::Storage::default(),
             notify: NotifyImpl::default(),
             entity: entity,

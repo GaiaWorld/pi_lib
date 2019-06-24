@@ -7,7 +7,7 @@ use std::{
 };
 
 pub use any::ArcAny;
-use pointer::cell::TrustCell;
+// use pointer::cell::StdCell;
 use slab::{Slab, SlabIter};
 
 
@@ -16,6 +16,7 @@ use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use component::MultiCase;
 use Share;
+use cell::StdCell;
 
 
 pub trait Entity: Notify + ArcAny {
@@ -26,7 +27,7 @@ pub trait Entity: Notify + ArcAny {
 }
 impl_downcast_arc!(Entity);
 
-pub type CellEntity<T> = TrustCell<EntityImpl<T>>;
+pub type CellEntity<T> = StdCell<EntityImpl<T>>;
 impl<T: Share> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
