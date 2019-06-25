@@ -126,6 +126,10 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
         self.map.remove(&id);
     }
 
+    pub fn get_notify(&self) -> NotifyImpl{
+        self.notify.clone()
+    }
+
     // fn remove(&mut self, id: usize) -> DeleteListeners {
     //     self.map.remove(&id);
     //     self.notify.delete.clone()

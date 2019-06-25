@@ -39,5 +39,5 @@ members = [
   "dirty",
   "compress",
   "hashmap",
-  "print_info",
+  "share",
 ]
