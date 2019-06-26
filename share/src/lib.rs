@@ -1,8 +1,8 @@
-#[cfg(feature = "rc")]
+#[cfg(not(feature = "arc"))]
 use std::rc::{Rc, Weak};
-#[cfg(feature = "rc")]
+#[cfg(not(feature = "arc"))]
 pub type Share<T> = Rc<T>;
-#[cfg(feature = "rc")]
+#[cfg(not(feature = "arc"))]
 pub type ShareWeak<T> = Weak<T>;
 
 #[cfg(feature = "arc")]
