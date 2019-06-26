@@ -137,21 +137,46 @@ impl<'a> ToTokens for SetGetFuncsImpl<'a> {
                             let field_name_str = field_name.clone().to_string();
                             let set_name = ident(&("set_".to_string() + field_name.clone().to_string().as_str()));
                             let ty = &field.ty;
-                            // set field
-                            if self.1 {
-                                tokens.extend(quote! {
-                                    fn #set_name(&mut self, value: #ty) {
-                                        (self.value.0).#field_name = value; // TODO?
-                                        self.notify.modify_event(self.id, #field_name_str, 0);
-                                    } 
-                                });
-                            }else {
-                                tokens.extend(quote! {
-                                    fn #set_name(&mut self, value: #ty) {
-                                        self.value.#field_name = value; // TODO?
-                                        self.notify.modify_event(self.id, #field_name_str, 0);
-                                    } 
-                                });
+                            if is_base_type(ty) {
+                                // set field
+                                if self.1 {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            if value == (self.value.0).#field_name {
+                                                return;
+                                            }
+                                            (self.value.0).#field_name = value;
+                                            self.notify.modify_event(self.id, #field_name_str, 0);
+                                        } 
+                                    });
+                                }else {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            if value == self.value.#field_name {
+                                                return;
+                                            }
+                                            self.value.#field_name = value;
+                                            self.notify.modify_event(self.id, #field_name_str, 0);
+                                        } 
+                                    });
+                                }
+                            } else {
+                                // set field
+                                if self.1 {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            (self.value.0).#field_name = value;
+                                            self.notify.modify_event(self.id, #field_name_str, 0);
+                                        } 
+                                    });
+                                }else {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            self.value.#field_name = value; 
+                                            self.notify.modify_event(self.id, #field_name_str, 0);
+                                        } 
+                                    });
+                                }
                             }
                         }
                     },
@@ -161,21 +186,46 @@ impl<'a> ToTokens for SetGetFuncsImpl<'a> {
                             let set_name = ident(&("set_".to_string() + i.to_string().as_str()));
                             let ty = &field.ty;
                             let index = syn::Index::from(i);
-                            // set index
-                            if self.1 {
-                                tokens.extend(quote! {
-                                    fn #set_name(&mut self, value: #ty) {
-                                        (self.value.0).#index = value; // TODO?
-                                        self.notify.modify_event(self.id, "", #i);
-                                    } 
-                                });
+                            if is_base_type(ty) {
+                                // set index
+                                if self.1 {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            if (self.value.0).#index == value {
+                                                return;
+                                            }
+                                            (self.value.0).#index = value;
+                                            self.notify.modify_event(self.id, "", #i);
+                                        } 
+                                    });
+                                }else {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            if self.value.#index == value {
+                                                return;
+                                            }
+                                            self.value.#index = value;
+                                            self.notify.modify_event(self.id, "", #i);
+                                        } 
+                                    });
+                                }
                             }else {
-                                tokens.extend(quote! {
-                                    fn #set_name(&mut self, value: #ty) {
-                                        self.value.#index = value; // TODO?
-                                        self.notify.modify_event(self.id, "", #i);
-                                    } 
-                                });
+                                // set index
+                                if self.1 {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            (self.value.0).#index = value;
+                                            self.notify.modify_event(self.id, "", #i);
+                                        } 
+                                    });
+                                }else {
+                                    tokens.extend(quote! {
+                                        fn #set_name(&mut self, value: #ty) {
+                                            self.value.#index = value;
+                                            self.notify.modify_event(self.id, "", #i);
+                                        } 
+                                    });
+                                }
                             }
                             i += 1;
                         }
@@ -238,5 +288,16 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
         tokens.extend(quote! {
             fn modify<F: Fn(&mut #name#ty_generics) -> bool>(&mut self, callback: F); 
         });
+    }
+}
+
+fn is_base_type(ty: &syn::Type) -> bool{
+    let s = ty.into_token_stream().to_string();
+    let s = s.as_str();
+
+    if s == "bool" || s == "usize" || s == "isize" || s == "u8" || s == "u16" || s == "u32" || s == "u64" || s == "u128" || s == "i8" || s == "i16" || s == "i32" || s == "i64" || s == "i128" || s == "&str" || s == "String" || s == "&'static str" || s == "f32" || s == "f64" {
+        return true;
+    }else {
+        return false;
     }
 }
