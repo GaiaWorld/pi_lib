@@ -428,7 +428,7 @@ impl<'a, T> Iterator for SlabIter<'a, T> {
         let sign_index = self.curr_index/usize_size();
         let mut sign_index1 = self.curr_index%usize_size();
         for i in sign_index..self.signs.len(){
-            let sign = self.signs[i].clone() >> sign_index1;
+            let sign = self.signs[i].clone() >> sign_index1;       
             if sign != usize::max_value() >> sign_index1{
                 let first_zero = find_zero(sign);
                 let curr = self.curr_index + first_zero;
@@ -436,7 +436,7 @@ impl<'a, T> Iterator for SlabIter<'a, T> {
                 self.curr_len += 1;
                 return Some((curr + 1, &self.entries[curr]));
             }else {
-                self.curr_index += 8 - sign_index1;
+                self.curr_index += usize_size() - sign_index1;
                 sign_index1 = 0;
             }
         }
@@ -464,7 +464,7 @@ impl<'a, T> Iterator for SlabIterMut<'a, T> {
                 self.curr_len += 1;
                 return Some((curr + 1, unsafe{&mut (*self.entries)[curr]} ));
             }else {
-                self.curr_index += 8 - sign_index1;
+                self.curr_index += usize_size() - sign_index1;
                 sign_index1 = 0;
             }
         }
@@ -492,7 +492,7 @@ fn usize_size() -> usize{
     size_of::<usize>() * 8
 }
 
-// 返回指定的数字中低位第一个0的位置
+// 返回指定的数字中从最低位开始第一个0的位置
 #[inline]
 fn find_zero(i:usize) -> usize {
 	let a = !i;

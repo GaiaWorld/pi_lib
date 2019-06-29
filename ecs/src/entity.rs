@@ -89,6 +89,12 @@ impl<T> EntityImpl<T> {
             marker: PhantomData,
         }
     }
+    pub fn is_exist(&self, id: usize) -> bool {
+        match self.slab.get(id) {
+            Some(_) => true,
+            None => false
+        }
+    }
     pub fn get_mask(&self) -> usize {
         self.components.len()
     }
