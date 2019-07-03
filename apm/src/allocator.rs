@@ -62,7 +62,9 @@ pub fn set_max_alloced_limit(limit: usize) -> Result<usize, ()> {
 */
 #[inline]
 pub fn is_alloced_limit() -> bool {
-    all_alloced_size() >= get_max_alloced_limit()
+    let max_alloced_limit = get_max_alloced_limit();
+
+    (max_alloced_limit > 0) && all_alloced_size() >= max_alloced_limit
 }
 
 /*
