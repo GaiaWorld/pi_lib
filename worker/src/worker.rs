@@ -9,7 +9,7 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 use threadpool::ThreadPool;
 
 use atom::Atom;
-use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
+use apm::{allocator::is_alloced_limit, counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer}};
 
 use task::Task;
 use task_pool::TaskPool;
@@ -245,8 +245,16 @@ impl Worker {
                 }
                 wake = w;
             }
-            //获取任务
-            if let Some(t) = tasks.pop() {
+
+            let task = if is_alloced_limit() {
+                //已达已分配内存限制，则只获取异步任务
+                tasks.pop_async()
+            } else {
+                //未达已分配内存限制，则获取任务
+                tasks.pop()
+            };
+
+            if let Some(t) = task {
                 //有任务
                 base_task = t;
             } else {

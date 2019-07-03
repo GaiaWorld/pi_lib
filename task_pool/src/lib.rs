@@ -42,12 +42,12 @@ pub struct TaskPool<T: Debug + 'static>{
 
     delay_queue: Timer<DelayTask<T>>,
 
-    handler: Box<Fn()>,
+    handler: Box<Fn(bool)>,
     count: AtomicUsize,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
-    pub fn new(timer: Timer<DelayTask<T>>, handler: Box<Fn()>) -> Self {
+    pub fn new(timer: Timer<DelayTask<T>>, handler: Box<Fn(bool)>) -> Self {
         // let timer = Timer::new(10);
         // timer.run();
         TaskPool {
@@ -114,7 +114,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             (id, sync_pool.0.queue_len())
         };
 //        println!("!!!!!!push dyn sync queue start");
-        self.notify(queue_len);
+        self.notify(true, queue_len);
 //        println!("!!!!!!push dyn sync queue finish");
         to_sync_id(id)
     }
@@ -129,7 +129,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             sync_pool.1.store(id, index);
             (id, sync_pool.0.queue_len())
         };
-        self.notify(queue_len);
+        self.notify(true, queue_len);
         to_sync_id(id)
     }
 
@@ -142,7 +142,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             sync_pool.queue_len()
         };
 //        println!("!!!!!!push static sync queue start");
-        self.notify(len);
+        self.notify(true, len);
 //        println!("!!!!!!push static sync queue start");
     }
 
@@ -154,7 +154,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             self.static_sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
             sync_pool.queue_len()
         };
-        self.notify(len);
+        self.notify(true, len);
     }
 
     // // push a async task
@@ -168,7 +168,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             (index, pool.len())
         };
 //        println!("!!!!!!push dyn async queue start");
-        self.notify(len);
+        self.notify(false, len);
 //        println!("!!!!!!push dyn async queue finish");
         to_async_id(index)
     }
@@ -181,7 +181,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             lock.len()
         };
 //        println!("!!!!!!push static async queue start");
-        self.notify(len);
+        self.notify(false, len);
 //        println!("!!!!!!push dyn async queue finish");
     }
 
@@ -333,6 +333,37 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
+    pub fn pop_async(&self) -> Option<Task<T>>{
+        let (async_w, static_async_w, r, mut w) = self.weight_rng_async();
+
+        if w < async_w {
+            let mut lock = self.async_pool.1.lock().unwrap();
+            let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
+            let w = pool.amount();
+            if w != 0 {
+                let r = unsafe{pool.pop(r%w, indexs)};
+                self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
+                indexs.destroy(r.2);
+                return Some(Task::Async(r.0));
+            }
+        } else {
+            w = w - async_w;
+        }
+
+
+        if w < static_async_w {
+            let mut pool = self.static_async_pool.1.lock().unwrap();
+            let w = pool.amount();
+            if w != 0 {
+                let r = Some(Task::Async(pool.pop(r%w).0));
+                self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
+                return r;
+            }
+        }
+
+        None
+    }
+
     pub fn remove_sync(&self, queue_id: isize, id: isize) -> T {
         let mut lock = self.sync_pool.1.lock().unwrap();
         let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
@@ -422,7 +453,7 @@ impl<T: Debug + 'static> TaskPool<T> {
                     _ => (false, 0)
                 }
             };
-            self.notify(len);
+            self.notify(true, len);
             r
         }else if is_static_queue(id) {
             let (r, len) = {let mut lock = self.static_sync_pool.1.lock().unwrap();
@@ -436,7 +467,7 @@ impl<T: Debug + 'static> TaskPool<T> {
                     _ => (false, 0)
                 }
             };
-            self.notify(len);
+            self.notify(true, len);
             r
         }else {
             false
@@ -469,10 +500,23 @@ impl<T: Debug + 'static> TaskPool<T> {
         len1 + len2 + len3 + len4
     }
 
-    fn notify(&self, len: usize) {
+    fn notify(&self, is_sync: bool, len: usize) {
         if len <= self.count.load(AOrd::SeqCst) {
-            (self.handler)()
+            (self.handler)(is_sync)
         }
+    }
+
+    fn weight_rng_async(&self) -> (usize, usize, usize, usize){
+        let async_w = self.async_pool.0.load(AOrd::Relaxed);  //异步池总权重
+        let static_async_w = self.static_async_pool.0.load(AOrd::Relaxed);  //异步池总权重
+        let r: usize = rand::thread_rng().gen(); // 由外部实现随机生成器， TODO
+        let amount = async_w + static_async_w;
+        let w = if amount == 0 {
+            0
+        }else {
+            r%amount
+        };
+        (async_w, static_async_w, r, w)
     }
 
     fn weight_rng(&self) -> (usize, usize, usize, usize, usize, usize){
