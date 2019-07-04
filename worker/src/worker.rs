@@ -247,8 +247,8 @@ impl Worker {
             }
 
             let task = if is_alloced_limit() {
-                //已达已分配内存限制，则只获取异步任务
-                tasks.pop_async()
+                //已达已分配内存限制，则只获取动态同步和所有异步任务
+                tasks.pop_inner()
             } else {
                 //未达已分配内存限制，则获取任务
                 tasks.pop()

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, Condvar};
 use atom::Atom;
 use apm::{allocator::is_alloced_limit, counter::{GLOBAL_PREF_COLLECT, PrefCounter}};
 use timer::Timer;
-use task_pool::{TaskPool, DelayTask};
+use task_pool::{enums::QueueType, TaskPool, DelayTask};
 
 use task::{TaskType, Task};
 
@@ -28,17 +28,20 @@ lazy_static! {
 * 虚拟机任务池
 */
 lazy_static! {
-	pub static ref JS_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|is_sync| {
-	    if is_sync && is_alloced_limit() {
-	        //如果是同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	        return;
+	pub static ref JS_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒虚拟机工作者
+                let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
 	    }
-
-	    //唤醒虚拟机工作者
-        let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
 	})));
 }
 
@@ -46,17 +49,20 @@ lazy_static! {
 * 存储任务池
 */
 lazy_static! {
-	pub static ref STORE_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|is_sync| {
-	    if is_sync && is_alloced_limit() {
-	        //如果是同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	        return;
+	pub static ref STORE_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒存储工作者
+                let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
 	    }
-
-	    //唤醒存储工作者
-        let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
 	})));
 }
 
@@ -64,17 +70,20 @@ lazy_static! {
 * 网络任务池
 */
 lazy_static! {
-	pub static ref NET_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|is_sync| {
-	    if is_sync && is_alloced_limit() {
-	        //如果是同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	        return;
+	pub static ref NET_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒网络工作者
+                let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
 	    }
-
-	    //唤醒网络工作者
-        let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
 	})));
 }
 
