@@ -23,7 +23,9 @@ use std::marker::Send;
 use std::fmt;
 use std::ptr::NonNull;
 
-use rand::Rng;
+use rand::prelude::*;
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 
 use timer::{Timer, Runer};
 use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
@@ -44,6 +46,7 @@ pub struct TaskPool<T: Debug + 'static>{
 
     handler: Box<Fn(QueueType, usize)>,
     count: AtomicUsize,
+    rng: Arc<Mutex<SmallRng>>,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
@@ -65,6 +68,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             delay_queue: timer,
             count: AtomicUsize::new(0),
             handler,
+            rng: Arc::new(Mutex::new(SmallRng::from_entropy())),
         }
     }
 
@@ -563,7 +567,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         let async_w = self.async_pool.0.load(AOrd::Relaxed);  //异步池总权重
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
         let static_async_w = self.static_async_pool.0.load(AOrd::Relaxed);  //异步池总权重
-        let r: usize = rand::thread_rng().gen(); // 由外部实现随机生成器， TODO
+        let r: usize = self.rng.lock().unwrap().gen(); // 由外部实现随机生成器， TODO
         let amount = async_w + sync_w + static_async_w;
         let w = if amount == 0 {
             0
@@ -578,7 +582,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         let sync_w = self.sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
         let static_async_w = self.static_async_pool.0.load(AOrd::Relaxed);  //异步池总权重
         let static_sync_w = self.static_sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
-        let r: usize = rand::thread_rng().gen(); // 由外部实现随机生成器， TODO
+        let r: usize = self.rng.lock().unwrap().gen(); // 由外部实现随机生成器， TODO
         let amount = async_w + sync_w + static_async_w + static_sync_w;
         let w = if amount == 0 {
             0
