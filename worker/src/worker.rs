@@ -239,11 +239,14 @@ impl Worker {
             let mut wake = lock.lock().unwrap();
             while !*wake {
                 //等待任务唤醒
-                let (w, wait) = cvar.wait_timeout(wake, Duration::from_millis(100)).unwrap();
+                let (mut w, wait) = cvar.wait_timeout(wake, Duration::from_millis(100)).unwrap();
                 if wait.timed_out() {
-                    return //等待超时，则立即解锁，并处理控制状态
+                    //等待超时，则继续工作
+                    *w = true;
+                    wake = w;
+                } else {
+                    wake = w;
                 }
-                wake = w;
             }
 
             let task = if is_alloced_limit() {

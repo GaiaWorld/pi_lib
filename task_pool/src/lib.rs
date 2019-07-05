@@ -44,13 +44,13 @@ pub struct TaskPool<T: Debug + 'static>{
 
     delay_queue: Timer<DelayTask<T>>,
 
-    handler: Box<Fn(QueueType, usize)>,
+    handler: Arc<Fn(QueueType, usize)>,
     count: AtomicUsize,
     rng: Arc<Mutex<SmallRng>>,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
-    pub fn new(timer: Timer<DelayTask<T>>, handler: Box<Fn(QueueType, usize)>) -> Self {
+    pub fn new(timer: Timer<DelayTask<T>>, handler: Arc<Fn(QueueType, usize)>) -> Self {
         // let timer = Timer::new(10);
         // timer.run();
         TaskPool {
@@ -218,12 +218,14 @@ impl<T: Debug + 'static> TaskPool<T> {
     //push a delay task, return Arc<AtomicUsize> as index
     pub fn push_sync_delay(&self, task: T, queue_id: isize, direc: Direction, ms: u32) -> isize{
         let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
+
         let task = DelayTask::Sync {
-            queue_id: from_sync_id(queue_id),
+            queue_id: queue_id as usize,
             direc: direc,
             index: index,
             sync_pool: self.sync_pool.clone(),
             task: Box::into_raw_non_null(Box::new(task)),
+            handler: self.handler.clone(),
         };
         let index1 = self.delay_queue.set_timeout(task, ms);
         self.sync_pool.1.lock().unwrap().1.store(index, index1);
@@ -237,6 +239,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             index: index,
             async_pool: self.async_pool.clone(),
             task: Box::into_raw_non_null(Box::new(task)),
+            handler: self.handler.clone(),
         };
         let index1 = self.delay_queue.set_timeout(task, ms);
         self.sync_pool.1.lock().unwrap().1.store(index, index1);
@@ -640,6 +643,7 @@ pub enum DelayTask<T: 'static> {
         index: usize,
         async_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>)>)>,
         task:  NonNull<T>,
+        handler: Arc<Fn(QueueType, usize)>,
     },//异步任务
     Sync{
         queue_id: usize,
@@ -647,33 +651,38 @@ pub enum DelayTask<T: 'static> {
         direc: Direction,
         sync_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>)>)>,
         task:  NonNull<T>,
+        handler: Arc<Fn(QueueType, usize)>,
     }//同步任务Sync(队列id, push方向)
 }
 
 impl<T: 'static> Runer for DelayTask<T> {
     fn run(self, _key: usize){
         match self {
-            DelayTask::Async { priority,index, async_pool,task } => {
+            DelayTask::Async { priority,index, async_pool,task , handler} => {
                 let mut lock = async_pool.1.lock().unwrap();
                 let (pool, indexs): &mut (dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
                 pool.push(unsafe {task.as_ptr().read()} , priority, index, indexs);
                 async_pool.0.store(pool.amount(), AOrd::Relaxed);
+                handler(QueueType::DynAsync, pool.len());
             },
-            DelayTask::Sync { queue_id, index, direc, sync_pool, task } => {
+            DelayTask::Sync { queue_id, index, direc, sync_pool, task , handler} => {
                 let mut lock = sync_pool.1.lock().unwrap();
                 let (pool, indexs): &mut (dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
                 let id = match direc {
                     Direction::Front => pool.push_front(unsafe {task.as_ptr().read()}, queue_id, index),
-                    Direction::Back => pool.push_front(unsafe {task.as_ptr().read()}, queue_id, index)
+                    Direction::Back => pool.push_back(unsafe {task.as_ptr().read()}, queue_id, index)
                 };
                 sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
                 indexs.store(index, id);
                 indexs.set_class(index, IndexType::Sync);
+                handler(QueueType::DynSync, pool.queue_len());
             }
             
         }
     }
 }
+
+
 
 unsafe impl<T> Send for DelayTask<T> {}
 
