@@ -129,7 +129,10 @@ impl IdTree {
           }
           (n.parent, n.layer, n.count, n.prev, n.next, n.children.head)
         },
-        _ => panic!("invalid id: {}", id)
+        _ => {
+            println!("invalid id: {}", id);
+            return;
+        }
       };
       if layer > 0 {
         match notify {

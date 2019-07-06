@@ -144,6 +144,37 @@ impl<T> Slab<T> {
         return &mut self.entries[key - 1];
     }
 
+    pub fn alloc_width_is_first(&mut self) -> (usize, &mut T, bool){
+        let key = self.next + 1;
+        let r = self.alloc_width_is_first_at(key);
+        (key, r.0, r.1)
+    }
+
+    pub fn alloc_width_is_first_at(&mut self, key: usize) -> (&mut T, bool) {
+        let key = key - 1;
+        let len = self.entries.len();
+        self.len += 1;
+        let t = if key == len {
+            if len == self.capacity() {
+                self.entries.reserve(1);
+            }
+            unsafe{self.entries.set_len(len + 1)};
+            self.next = key + 1;
+            let s_index = key%usize_size();
+            if s_index == 0{
+                self.vacancy_sign.push(usize::max_value() - 1);
+            }else {
+                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
+            }
+            (&mut self.entries[key], true)
+        } else {
+            self.next = unsafe{*(&self.entries[key] as *const T as usize as *const usize)}.clone();
+            self.one2zero(key);
+            (&mut self.entries[key], false)
+        };
+        t
+    }
+
     pub fn alloc(&mut self) -> (usize, &mut T){
         let key = self.next + 1;
         (key, self.alloc_at(key))
