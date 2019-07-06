@@ -42,3 +42,11 @@ pub enum FreeSign {
     Error,
     Ignore,
 }
+
+#[derive(Debug)]
+pub enum QueueType {
+    DynSync,
+    StaticSync,
+    DynAsync,
+    StaticAsync,
+}

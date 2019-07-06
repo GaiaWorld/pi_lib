@@ -1,0 +1,6 @@
+[package]
+name = "lfstack"
+version = "0.1.0"
+authors = ["vmos <vmos@fairblock.io>"]
+
+[dependencies]

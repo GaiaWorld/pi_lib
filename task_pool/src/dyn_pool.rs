@@ -55,6 +55,21 @@ impl<T: 'static> SyncPool<T>{
     }
 
     #[inline]
+    pub fn is_locked(&self, id: usize) -> bool {
+        match self.slab.try_load(id) {
+            Some(i) => {
+                let class = self.slab.get_class(id).clone();
+                match class {
+                    IndexType::HalfLockQueue => true,
+                    IndexType::LockQueue => true,
+                    _ => false,
+                }
+            },
+            None => false,
+        }
+    }
+
+    #[inline]
     pub fn lock_queue(&mut self, id: usize)-> bool {
         match self.slab.try_load(id) {
             Some(i) => {

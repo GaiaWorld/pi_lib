@@ -2,9 +2,9 @@ use std::boxed::FnBox;
 use std::sync::{Arc, Mutex, Condvar};
 
 use atom::Atom;
-use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter};
+use apm::{allocator::is_alloced_limit, counter::{GLOBAL_PREF_COLLECT, PrefCounter}};
 use timer::Timer;
-use task_pool::{TaskPool, DelayTask};
+use task_pool::{enums::{Direction, QueueType}, TaskPool, DelayTask};
 
 use task::{TaskType, Task};
 
@@ -28,12 +28,20 @@ lazy_static! {
 * 虚拟机任务池
 */
 lazy_static! {
-	pub static ref JS_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|| {
-	    //唤醒虚拟机工作者
-        let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
+	pub static ref JS_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒虚拟机工作者
+                let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
+	    }
 	})));
 }
 
@@ -41,12 +49,20 @@ lazy_static! {
 * 存储任务池
 */
 lazy_static! {
-	pub static ref STORE_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|| {
-	    //唤醒存储工作者
-        let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
+	pub static ref STORE_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒存储工作者
+                let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
+	    }
 	})));
 }
 
@@ -54,12 +70,20 @@ lazy_static! {
 * 网络任务池
 */
 lazy_static! {
-	pub static ref NET_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Box::new(|| {
-	    //唤醒网络工作者
-        let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
-        let mut wake = lock.lock().unwrap();
-        *wake = true;
-        cvar.notify_one();
+	pub static ref NET_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
+	    match task_type {
+	        QueueType::StaticSync if is_alloced_limit() => {
+	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
+	            return;
+	        },
+	        _ => {
+	            //唤醒网络工作者
+                let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
+                let mut wake = lock.lock().unwrap();
+                *wake = true;
+                cvar.notify_one();
+	        },
+	    }
 	})));
 }
 
@@ -170,6 +194,34 @@ pub fn cast_js_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 }
 
 /*
+* 线程安全的向虚拟机任务池投递延迟任务，返回可移除的任务句柄
+*/
+pub fn cast_js_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
+                    func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            JS_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            JS_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    JS_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    JS_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
+    cast_delay_task(&JS_TASK_POOL, task_type, priority, queue, func, timeout, info)
+}
+
+/*
 * 线程安全的为虚拟机任务池移除队列
 */
 pub fn remove_js_task_queue(queue: isize) -> bool {
@@ -234,6 +286,34 @@ pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize
     }
 
     cast_task(&STORE_TASK_POOL, task_type, priority, queue, func, info)
+}
+
+/*
+* 线程安全的向存储任务池投递延迟任务，返回可移除的任务句柄
+*/
+pub fn cast_store_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
+                             func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            STORE_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            STORE_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    STORE_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    STORE_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
+    cast_delay_task(&STORE_TASK_POOL, task_type, priority, queue, func, timeout, info)
 }
 
 /*
@@ -304,6 +384,34 @@ pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 }
 
 /*
+* 线程安全的向网络任务池投递延迟任务，返回可移除的任务句柄
+*/
+pub fn cast_net_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
+                           func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+    match task_type {
+        TaskType::Async(false) => {
+            NET_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Async(true) => {
+            NET_DYNAMIC_ASYNC_TASK_CAST_COUNT.sum(1);
+        },
+        TaskType::Sync(_) => {
+            match queue.as_ref().unwrap() {
+                q if q < &0 => {
+                    NET_STATIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+                q => {
+                    NET_DYNAMIC_SYNC_TASK_CAST_COUNT.sum(1);
+                },
+            }
+        },
+        _ => (),
+    }
+
+    cast_delay_task(&NET_TASK_POOL, task_type, priority, queue, func, timeout, info)
+}
+
+/*
 * 线程安全的为网络任务池移除队列
 */
 pub fn remove_net_task_queue(queue: isize) -> bool {
@@ -367,6 +475,51 @@ fn cast_task(task_pool: &Arc<TaskPool<Task>>, task_type: TaskType, priority: usi
                 q => {
                     //动态同步任务
                     Some((*task_pool).push_dyn_front(task, q))
+                },
+            }
+        },
+    }
+}
+
+//投递延迟任务
+fn cast_delay_task(task_pool: &Arc<TaskPool<Task>>, task_type: TaskType, priority: usize,
+                   queue: Option<isize>, func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+    let mut task = Task::new();
+    task.set_priority(priority as u64);
+    task.set_func(Some(func));
+    task.set_info(info);
+    match task_type {
+        TaskType::Async(false) => {
+            //静态异步任务
+            None
+        },
+        TaskType::Async(true) => {
+            //动态异步任务
+            Some((*task_pool).push_async_delay(task, priority, timeout))
+        },
+        TaskType::Sync(true) => {
+            //同步队列尾
+            match queue.unwrap() {
+                q if q < 0 => {
+                    //静态同步任务
+                    None
+                },
+                q => {
+                    //动态同步任务
+                    Some((*task_pool).push_sync_delay(task, q, Direction::Back, timeout))
+                },
+            }
+        },
+        _ => {
+            //同步队列头
+            match queue.unwrap() {
+                q if q < 0 => {
+                    //静态同步任务
+                    None
+                },
+                q => {
+                    //动态同步任务
+                    Some((*task_pool).push_sync_delay(task, q, Direction::Front, timeout))
                 },
             }
         },

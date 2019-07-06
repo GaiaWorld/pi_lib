@@ -37,7 +37,7 @@ impl<T> SlabDeque<T> {
 
     /// Prepend an element to the SlabDeque. return a index
     pub fn push_front(&mut self, elem: T) -> usize{
-        self.deque.push_back(elem, &mut self.slab)
+        self.deque.push_front(elem, &mut self.slab)
     }
 
     /// Removes the first element from the SlabDeque and returns it, or None if it is empty.

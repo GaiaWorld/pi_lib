@@ -22,6 +22,7 @@ members = [
   "wheel",
   "wtree",
   "deque",
+  "lfstack",
   "dyn_uint",
   "task_pool",
   "apm",

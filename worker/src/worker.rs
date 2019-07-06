@@ -9,7 +9,7 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 use threadpool::ThreadPool;
 
 use atom::Atom;
-use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
+use apm::{allocator::is_alloced_limit, counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer}};
 
 use task::Task;
 use task_pool::TaskPool;
@@ -239,14 +239,25 @@ impl Worker {
             let mut wake = lock.lock().unwrap();
             while !*wake {
                 //等待任务唤醒
-                let (w, wait) = cvar.wait_timeout(wake, Duration::from_millis(100)).unwrap();
+                let (mut w, wait) = cvar.wait_timeout(wake, Duration::from_millis(100)).unwrap();
                 if wait.timed_out() {
-                    return //等待超时，则立即解锁，并处理控制状态
+                    //等待超时，则继续工作
+                    *w = true;
+                    wake = w;
+                } else {
+                    wake = w;
                 }
-                wake = w;
             }
-            //获取任务
-            if let Some(t) = tasks.pop() {
+
+            let task = if is_alloced_limit() {
+                //已达已分配内存限制，则只获取动态同步和所有异步任务
+                tasks.pop_inner()
+            } else {
+                //未达已分配内存限制，则获取任务
+                tasks.pop()
+            };
+
+            if let Some(t) = task {
                 //有任务
                 base_task = t;
             } else {
