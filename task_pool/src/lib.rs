@@ -3,6 +3,7 @@
 extern crate rand;
 
 extern crate flame;
+#[macro_use]
 extern crate flamer;
 
 extern crate wtree;
@@ -23,7 +24,7 @@ use std::fmt;
 use std::ptr::NonNull;
 
 use rand::prelude::*;
-use rand::{Rng};
+use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 
 use timer::{Timer, Runer};
@@ -44,6 +45,7 @@ pub struct TaskPool<T: Debug + 'static>{
     delay_queue: Timer<DelayTask<T>>,
 
     handler: Arc<Fn(QueueType, usize)>,
+    count: AtomicUsize,
     rng: Arc<Mutex<SmallRng>>,
 }
 
@@ -64,9 +66,14 @@ impl<T: Debug + 'static> TaskPool<T> {
 
             //index_factory: SlabFactory::new(),
             delay_queue: timer,
+            count: AtomicUsize::new(0),
             handler,
             rng: Arc::new(Mutex::new(SmallRng::from_entropy())),
         }
+    }
+
+    pub fn set_count(&self, count: usize) {
+        self.count.store(count, AOrd::Relaxed);
     }
 
     // create sync queues, return true, or false if id is exist
@@ -330,7 +337,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             w = w - async_w;
         }
 
-        
+
         if w < static_async_w {
             let mut pool = self.static_async_pool.1.lock().unwrap();
             let w = pool.amount();
@@ -552,9 +559,11 @@ impl<T: Debug + 'static> TaskPool<T> {
         let len4 = self.static_sync_pool.1.lock().unwrap().len();
         len1 + len2 + len3 + len4
     }
-    #[inline]
+
     fn notify(&self, task_type: QueueType, task_size: usize) {
-        (self.handler)(task_type, task_size)
+        if task_size <= self.count.load(AOrd::Relaxed) {
+            (self.handler)(task_type, task_size)
+        }
     }
 
     fn weight_rng_inner(&self) -> (usize, usize, usize, usize, usize){
@@ -668,7 +677,7 @@ impl<T: 'static> Runer for DelayTask<T> {
                 indexs.set_class(index, IndexType::Sync);
                 handler(QueueType::DynSync, pool.queue_len());
             }
-            
+
         }
     }
 }
@@ -750,8 +759,8 @@ use time::run_millis;
 
 #[test]
 fn test(){
-	let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(|| {}));
-    
+    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(|| {}));
+
     let queue1 = task_pool.create_dyn_queue(1);
     let queue2 = task_pool.create_dyn_queue(2);
     let queue3 = task_pool.create_static_queue(1);
@@ -822,7 +831,7 @@ fn test(){
         task_pool.pop_unlock().unwrap();
     }
 
-   /***************************************测试移除接口*************************************************** */
+    /***************************************测试移除接口*************************************************** */
     let index1 = task_pool.push_dyn_back(1, queue1);
     let index2 = task_pool.push_dyn_back(2, queue2);
     let index3 = task_pool.push_dyn_async(3, 2);
@@ -907,7 +916,7 @@ fn test_effect(){
     }
     println!("remove_async-------{} ", run_millis() - time );
 
-     let time = run_millis();
+    let time = run_millis();
     for queue_id in 1..1001 {
         let q = (queue_id - 1) * 100;
         for i in 0..100 {
