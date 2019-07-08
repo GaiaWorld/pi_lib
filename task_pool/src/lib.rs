@@ -3,7 +3,6 @@
 extern crate rand;
 
 extern crate flame;
-#[macro_use]
 extern crate flamer;
 
 extern crate wtree;
@@ -24,7 +23,7 @@ use std::fmt;
 use std::ptr::NonNull;
 
 use rand::prelude::*;
-use rand::{Rng, SeedableRng};
+use rand::{Rng};
 use rand::rngs::SmallRng;
 
 use timer::{Timer, Runer};
@@ -45,7 +44,6 @@ pub struct TaskPool<T: Debug + 'static>{
     delay_queue: Timer<DelayTask<T>>,
 
     handler: Arc<Fn(QueueType, usize)>,
-    count: AtomicUsize,
     rng: Arc<Mutex<SmallRng>>,
 }
 
@@ -66,14 +64,9 @@ impl<T: Debug + 'static> TaskPool<T> {
 
             //index_factory: SlabFactory::new(),
             delay_queue: timer,
-            count: AtomicUsize::new(0),
             handler,
             rng: Arc::new(Mutex::new(SmallRng::from_entropy())),
         }
-    }
-
-    pub fn set_count(&self, count: usize) {
-        self.count.store(count, AOrd::Relaxed);
     }
 
     // create sync queues, return true, or false if id is exist
@@ -220,7 +213,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
 
         let task = DelayTask::Sync {
-            queue_id: queue_id as usize,
+            queue_id: from_queue_id(queue_id),
             direc: direc,
             index: index,
             sync_pool: self.sync_pool.clone(),
@@ -559,11 +552,9 @@ impl<T: Debug + 'static> TaskPool<T> {
         let len4 = self.static_sync_pool.1.lock().unwrap().len();
         len1 + len2 + len3 + len4
     }
-
+    #[inline]
     fn notify(&self, task_type: QueueType, task_size: usize) {
-        if task_size <= self.count.load(AOrd::Relaxed) {
-            (self.handler)(task_type, task_size)
-        }
+        (self.handler)(task_type, task_size)
     }
 
     fn weight_rng_inner(&self) -> (usize, usize, usize, usize, usize){
