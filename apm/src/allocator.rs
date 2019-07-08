@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::f32::MAX;
 
 /*
-* 当前最大已分配内存限制，默认2GB
+* 当前最大已分配内存限制，默认8GB
 */
-static MAX_ALLOCATED_LIMIT: AtomicUsize = AtomicUsize::new(2147483647);
+static MAX_ALLOCATED_LIMIT: AtomicUsize = AtomicUsize::new(8589934590);
 
 /*
 * 当前已分配内存
