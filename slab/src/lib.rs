@@ -144,13 +144,13 @@ impl<T> Slab<T> {
         return &mut self.entries[key - 1];
     }
 
-    pub fn alloc_width_is_first(&mut self) -> (usize, &mut T, bool){
+    pub fn alloc_with_is_first(&mut self) -> (usize, &mut T, bool){
         let key = self.next + 1;
-        let r = self.alloc_width_is_first_at(key);
+        let r = self.alloc_with_is_first_at(key);
         (key, r.0, r.1)
     }
 
-    pub fn alloc_width_is_first_at(&mut self, key: usize) -> (&mut T, bool) {
+    pub fn alloc_with_is_first_at(&mut self, key: usize) -> (&mut T, bool) {
         let key = key - 1;
         let len = self.entries.len();
         self.len += 1;
