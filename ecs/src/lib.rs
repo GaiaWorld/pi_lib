@@ -3,12 +3,12 @@
 
 extern crate slab;
 extern crate atom;
-extern crate fnv;
 extern crate map;
 extern crate listener;
 extern crate pointer;
 #[macro_use]
 extern crate any;
+extern crate fx_hashmap;
 
 // extern crate im;
 pub extern crate paste;

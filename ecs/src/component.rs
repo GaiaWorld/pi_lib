@@ -12,7 +12,7 @@ use map::{Map};
 use listener::Listener;
 
 use system::{SystemData, SystemMutData};
-use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteListeners, DeleteEvent};
+use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteEvent};
 use entity::CellEntity;
 use {Fetch, Lend, LendMut, TypeIds, World};
 use Share;
