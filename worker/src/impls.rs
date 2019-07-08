@@ -152,6 +152,13 @@ pub fn create_js_task_queue(priority: usize, can_del: bool) -> isize {
 }
 
 /*
+* 线程安全的获取虚拟机任务池任务数
+*/
+pub fn js_task_size() -> usize {
+    JS_TASK_POOL.len()
+}
+
+/*
 * 线程安全的锁住虚拟机任务池队列
 */
 pub fn lock_js_task_queue(queue: isize) -> bool {
@@ -248,6 +255,13 @@ pub fn create_store_task_queue(priority: usize, can_del: bool) -> isize {
 }
 
 /*
+* 线程安全的获取存储任务池任务数
+*/
+pub fn store_task_size() -> usize {
+    STORE_TASK_POOL.len()
+}
+
+/*
 * 线程安全的锁住存储任务池队列
 */
 pub fn lock_store_task_queue(queue: isize) -> bool {
@@ -340,6 +354,13 @@ pub fn create_net_task_queue(priority: usize, can_del: bool) -> isize {
     }
 
     create_task_queue(&NET_TASK_POOL, priority, can_del)
+}
+
+/*
+* 线程安全的获取网络任务池任务数
+*/
+pub fn net_task_size() -> usize {
+    NET_TASK_POOL.len()
 }
 
 /*
