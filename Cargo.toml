@@ -41,4 +41,5 @@ members = [
   "compress",
   "hashmap",
   "share",
+  "fx_hashmap",
 ]

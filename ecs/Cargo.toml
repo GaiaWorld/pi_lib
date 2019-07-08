@@ -10,10 +10,10 @@ map = {path="../map"}
 any = {path="../any"}
 pointer = {path="../pointer"}
 listener = {path="../listener"}
+fx_hashmap = {path="../fx_hashmap"}
 time = {path="../time"}
 paste = "0.1"
 lazy_static = "*"
-fnv = "*"
 # im = "*"
 
 [[example]]

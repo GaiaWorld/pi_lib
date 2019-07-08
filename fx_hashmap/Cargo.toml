@@ -1,0 +1,7 @@
+[package]
+name = "fx_hashmap"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+fxhash = "0.2.1"

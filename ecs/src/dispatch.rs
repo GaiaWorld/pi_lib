@@ -37,8 +37,8 @@ impl Dispatcher for SeqDispatcher {
         
         
         // 根据系统的读写数据，计算依赖关系。 如果一个数据被读写，则读会依赖写。写会先执行，读后执行
-        // let mut system_map = FnvHashMap::default();
-        // let mut component_map = FnvHashMap::default();
+        // let mut system_map = FxHashMap32::default();
+        // let mut component_map = FxHashMap32::default();
         //let mut vec = &mut self.vec;
         // for k in names.iter() {
         //     depend(world, k, &mut system_map, &mut component_map)
@@ -72,7 +72,7 @@ impl Dispatcher for SeqDispatcher {
 
 //====================================
 // // 根据系统的读写数据，计算依赖关系
-// fn depend(world: &World, key: &Atom, system_map: &mut FnvHashMap<Atom, (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>)>, component_map: &mut FnvHashMap<(TypeId, TypeId), (Vec<Atom>, Vec<Atom>)>) {
+// fn depend(world: &World, key: &Atom, system_map: &mut FxHashMap32<Atom, (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>)>, component_map: &mut FxHashMap32<(TypeId, TypeId), (Vec<Atom>, Vec<Atom>)>) {
 //     match world.get_system(key) {
 //         Some(arc_sys) => {
 //             let (read, write) = arc_sys.get_depends();
@@ -95,7 +95,7 @@ impl Dispatcher for SeqDispatcher {
 // }
 
 // // 根据依赖关系，计算先后次序
-// fn calc(key: &Atom, system_map: &FnvHashMap<Atom, (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>)>, component_map: &FnvHashMap<(TypeId, TypeId), (Vec<Atom>, Vec<Atom>)>) -> bool {
+// fn calc(key: &Atom, system_map: &FxHashMap32<Atom, (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>)>, component_map: &FxHashMap32<(TypeId, TypeId), (Vec<Atom>, Vec<Atom>)>) -> bool {
 //     let (read_components, _) = system_map.get(key).unwrap();
 //     for k in read_components.iter() {
 //         match component_map.get(k) {
