@@ -105,7 +105,7 @@ impl<T: 'static> SyncPool<T>{
                             r.1 = IndexType::HalfLockQueue;
                             return FreeSign::Success;
                         }
-                        self.len += r.2.len();
+//                        self.len += r.2.len();
                         r.2.get_weight()
                     }
                     _ => return FreeSign::Ignore,
