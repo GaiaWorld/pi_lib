@@ -552,6 +552,22 @@ impl<T: Debug + 'static> TaskPool<T> {
         self.delay_queue.clear();
     }
 
+    pub fn dyn_sync_len(&self) -> usize {
+        self.sync_pool.1.lock().unwrap().0.len()
+    }
+
+    pub fn static_sync_len(&self) -> usize {
+        self.static_sync_pool.1.lock().unwrap().len()
+    }
+
+    pub fn dyn_async_len(&self) -> usize {
+        self.async_pool.1.lock().unwrap().0.len()
+    }
+
+    pub fn static_async_len(&self) -> usize {
+        self.static_async_pool.1.lock().unwrap().len()
+    }
+
     pub fn len(&self) -> usize {
         let len1 = self.sync_pool.1.lock().unwrap().0.len();
         let len2 = self.static_async_pool.1.lock().unwrap().len();

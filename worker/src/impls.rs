@@ -152,6 +152,34 @@ pub fn create_js_task_queue(priority: usize, can_del: bool) -> isize {
 }
 
 /*
+* 线程安全的获取虚拟机静态同步任务数
+*/
+pub fn js_static_sync_task_size() -> usize {
+    JS_TASK_POOL.static_sync_len()
+}
+
+/*
+* 线程安全的获取虚拟机静态同步任务数
+*/
+pub fn js_dyn_sync_task_size() -> usize {
+    JS_TASK_POOL.dyn_sync_len()
+}
+
+/*
+* 线程安全的获取虚拟机静态同步任务数
+*/
+pub fn js_static_async_task_size() -> usize {
+    JS_TASK_POOL.static_async_len()
+}
+
+/*
+* 线程安全的获取虚拟机静态同步任务数
+*/
+pub fn js_dyn_async_task_size() -> usize {
+    JS_TASK_POOL.dyn_async_len()
+}
+
+/*
 * 线程安全的获取虚拟机任务池任务数
 */
 pub fn js_task_size() -> usize {
