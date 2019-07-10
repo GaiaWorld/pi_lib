@@ -50,7 +50,6 @@ pub fn get_max_alloced_limit() -> usize {
 */
 #[inline]
 pub fn set_max_alloced_limit(limit: usize) -> Result<usize, ()> {
-    println!("!!!!!!limit: {}, all_alloced_size: {}", limit, all_alloced_size());
     if limit <= all_alloced_size() {
         return Err(());
     }
