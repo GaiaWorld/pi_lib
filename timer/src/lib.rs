@@ -1,5 +1,4 @@
 #![feature(integer_atomics)]
-#![feature(fnbox)]
 
 extern crate atom;
 extern crate apm;
@@ -14,7 +13,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration};
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicU64};
-use std::boxed::FnBox;
 use std::mem::{transmute};
 use std::marker::Send;
 
@@ -131,14 +129,14 @@ impl<T: Send + Runer> TimerImpl<T>{
 pub struct FuncRuner(usize, usize);
 
 impl FuncRuner{
-    pub fn new(f: Box<FnBox()>) -> Self {
+    pub fn new(f: Box<FnOnce()>) -> Self {
         unsafe { transmute(f) }
     }
 }
 
 impl Runer for FuncRuner {
     fn run(self, _index: usize){
-        let func: Box<FnBox()> = unsafe { transmute((self.0, self.1)) };
+        let func: Box<FnOnce()> = unsafe { transmute((self.0, self.1)) };
         func();
     }
 }

@@ -1,4 +1,3 @@
-use std::boxed::FnBox;
 use std::sync::{Arc, Mutex, Condvar};
 
 use atom::Atom;
@@ -204,7 +203,7 @@ pub fn unlock_js_task_queue(queue: isize) -> bool {
 * 线程安全的向虚拟机任务池投递任务，返回可移除的任务句柄
 */
 pub fn cast_js_task(task_type: TaskType, priority: usize, queue: Option<isize>,
-                    func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+                    func: Box<FnOnce(Option<isize>)>, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             JS_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -232,7 +231,7 @@ pub fn cast_js_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 * 线程安全的向虚拟机任务池投递延迟任务，返回可移除的任务句柄
 */
 pub fn cast_js_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
-                    func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+                    func: Box<FnOnce(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             JS_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -306,7 +305,7 @@ pub fn unlock_store_task_queue(queue: isize) -> bool {
 /*
 * 线程安全的向存储任务池投递任务，返回可移除的任务句柄
 */
-pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnOnce(Option<isize>)>, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             STORE_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -334,7 +333,7 @@ pub fn cast_store_task(task_type: TaskType, priority: usize, queue: Option<isize
 * 线程安全的向存储任务池投递延迟任务，返回可移除的任务句柄
 */
 pub fn cast_store_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
-                             func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+                             func: Box<FnOnce(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             STORE_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -408,7 +407,7 @@ pub fn unlock_net_task_queue(queue: isize) -> bool {
 /*
 * 线程安全的向网络任务池投递任务，返回可移除的任务句柄
 */
-pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>, func: Box<FnOnce(Option<isize>)>, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             NET_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -436,7 +435,7 @@ pub fn cast_net_task(task_type: TaskType, priority: usize, queue: Option<isize>,
 * 线程安全的向网络任务池投递延迟任务，返回可移除的任务句柄
 */
 pub fn cast_net_delay_task(task_type: TaskType, priority: usize, queue: Option<isize>,
-                           func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+                           func: Box<FnOnce(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
     match task_type {
         TaskType::Async(false) => {
             NET_STATIC_ASYNC_TASK_CAST_COUNT.sum(1);
@@ -484,7 +483,7 @@ fn create_task_queue(task_pool: &Arc<TaskPool<Task>>, priority: usize, can_del: 
 
 //投递任务
 fn cast_task(task_pool: &Arc<TaskPool<Task>>, task_type: TaskType, priority: usize,
-             queue: Option<isize>, func: Box<FnBox(Option<isize>)>, info: Atom) -> Option<isize> {
+             queue: Option<isize>, func: Box<FnOnce(Option<isize>)>, info: Atom) -> Option<isize> {
     let mut task = Task::new();
     task.set_priority(priority as u64);
     task.set_func(Some(func));
@@ -532,7 +531,7 @@ fn cast_task(task_pool: &Arc<TaskPool<Task>>, task_type: TaskType, priority: usi
 
 //投递延迟任务
 fn cast_delay_task(task_pool: &Arc<TaskPool<Task>>, task_type: TaskType, priority: usize,
-                   queue: Option<isize>, func: Box<FnBox(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
+                   queue: Option<isize>, func: Box<FnOnce(Option<isize>)>, timeout: u32, info: Atom) -> Option<isize> {
     let mut task = Task::new();
     task.set_priority(priority as u64);
     task.set_func(Some(func));

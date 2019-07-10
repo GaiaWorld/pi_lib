@@ -10,7 +10,6 @@
 #![feature(trait_alias)]
 #![feature(const_fn)]
 #![feature(nll)]
-#![feature(fnbox)]
 #[warn(unreachable_patterns)]
 
 #[allow(dead_code,unused_variables,non_snake_case,unused_parens,unused_assignments,unused_unsafe,unused_imports)]

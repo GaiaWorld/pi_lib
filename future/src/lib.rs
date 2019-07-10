@@ -1,5 +1,3 @@
-#![feature(fnbox)]
-
 extern crate futures;
 extern crate npnc;
 extern crate time;

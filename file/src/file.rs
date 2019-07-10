@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::path::Path;
 use std::clone::Clone;
-use std::boxed::FnBox;
 use std::time::Duration;
 #[cfg(any(unix))]
 use std::os::unix::fs::FileExt;
@@ -127,13 +126,13 @@ pub trait Shared {
     fn new(file: Self::T) -> Arc<Self::T>;
 
     //原子的从指定位置开始读指定字节
-    fn pread(self, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>);
+    fn pread(self, pos: u64, len: usize, callback: Box<FnOnce(Arc<Self::T>, Result<Vec<u8>>)>);
 
     //原子的从指定位置开始读指定字节，并填充指定的向量
-    fn fpread(self, buf: Vec<u8>, buf_pos: u64, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>);
+    fn fpread(self, buf: Vec<u8>, buf_pos: u64, pos: u64, len: usize, callback: Box<FnOnce(Arc<Self::T>, Result<Vec<u8>>)>);
 
     //原子的从指定位置开始写指定字节
-    fn pwrite(self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnBox(Arc<Self::T>, Result<usize>)>);
+    fn pwrite(self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnOnce(Arc<Self::T>, Result<usize>)>);
 }
 
 /*
@@ -148,7 +147,7 @@ impl Shared for SharedFile {
         Arc::new(file)
     }
 
-    fn pread(self, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>) {
+    fn pread(self, pos: u64, len: usize, callback: Box<FnOnce(Arc<Self::T>, Result<Vec<u8>>)>) {
         if len == 0 {
             READ_ASYNC_FILE_ERROR_COUNT.sum(1);
 
@@ -160,7 +159,7 @@ impl Shared for SharedFile {
         pread_continue(vec, 0, self, pos, len, callback);
     }
 
-    fn fpread(self, buf: Vec<u8>, buf_pos: u64, pos: u64, len: usize, callback: Box<FnBox(Arc<Self::T>, Result<Vec<u8>>)>) {
+    fn fpread(self, buf: Vec<u8>, buf_pos: u64, pos: u64, len: usize, callback: Box<FnOnce(Arc<Self::T>, Result<Vec<u8>>)>) {
         if len == 0 {
             READ_ASYNC_FILE_ERROR_COUNT.sum(1);
 
@@ -182,7 +181,7 @@ impl Shared for SharedFile {
         fpread_continue(vec, buf_pos, self, pos, len, callback);
     }
 
-    fn pwrite(self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnBox(Arc<Self::T>, Result<usize>)>) {
+    fn pwrite(self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnOnce(Arc<Self::T>, Result<usize>)>) {
         let len = bytes.len();
         if len == 0 {
             return callback(self, Ok(0));
@@ -227,7 +226,7 @@ impl Clone for AsyncFile {
 
 impl AsyncFile {
     //以指定方式打开指定文件
-    pub fn open<P: AsRef<Path> + Send + 'static>(path: P, options: AsyncFileOptions, callback: Box<FnBox(Result<Self>)>) {
+    pub fn open<P: AsRef<Path> + Send + 'static>(path: P, options: AsyncFileOptions, callback: Box<FnOnce(Result<Self>)>) {
         let func = move |_lock| {
             let (r, w, a, c, t, len) = match options {
                 AsyncFileOptions::OnlyRead(len) => (true, false, false, false, false, len),
@@ -273,7 +272,7 @@ impl AsyncFile {
     }
 
     //文件重命名
-    pub fn rename<P: AsRef<Path> + Clone + Send + 'static>(from: P, to: P, callback: Box<FnBox(P, P, Result<()>)>) {
+    pub fn rename<P: AsRef<Path> + Clone + Send + 'static>(from: P, to: P, callback: Box<FnOnce(P, P, Result<()>)>) {
         let func = move |_lock| {
             let result = rename(from.clone(), to.clone());
             callback(from, to, result);
@@ -282,7 +281,7 @@ impl AsyncFile {
     }
 
     //移除指定文件
-    pub fn remove<P: AsRef<Path> + Send + 'static>(path: P, callback: Box<FnBox(Result<()>)>) {
+    pub fn remove<P: AsRef<Path> + Send + 'static>(path: P, callback: Box<FnOnce(Result<()>)>) {
         let func = move |_lock| {
             let result = remove_file(path);
             callback(result);
@@ -350,7 +349,7 @@ impl AsyncFile {
     }
 
     //从指定位置开始，读指定字节
-    pub fn read(mut self, pos: u64, len: usize, callback: Box<FnBox(Self, Result<Vec<u8>>)>) {
+    pub fn read(mut self, pos: u64, len: usize, callback: Box<FnOnce(Self, Result<Vec<u8>>)>) {
         let func = move |_lock| {
             let file_size = self.get_size();
             if file_size == 0 || len == 0 {
@@ -434,7 +433,7 @@ impl AsyncFile {
     }
 
     //从指定位置开始，写指定字节
-    pub fn write(mut self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnBox(Self, Result<()>)>) {
+    pub fn write(mut self, options: WriteOptions, pos: u64, bytes: Vec<u8>, callback: Box<FnOnce(Self, Result<()>)>) {
         let func = move |_lock| {
             if !&bytes[self.pos as usize..].is_empty() {
                 match self.inner.seek(SeekFrom::Start(pos as u64)) {
@@ -527,7 +526,7 @@ fn get_block_size(_meta: &Metadata) -> usize {
 }
 
 //继续读
-fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
+fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnOnce(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
     let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.read_at(&mut vec[vec_pos as usize..(vec_pos as usize + len)], pos);
@@ -568,7 +567,7 @@ fn pread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, le
 }
 
 //继续填充读
-fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
+fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, len: usize, callback: Box<FnOnce(Arc<<SharedFile as Shared>::T>, Result<Vec<u8>>)>) {
     let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.read_at(&mut vec[vec_pos as usize..(vec_pos as usize + len)], pos);
@@ -609,7 +608,7 @@ fn fpread_continue(mut vec: Vec<u8>, vec_pos: u64, file: SharedFile, pos: u64, l
 }
 
 //继续写
-fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos: u64, bytes: Vec<u8>, vec_pos: u64, callback: Box<FnBox(Arc<<SharedFile as Shared>::T>, Result<usize>)>) {
+fn pwrite_continue(len: usize, mut file: SharedFile, options: WriteOptions, pos: u64, bytes: Vec<u8>, vec_pos: u64, callback: Box<FnOnce(Arc<<SharedFile as Shared>::T>, Result<usize>)>) {
     let func = move |_lock| {
         #[cfg(any(unix))]
         let r = file.inner.write_at(&bytes[vec_pos as usize..len], pos);

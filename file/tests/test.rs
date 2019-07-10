@@ -1,5 +1,3 @@
-#![feature(fnbox)]
-
 extern crate npnc;
 
 extern crate worker;
@@ -8,7 +6,6 @@ extern crate atom;
 
 use std::thread;
 use std::sync::Arc;
-use std::boxed::FnBox;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::result::Result as NormalResult;

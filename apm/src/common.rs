@@ -1,7 +1,6 @@
 use std::thread;
 use std::sync::Arc;
 use std::net::IpAddr;
-use std::boxed::FnBox;
 use std::sync::RwLock;
 use std::path::PathBuf;
 use std::cell::RefCell;

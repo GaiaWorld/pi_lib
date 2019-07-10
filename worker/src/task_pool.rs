@@ -1,7 +1,6 @@
 use rand;
 use rand::Rng;
 use fnv::FnvHashMap;
-use std::boxed::FnBox;
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter, Result};
 
@@ -315,7 +314,7 @@ impl TaskPool {
     }
 
     //向任务池加入一个任务
-    pub fn push(&mut self, task_type: TaskType, priority: u64, func: Box<FnBox()>, info: Atom) {
+    pub fn push(&mut self, task_type: TaskType, priority: u64, func: Box<FnOnce()>, info: Atom) {
         let mut task: Task = self.task_cache.pop();
         task.set_priority(priority);
         task.set_func(Some(func));
