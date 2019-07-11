@@ -309,14 +309,17 @@ impl<T: Debug + 'static> TaskPool<T> {
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.get_weight();
-            if w != 0 {
-                let r = pool.pop_front_with_lock(r%w);
-                let elem = r.0.unwrap();
-                self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.destroy(elem.1);
+            let weight = pool.get_weight();
+            if weight != 0 {
+                let r = pool.pop_front_with_lock(r%weight);
+                if let Some(elem) = r.0 {
+                    self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
+                    indexs.destroy(elem.1);
 //                println!("w---dyn_sync_pop");
-                return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
+                    return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
+                } else {
+                    w = w - sync_w;
+                }
             }
         } else {
             w = w - sync_w;
@@ -325,9 +328,9 @@ impl<T: Debug + 'static> TaskPool<T> {
         if w < async_w {
             let mut lock = self.async_pool.1.lock().unwrap();
             let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.amount();
-            if w != 0 {
-                let r = unsafe{pool.pop(r%w, indexs)};
+            let weight = pool.amount();
+            if weight != 0 {
+                let r = unsafe{pool.pop(r%weight, indexs)};
                 self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
                 indexs.destroy(r.2);
 //                println!("w---dyn_async_pop");
@@ -340,9 +343,9 @@ impl<T: Debug + 'static> TaskPool<T> {
 
         if w < static_async_w {
             let mut pool = self.static_async_pool.1.lock().unwrap();
-            let w = pool.amount();
-            if w != 0 {
-                let r = Some(Task::Async(pool.pop(r%w).0));
+            let weight = pool.amount();
+            if weight != 0 {
+                let r = Some(Task::Async(pool.pop(r%weight).0));
                 self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
 //                println!("w---static_async_pop");
                 return r;
@@ -353,13 +356,14 @@ impl<T: Debug + 'static> TaskPool<T> {
 
         if w < static_sync_w {
             let mut pool = self.static_sync_pool.1.lock().unwrap();
-            let w = pool.get_weight();
-            if w != 0 {
-                let r = pool.pop_front_with_lock(r%w);
-                let elem = r.0.unwrap();
-                self.static_sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
+            let weight = pool.get_weight();
+            if weight != 0 {
+                let r = pool.pop_front_with_lock(r%weight);
+                if let Some(elem) = r.0 {
+                    self.static_sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
 //                println!("w---static_sync_pop");
-                return Some(Task::Sync(elem, to_static_queue_id(r.1)));
+                    return Some(Task::Sync(elem, to_static_queue_id(r.1)));
+                }
             }
         }
 //        println!("w---empty_pop");
@@ -373,13 +377,16 @@ impl<T: Debug + 'static> TaskPool<T> {
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
             let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.get_weight();
-            if w != 0 {
-                let r = pool.pop_front_with_lock(r%w);
-                let elem = r.0.unwrap();
-                self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.destroy(elem.1);
-                return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
+            let weight = pool.get_weight();
+            if weight != 0 {
+                let r = pool.pop_front_with_lock(r%weight);
+                if let Some(elem) = r.0 {
+                    self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
+                    indexs.destroy(elem.1);
+                    return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
+                } else {
+                    w = w - sync_w;
+                }
             }
         } else {
             w = w - sync_w;
@@ -388,9 +395,9 @@ impl<T: Debug + 'static> TaskPool<T> {
         if w < async_w {
             let mut lock = self.async_pool.1.lock().unwrap();
             let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.amount();
-            if w != 0 {
-                let r = unsafe{pool.pop(r%w, indexs)};
+            let weight = pool.amount();
+            if weight != 0 {
+                let r = unsafe{pool.pop(r%weight, indexs)};
                 self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
                 indexs.destroy(r.2);
                 return Some(Task::Async(r.0));
@@ -402,9 +409,9 @@ impl<T: Debug + 'static> TaskPool<T> {
 
         if w < static_async_w {
             let mut pool = self.static_async_pool.1.lock().unwrap();
-            let w = pool.amount();
-            if w != 0 {
-                let r = Some(Task::Async(pool.pop(r%w).0));
+            let weight = pool.amount();
+            if weight != 0 {
+                let r = Some(Task::Async(pool.pop(r%weight).0));
                 self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
                 return r;
             }
