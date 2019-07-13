@@ -620,6 +620,7 @@ impl<'a> ReadBuffer<'a>{
 					Ok(T::from(self.bytes.get_lu128(self.head - 8) as u128))
 				},
 				_ => {
+					panic!("read integer error, act_type: {}, bin: {:?}", t, self.bytes);
 					Err(ReadBonErr::type_no_match("integer".to_string(), t))
 				}
 			}
