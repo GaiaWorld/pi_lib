@@ -123,6 +123,7 @@ pub fn free_sys_mem(limit: u64) -> bool {
                 //多余的空闲内存已达限制，则回收多余的空闲内存
                 unsafe {
                     if dukc_manual_free() == 0 {
+                        println!("===> Collect System Memory Ok, Free Failed, current: {}, before real: {}, after real: {}, limit: {}, time: {:?}", current, res, after_res, limit, Instant::now() - start_time);
                         false
                     } else {
                         let after_res = if let Some((_, _, after, _, _, _)) = sys.process_memory(pid) {
@@ -130,7 +131,7 @@ pub fn free_sys_mem(limit: u64) -> bool {
                         } else {
                             -1
                         };
-                        println!("===> Collect System Memory Ok, current: {}, before real: {}, after real: {}, limit: {}, time: {:?}", current, res, after_res, limit, Instant::now() - start_time);
+                        println!("===> Collect System Memory Ok, Free Ok, current: {}, before real: {}, after real: {}, limit: {}, time: {:?}", current, res, after_res, limit, Instant::now() - start_time);
                         true
                     }
                 }
