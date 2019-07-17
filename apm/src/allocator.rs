@@ -129,7 +129,7 @@ pub fn free_sys_mem(limit: u64) -> bool {
                         let after_res = if let Some((_, _, after, _, _, _)) = sys.process_memory(pid) {
                             after
                         } else {
-                            -1
+                            0
                         };
                         println!("===> Collect System Memory Ok, Free Ok, current: {}, before real: {}, after real: {}, limit: {}, time: {:?}", current, res, after_res, limit, Instant::now() - start_time);
                         true
