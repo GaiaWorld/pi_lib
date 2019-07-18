@@ -16,7 +16,7 @@ use entity::{Entity, EntityImpl, CellEntity};
 use component::{MultiCase, CellMultiCase, MultiCaseImpl, Component};
 use single::{SingleCase, CellSingleCase, SingleCaseImpl};
 use dispatch::Dispatcher;
-use { Share, LendMut};
+use { LendMut};
 use cell::StdCell;
 
 #[derive(Default, Clone)]
@@ -29,7 +29,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn register_entity<E: Share>(&mut self) {
+    pub fn register_entity<E: 'static>(&mut self) {
         let id = TypeId::of::<E>();
         match self.entity.insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new()))) {
             Some(_) => panic!("duplicate registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
@@ -37,7 +37,7 @@ impl World {
         }
     }
     /// 注册单例组件
-    pub fn register_single<T: Share>(&mut self, t: T) {
+    pub fn register_single<T: 'static>(&mut self, t: T) {
         let id = TypeId::of::<T>();
         match self.single.insert(id, Arc::new(SingleCaseImpl::new(t))) {
             Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<T>()}, id),
@@ -45,7 +45,7 @@ impl World {
         }
     }
     /// 注册多例组件，必须声明是那种entity上的组件
-    pub fn register_multi<E: Share, C: Component>(&mut self) {
+    pub fn register_multi<E: 'static, C: Component>(&mut self) {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         match self.entity.get(&eid) {
@@ -87,7 +87,7 @@ impl World {
             _ => ()
         }
     }
-    pub fn create_entity<E: Share>(&self) -> usize {
+    pub fn create_entity<E: 'static>(&self) -> usize {
         let id = TypeId::of::<E>();
         match self.entity.get(&id) {
             Some(v) => match v.clone().downcast() {
@@ -100,7 +100,7 @@ impl World {
             _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
         }
     }
-    pub fn free_entity<E: Share>(&self, id: usize) {
+    pub fn free_entity<E: 'static>(&self, id: usize) {
         let eid = TypeId::of::<E>();
         match self.entity.get(&eid) {
             Some(v) => match v.clone().downcast() {
@@ -122,7 +122,7 @@ impl World {
     pub fn remove_dispatcher(&mut self, name: &Atom) -> Option<Arc<dyn Dispatcher>> {
         self.runner.remove(name)
     }
-    pub fn fetch_entity<T: Share>(&self) -> Option<Arc<CellEntity<T>>> {
+    pub fn fetch_entity<T: 'static>(&self) -> Option<Arc<CellEntity<T>>> {
         let id = TypeId::of::<T>();
         let r = match self.entity.get(&id) {
             Some(v) => v.clone(),
@@ -133,7 +133,7 @@ impl World {
             Err(_) => panic!("downcast err"),
         }
     }
-    pub fn fetch_single<T: Share>(&self) -> Option<Arc<CellSingleCase<T>>> {
+    pub fn fetch_single<T: 'static>(&self) -> Option<Arc<CellSingleCase<T>>> {
         let id = TypeId::of::<T>();
         let r = match self.single.get(&id) {
             Some(v) => v.clone(),
@@ -144,7 +144,7 @@ impl World {
             Err(_) => panic!("downcast err"),
         }
     }
-    pub fn fetch_multi<E: Share, C: Component>(&self) -> Option<Arc<CellMultiCase<E, C>>> {
+    pub fn fetch_multi<E: 'static, C: Component>(&self) -> Option<Arc<CellMultiCase<E, C>>> {
         let eid = TypeId::of::<E>();
         let cid = TypeId::of::<C>();
         let r = match self.multi.get(&(eid, cid)) {

@@ -37,10 +37,6 @@ pub use dispatch::{SeqDispatcher, Dispatcher};
 
 use std::any::TypeId;
 
-pub trait Share: Send + Sync + 'static {}
-
-impl<T: Send + Sync + 'static> Share for T {}
-
 pub trait Fetch: Sized + 'static {
     fn fetch(world: &World) -> Self;
 }

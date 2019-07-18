@@ -11,7 +11,6 @@ use any::ArcAny;
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write};
 use {Fetch, Lend, LendMut, TypeIds, World};
-use Share;
 use cell::StdCell;
 
 pub trait SingleCase: Notify + ArcAny {
@@ -20,10 +19,10 @@ impl_downcast_arc!(SingleCase);
 
 pub type CellSingleCase<T> = StdCell<SingleCaseImpl<T>>;
 
-impl<T: Share> SingleCase for CellSingleCase<T> {}
+impl<T: 'static> SingleCase for CellSingleCase<T> {}
 
 // TODO 以后用宏生成
-impl<T: Share> Notify for CellSingleCase<T> {
+impl<T: 'static> Notify for CellSingleCase<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
     }
@@ -53,25 +52,25 @@ impl<T: Share> Notify for CellSingleCase<T> {
     }
 }
 
-pub struct SingleCaseImpl<T: Share> {
+pub struct SingleCaseImpl<T: 'static> {
     value: T,
     notify: NotifyImpl,
 }
 
-impl<T: Share> Deref for SingleCaseImpl<T> {
+impl<T: 'static> Deref for SingleCaseImpl<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target{
         &self.value
     }
 }
 
-impl<T: Share> DerefMut for SingleCaseImpl<T> {
+impl<T: 'static> DerefMut for SingleCaseImpl<T> {
     fn deref_mut(&mut self) -> &mut Self::Target{
         &mut self.value
     }
 }
 
-impl<T: Share> SingleCaseImpl<T> {
+impl<T: 'static> SingleCaseImpl<T> {
     pub fn new(value: T) -> StdCell<Self>{
         StdCell::new(SingleCaseImpl{
             value,
@@ -86,28 +85,28 @@ impl<T: Share> SingleCaseImpl<T> {
     }
 }
 
-impl<'a, T: Share> SystemData<'a> for &'a SingleCaseImpl<T> {
+impl<'a, T: 'static> SystemData<'a> for &'a SingleCaseImpl<T> {
     type FetchTarget = ShareSingleCase<T>;
 }
-impl<'a, T: Share> SystemMutData<'a> for &'a mut SingleCaseImpl<T> {
+impl<'a, T: 'static> SystemMutData<'a> for &'a mut SingleCaseImpl<T> {
     type FetchTarget = ShareSingleCase<T>;
 }
 
 pub type ShareSingleCase<T> = Arc<CellSingleCase<T>>;
 
-impl<T: Share> Fetch for ShareSingleCase<T> {
+impl<T: 'static> Fetch for ShareSingleCase<T> {
     fn fetch(world: &World) -> Self {
         world.fetch_single::<T>().unwrap()
     }
 }
 
-impl<T: Share> TypeIds for ShareSingleCase<T> {
+impl<T: 'static> TypeIds for ShareSingleCase<T> {
     fn type_ids() -> Vec<(TypeId, TypeId)> {
         vec![(TypeId::of::<()>(), TypeId::of::<T>())]
     }
 }
 
-impl<'a, T: Share> Lend<'a> for ShareSingleCase<T> {
+impl<'a, T: 'static> Lend<'a> for ShareSingleCase<T> {
     type Target = &'a SingleCaseImpl<T>;
     type Target1 = usize;
 
@@ -125,7 +124,7 @@ impl<'a, T: Share> Lend<'a> for ShareSingleCase<T> {
 }
 
 
-impl<'a, T: Share> LendMut<'a> for ShareSingleCase<T> {
+impl<'a, T: 'static> LendMut<'a> for ShareSingleCase<T> {
     type Target = &'a mut SingleCaseImpl<T>;
     type Target1 = usize;
 

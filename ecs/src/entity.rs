@@ -15,7 +15,6 @@ use {Fetch, Lend, LendMut, TypeIds, World};
 use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn};
 use component::MultiCase;
-use Share;
 use cell::StdCell;
 
 
@@ -28,7 +27,7 @@ pub trait Entity: Notify + ArcAny {
 impl_downcast_arc!(Entity);
 
 pub type CellEntity<T> = StdCell<EntityImpl<T>>;
-impl<T: Share> Notify for CellEntity<T> {
+impl<T: 'static> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
     }
@@ -57,7 +56,7 @@ impl<T: Share> Notify for CellEntity<T> {
         self.borrow_mut().notify.modify.delete(listener);
     }
 }
-impl<T: Share> Entity for CellEntity<T> {
+impl<T: 'static> Entity for CellEntity<T> {
     fn get_mask(&self) -> usize {
         self.borrow().get_mask()
     }
@@ -152,28 +151,28 @@ impl<'a> Iterator for EntityIter<'a> {
     }
 }
 
-impl<'a, T: Share> SystemData<'a> for &'a EntityImpl<T> {
+impl<'a, T: 'static> SystemData<'a> for &'a EntityImpl<T> {
     type FetchTarget = ShareEntity<T>;
 }
-impl<'a, T: Share> SystemMutData<'a> for &'a mut EntityImpl<T> {
+impl<'a, T: 'static> SystemMutData<'a> for &'a mut EntityImpl<T> {
     type FetchTarget = ShareEntity<T>;
 }
 
 pub type ShareEntity<T> = Arc<CellEntity<T>>;
 
-impl<T: Share> Fetch for ShareEntity<T> {
+impl<T: 'static> Fetch for ShareEntity<T> {
     fn fetch(world: &World) -> Self {
         world.fetch_entity::<T>().unwrap()
     }
 }
 
-impl<T: Share> TypeIds for ShareEntity<T> {
+impl<T: 'static> TypeIds for ShareEntity<T> {
     fn type_ids() -> Vec<(TypeId, TypeId)> {
         vec![(TypeId::of::<T>(), TypeId::of::<()>())]
     }
 }
 
-impl<'a, T: Share> Lend<'a> for ShareEntity<T> {
+impl<'a, T: 'static> Lend<'a> for ShareEntity<T> {
     type Target = &'a EntityImpl<T>;
     type Target1 = usize;
 
@@ -190,7 +189,7 @@ impl<'a, T: Share> Lend<'a> for ShareEntity<T> {
     }
 }
 
-impl<'a, T: Share> LendMut<'a> for ShareEntity<T> {
+impl<'a, T: 'static> LendMut<'a> for ShareEntity<T> {
     type Target = &'a mut EntityImpl<T>;
     type Target1 = usize;
 

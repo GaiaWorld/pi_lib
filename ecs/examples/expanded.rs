@@ -8,8 +8,7 @@ extern crate any;
 
 use std::any::TypeId;
 use std::sync::Arc;
-
-use pointer::cell::{TrustCell};
+use std::cell::RefCell;
 
 use ecs::component::{ Component, MultiCaseImpl};
 use ecs::system::{Runner, System, RunnerFn, SystemData, SystemMutData, MultiCaseListener, DisposeFn, SingleCaseListener};
@@ -62,7 +61,7 @@ impl<'a> SingleCaseListener<'a, Node, DeleteEvent> for SystemDemo {
 }
 
 pub struct CellSystemDemo{
-    owner: TrustCell<SystemDemo>,
+    owner: RefCell<SystemDemo>,
     run_fn: Option<RunnerFn>,
     dispose_listener_fn: Option<DisposeFn>,
 }

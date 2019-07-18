@@ -213,14 +213,14 @@ macro_rules! impl_system {
     (@impls $system:tt<$($sg:ty),*> where [$($sg_impl:tt)*], $has_runner: tt, {$($t: tt)*}) => {
         $crate::paste::item! {
             pub struct [<Cell $system>] <$($sg_impl)*> {
-                owner: pointer::cell::TrustCell<$system<$($sg),*>>,
+                owner: $crate::cell::StdCell<$system<$($sg),*>>,
                 run_fn: Option<$crate::system::RunnerFn>,
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
             }
             impl<$($sg_impl)*> [<Cell $system>]<$($sg),*> {
                 pub fn new(sys: $system<$($sg),*>) -> Self{
                     Self {
-                        owner: pointer::cell::TrustCell::new(sys),
+                        owner: $crate::cell::StdCell::new(sys),
                         run_fn: None,
                         dispose_listener_fn: None,
                     }

@@ -15,11 +15,10 @@ use system::{SystemData, SystemMutData};
 use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteEvent};
 use entity::CellEntity;
 use {Fetch, Lend, LendMut, TypeIds, World};
-use Share;
 use cell::StdCell;
 
-pub trait Component: Sized + Share {
-    type Storage: Map<Key=usize, Val=Self> + Default + Share;
+pub trait Component: Sized + 'static {
+    type Storage: Map<Key=usize, Val=Self> + Default;
 }
 
 pub trait MultiCase: Notify + ArcAny {
@@ -29,7 +28,7 @@ impl_downcast_arc!(MultiCase);
 
 pub type CellMultiCase<E, C> = StdCell<MultiCaseImpl<E, C>>;
 
-impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
+impl<E: 'static, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
         let notify = self.borrow_mut().notify.delete.clone();
         let e = DeleteEvent{
@@ -39,7 +38,7 @@ impl<E: Share, C: Component> MultiCase for CellMultiCase<E, C> {
         self.borrow_mut().map.remove(&id);
     }
 }
-impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
+impl<E: 'static, C: Component> Notify for CellMultiCase<E, C> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.create.push_back(listener)
     }
@@ -69,7 +68,7 @@ impl<E: Share, C: Component> Notify for CellMultiCase<E, C> {
     }
 }
 
-pub struct MultiCaseImpl<E: Share, C: Component> {
+pub struct MultiCaseImpl<E, C: Component> {
     map: C::Storage,
     notify: NotifyImpl,
     entity: Arc<CellEntity<E>>,
@@ -77,7 +76,7 @@ pub struct MultiCaseImpl<E: Share, C: Component> {
     marker: PhantomData<E>,
 }
 
-impl<E: Share, C: Component> MultiCaseImpl<E, C> {
+impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
     pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> StdCell<Self>{
         StdCell::new(MultiCaseImpl{
             map: C::Storage::default(),
@@ -136,28 +135,28 @@ impl<E: Share, C: Component> MultiCaseImpl<E, C> {
     // }
 }
 
-impl<'a, E: Share, C: Component> SystemData<'a> for &'a MultiCaseImpl<E, C> {
+impl<'a, E: 'static, C: Component> SystemData<'a> for &'a MultiCaseImpl<E, C> {
     type FetchTarget = ShareMultiCase<E, C>;
 }
-impl<'a, E: Share, C: Component> SystemMutData<'a> for &'a mut MultiCaseImpl<E, C> {
+impl<'a, E: 'static, C: Component> SystemMutData<'a> for &'a mut MultiCaseImpl<E, C> {
     type FetchTarget = ShareMultiCase<E, C>;
 }
 
 pub type ShareMultiCase<E, C> = Arc<CellMultiCase<E, C>>;
 
-impl<E: Share, C: Component> Fetch for ShareMultiCase<E, C> {
+impl<E: 'static, C: Component> Fetch for ShareMultiCase<E, C> {
     fn fetch(world: &World) -> Self {
         world.fetch_multi::<E, C>().unwrap()
     }
 }
 
-impl<E: Share, C: Component> TypeIds for ShareMultiCase<E, C> {
+impl<E: 'static, C: Component> TypeIds for ShareMultiCase<E, C> {
     fn type_ids() -> Vec<(TypeId, TypeId)> {
         vec![(TypeId::of::<E>(), TypeId::of::<C>())]
     }
 }
 
-impl<'a, E: Share, C: Component> Lend<'a> for ShareMultiCase<E, C> {
+impl<'a, E: 'static, C: Component> Lend<'a> for ShareMultiCase<E, C> {
     type Target = &'a MultiCaseImpl<E, C>;
     type Target1 = usize;
 
@@ -174,7 +173,7 @@ impl<'a, E: Share, C: Component> Lend<'a> for ShareMultiCase<E, C> {
     }
 }
 
-impl<'a, E: Share, C: Component> LendMut<'a> for ShareMultiCase<E, C> {
+impl<'a, E: 'static, C: Component> LendMut<'a> for ShareMultiCase<E, C> {
     type Target = &'a mut MultiCaseImpl<E, C>;
     type Target1 = usize;
 
