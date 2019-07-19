@@ -238,13 +238,13 @@ impl SysStat {
     //获取当前进程id
     #[cfg(any(windows))]
     pub fn current_pid(&self) -> usize {
-        sysinfo::get_current_pid()
+        sysinfo::get_current_pid().unwrap()
     }
 
     //获取当前进程的基础状态
     #[cfg(any(windows))]
     pub fn current_process_info(&self) -> (usize, String, PathBuf, Vec<String>, f32, u64, u64, ProcessState) {
-        let pid = sysinfo::get_current_pid();
+        let pid = sysinfo::get_current_pid().unwrap();
         self.inner.borrow_mut().refresh_process(pid);
 
         let inner = self.inner.borrow();
