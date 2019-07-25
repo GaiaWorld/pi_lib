@@ -1,6 +1,8 @@
 #![feature(nll)]
 
-extern crate dyn_uint;
+extern crate map;
+extern crate index_class;
+extern crate ver_index;
 #[cfg(test)]
 extern crate time;
 

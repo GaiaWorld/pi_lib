@@ -89,7 +89,7 @@ type NetSocketsInfo = Vec<(NetProtocolType, IpAddr, u16, Option<IpAddr>, Option<
 */
 pub struct ApmGuard<T> {
     arg: T,
-    callback: Arc<Fn(&mut T, thread::Thread)>,
+    callback: Arc<dyn Fn(&mut T, thread::Thread)>,
 }
 
 impl<T> Drop for ApmGuard<T> {
@@ -100,7 +100,7 @@ impl<T> Drop for ApmGuard<T> {
 
 impl<T> ApmGuard<T> {
     //构建守护对象
-    pub fn new(arg: T, callback: Arc<Fn(&mut T, thread::Thread)>) -> Self {
+    pub fn new(arg: T, callback: Arc<dyn Fn(&mut T, thread::Thread)>) -> Self {
         ApmGuard {
             arg,
             callback,
@@ -133,7 +133,7 @@ pub enum NetProtocolType {
 #[derive(Clone)]
 pub struct SysStat {
     inner: Arc<RefCell<System>>,            //通用内部系统状态
-    special: Option<Arc<SysSpecialStat>>,   //特定平台系统状态
+    special: Option<Arc<dyn SysSpecialStat>>,   //特定平台系统状态
 }
 
 impl SysStat {
@@ -155,7 +155,7 @@ impl SysStat {
     }
 
     //获取指定平台详细状态
-    pub fn special_platform(&self) -> Option<Arc<SysSpecialStat>> {
+    pub fn special_platform(&self) -> Option<Arc<dyn SysSpecialStat>> {
         if let Some(detal) = &self.special {
             return Some(detal.clone());
         }

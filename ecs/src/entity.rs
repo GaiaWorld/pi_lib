@@ -9,7 +9,7 @@ use std::{
 pub use any::ArcAny;
 // use pointer::cell::StdCell;
 use slab::{Slab, SlabIter};
-
+use ver_index::bit::BitIndex;
 
 use {Fetch, Lend, LendMut, TypeIds, World};
 use system::{SystemData, SystemMutData};
@@ -74,7 +74,7 @@ impl<T: 'static> Entity for CellEntity<T> {
 
 
 pub struct EntityImpl<T>{
-    slab: Slab<u64>, // 值usize 记录每个id所关联的component的掩码位
+    slab: Slab<u64, BitIndex>, // 值usize 记录每个id所关联的component的掩码位
     components: Vec<Arc<dyn MultiCase>>, // 组件
     notify: NotifyImpl,
     marker: PhantomData<T>,
@@ -119,7 +119,10 @@ impl<T> EntityImpl<T> {
         }
     }
     pub fn delete(&mut self, id: usize) {
-        let mask = self.slab.remove(id);
+        let mask = match self.slab.remove(id) {
+            Some(m) => m,
+            _ => return
+        };
         self.notify.modify_event(id, "", 0);
         if mask == 0 {
             return
@@ -138,7 +141,7 @@ impl<T> EntityImpl<T> {
     }
 }
 
-pub struct EntityIter<'a>(SlabIter<'a, u64>);
+pub struct EntityIter<'a>(SlabIter<'a, u64, BitIndex>);
 
 impl<'a> Iterator for EntityIter<'a> {
     type Item = usize;

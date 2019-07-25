@@ -8,4 +8,5 @@ atom = {path="../atom"}
 apm = {path="../apm"}
 wheel = {path="../wheel"}
 time = {path="../time"}
+ver_index = {path="../ver_index"}
 lazy_static = "*"

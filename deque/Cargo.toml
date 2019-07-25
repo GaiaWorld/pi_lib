@@ -4,5 +4,7 @@ version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
+map = {path="../map"}
 slab = {path="../slab"}
+ver_index = {path="../ver_index"}
 time = {path="../time"}

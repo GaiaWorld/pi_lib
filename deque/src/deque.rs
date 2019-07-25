@@ -7,189 +7,203 @@
 /// 
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::marker::PhantomData;
-use std::mem::replace;
 use std::iter::Iterator;
 
-use slab::IndexMap;
+use slab::IdAllocater;
+use map::Map;
 
-pub struct Deque<T, C: IndexMap<Node<T>>>{
-    first : usize,
-    last :usize,
+#[derive(Debug)]
+pub enum Direction{
+    Back,
+    Front,
+}
+
+pub struct Deque<T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>, ID: Copy + Debug + PartialEq + Default + Send + Sync>{
+    first: ID,
+    last: ID,
     len: usize,
     mark: PhantomData<(T, C)>,
 }
 
-impl<T, C: IndexMap<Node<T>>> Default for Deque<T, C> {
+impl<T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Default for Deque<T, C, ID> {
     fn default() -> Self {
         Deque::new()
     }
 }
 
-impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
+impl<T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Deque<T, C, ID> {
     pub fn new() -> Self {
         Self {
-            first: 0,
-            last: 0,
+            first: ID::default(),
+            last: ID::default(),
             len: 0,
             mark: PhantomData,
         }
     }
 
-    pub fn get_first(&self) -> usize{
+    pub fn get_first(&self) -> ID{
         self.first
     }
 
-    pub fn get_last(&self) -> usize{
+    pub fn get_last(&self) -> ID{
         self.last
     }
-
     /// Append an element to the Deque. return a index
-    pub fn push_back(&mut self, elem: T, index_map: &mut C) -> usize {
+    pub fn push_id(&mut self, id: ID, direct: Direction, id_map: &mut C) {
         self.len += 1;
-        if self.last == 0 {
-            let index = index_map.insert(Node::new(elem, 0, 0));
-            self.last = index;
-            self.first = index;
-            index
-        }else {
-            let index = index_map.insert(Node::new(elem, self.last, 0));
-            unsafe{index_map.get_unchecked_mut(self.last).next = index;}
-            self.last = index;
-            index
+        if self.first == ID::default() {
+            self.last = id;
+            self.first = id;
+            return
         }
-    }
-
-    /// Prepend an element to the Deque. return a index
-    pub fn push_front(&mut self, elem: T, index_map: &mut C) -> usize{
-        self.len += 1;
-        if self.first == 0 {
-            let index = index_map.insert(Node::new(elem, 0, 0));
-            self.last = index;
-            self.first = index;
-            index
-        }else {
-            let index = index_map.insert(Node::new(elem, 0, self.first));
-            unsafe{index_map.get_unchecked_mut(self.first).pre = index;}
-            self.first = index;
-            index
-        }
-    }
-
-    /// Prepend an element to the Deque. return a index
-    pub unsafe fn push_to_back(&mut self, elem: T, index: usize, index_map: &mut C) -> usize{
-        self.len += 1;
-        let i = index_map.insert(Node::new(elem, index, 0));
-
-        let next = {
-            let e = index_map.get_unchecked_mut(index);
-            replace(&mut e.next, i)
-        };
-
-        index_map.get_unchecked_mut(next).pre = i;
-        let e = index_map.get_unchecked_mut(i);
-        e.pre = index;
-        e.next = next;
-        i
-    }
-
-    /// Prepend an element to the Deque. return a index
-    pub unsafe fn push_to_front(&mut self, elem: T, index: usize, index_map: &mut C) -> usize{
-        self.len += 1;
-        let i = index_map.insert(Node::new(elem, index, 0));
-
-        let pre = {
-            let e = index_map.get_unchecked_mut(index);
-            replace(&mut e.pre, i)
-        };
-
-        index_map.get_unchecked_mut(pre).next = i;
-        let e = index_map.get_unchecked_mut(i);
-        e.pre = pre;
-        e.next = index;
-        i
-    }
-
-    /// Removes the first element from the Deque and returns it, or None if it is empty.
-    pub fn pop_front(&mut self, index_map: &mut C) -> Option<T> {
-        if self.first == 0{
-            None
-        } else {
-            self.len -= 1;
-            let node = index_map.remove(self.first);
-            self.first = node.next;
-            if self.first == 0 {
-                self.last = 0;
+        match direct {
+            Direction::Back => {
+                unsafe{id_map.get_unchecked_mut(&id).prev = self.last;}
+                unsafe{id_map.get_unchecked_mut(&self.last).next = id;}
+                self.last = id;
+            },
+            Direction::Front =>{
+                unsafe{id_map.get_unchecked_mut(&id).next = self.first;}
+                unsafe{id_map.get_unchecked_mut(&self.first).prev = id;}
+                self.first = id;
             }
-            Some(node.elem)
         }
+    }
+    /// Append an element to the Deque. return a index
+    pub fn push(&mut self, elem: T, direct: Direction, id_map: &mut C) -> ID {
+        self.len += 1;
+        if self.last == ID::default() {
+            let id = id_map.alloc(Node::new(elem, ID::default(), ID::default()));
+            self.last = id;
+            self.first = id;
+            return id
+        }
+        match direct {
+            Direction::Back =>{
+                let id = id_map.alloc(Node::new(elem, self.last, ID::default()));
+                unsafe{id_map.get_unchecked_mut(&self.last).next = id;}
+                self.last = id;
+                id
+            },
+            Direction::Front =>{
+                let id = id_map.alloc(Node::new(elem, ID::default(), self.first));
+                unsafe{id_map.get_unchecked_mut(&self.first).prev = id;}
+                self.first = id;
+                id
+            }
+        }
+    }
+    /// Append an element to the Deque. return a index
+    pub fn push_back(&mut self, elem: T, id_map: &mut C) -> ID {
+        self.len += 1;
+        if self.last == ID::default() {
+            let id = id_map.alloc(Node::new(elem, ID::default(), ID::default()));
+            self.last = id;
+            self.first = id;
+            id
+        }else {
+            let id = id_map.alloc(Node::new(elem, self.last, ID::default()));
+            unsafe{id_map.get_unchecked_mut(&self.last).next = id;}
+            self.last = id;
+            id
+        }
+    }
+
+    /// Prepend an element to the Deque. return a index
+    pub fn push_front(&mut self, elem: T, id_map: &mut C) -> ID{
+        self.len += 1;
+        if self.first == ID::default() {
+            let id = id_map.alloc(Node::new(elem, ID::default(), ID::default()));
+            self.last = id;
+            self.first = id;
+            id
+        }else {
+            let id = id_map.alloc(Node::new(elem, ID::default(), self.first));
+            unsafe{id_map.get_unchecked_mut(&self.first).prev = id;}
+            self.first = id;
+            id
+        }
+    }
+    /// Removes the first or last element from the Deque and returns it, or None if it is empty.
+    pub fn pop(&mut self, direct: Direction, id_map: &mut C) -> Option<T> {
+        match direct {
+            Direction::Back => self.pop_back(id_map),
+            Direction::Front => self.pop_front(id_map),
+        }
+    }
+    /// Removes the first element from the Deque and returns it, or None if it is empty.
+    pub fn pop_front(&mut self, id_map: &mut C) -> Option<T> {
+        if self.first == ID::default() {
+            return None
+        }
+        let node = match id_map.remove(&self.first) {
+            Some(r) => r,
+            _ => return None
+        };
+        self.len -= 1;
+        self.first = node.next;
+        if self.first == ID::default() {
+            self.last = ID::default();
+        }
+        Some(node.elem)
     }
 
     /// Removes the last element from the Deque and returns it, or None if it is empty.
-    pub fn pop_back(&mut self, index_map: &mut C) -> Option<T> {
-        if self.last == 0{
-            None
-        } else {
-            self.len -= 1;
-            let node = index_map.remove(self.last);
-            self.last = node.pre;
-            if self.last == 0 {
-                self.first = 0;
-            }
-            Some(node.elem)
+    pub fn pop_back(&mut self, id_map: &mut C) -> Option<T> {
+        if self.last == ID::default() {
+            return None
         }
+        let node = match id_map.remove(&self.last) {
+            Some(r) => r,
+            _ => return None
+        };
+        self.len -= 1;
+        self.last = node.prev;
+        if self.last == ID::default() {
+            self.first = ID::default();
+        }
+        Some(node.elem)
     }
 
     ///Removes and returns the element at index from the Deque.
-    pub fn remove(&mut self, index: usize, index_map: &mut C) -> T {
-        let node = index_map.remove(index);
-        match (node.pre, node.next) {
-            (0, 0) => {
+    pub fn remove(&mut self, id: ID, id_map: &mut C) -> Option<T> {
+        let node = match id_map.remove(&id) {
+            Some(r) => r,
+            _ => return None
+        };
+        if node.prev == ID::default() {
+            if node.next == ID::default() {
                 //如果该元素既不存在上一个元素，也不存在下一个元素， 则设置队列的头部None， 则设置队列的尾部None
-                self.first = 0;
-                self.last = 0;
-            },
-            
-            (_, 0) => {
-                //如果该元素存在上一个元素，不存在下一个元素， 则将上一个元素的下一个元素设置为None, 并设置队列的尾部为该元素的上一个元素
-                unsafe{ index_map.get_unchecked_mut(node.pre).next = 0};
-                self.last = node.pre;
-            },
-            (0, _) => {
+                self.first = ID::default();
+                self.last = ID::default();
+            }else{
                 //如果该元素不存在上一个元素，但存在下一个元素， 则将下一个元素的上一个元素设置为None, 并设置队列的头部为该元素的下一个元素
-                unsafe{ index_map.get_unchecked_mut(node.next).pre = 0};
+                unsafe{ id_map.get_unchecked_mut(&node.next).prev = ID::default()};
                 self.first = node.next;
-            },
-            (_, _) => {
-                //如果该元素既存在上一个元素，也存在下一个元素， 则将上一个元素的下一个元素设置为本元素的下一个元素, 下一个元素的上一个元素设置为本元素的上一个元素
-                unsafe{ index_map.get_unchecked_mut(node.pre).next = node.next};
-                unsafe{ index_map.get_unchecked_mut(node.next).pre = node.pre};
-            },
-            
+            }
+        }else if node.next == ID::default() {
+            //如果该元素存在上一个元素，不存在下一个元素， 则将上一个元素的下一个元素设置为None, 并设置队列的尾部为该元素的上一个元素
+            unsafe{ id_map.get_unchecked_mut(&node.prev).next = ID::default()};
+            self.last = node.prev;
+        }else{
+            //如果该元素既存在上一个元素，也存在下一个元素， 则将上一个元素的下一个元素设置为本元素的下一个元素, 下一个元素的上一个元素设置为本元素的上一个元素
+            unsafe{ id_map.get_unchecked_mut(&node.prev).next = node.next};
+            unsafe{ id_map.get_unchecked_mut(&node.next).prev = node.prev};
         }
         self.len -= 1;
-        node.elem
-    }
-
-    ///Removes and returns the element at index from the Deque.
-    pub fn try_remove(&mut self, index: usize, index_map: &mut C) -> Option<T> {
-        match index_map.contains(index){
-            true => {
-                Some(self.remove(index, index_map))
-            },
-            false => None,
-        }
+        Some(node.elem)
     }
 
     //clear Deque
-    pub fn clear(&mut self, index_map: &mut C) {
-        loop {
-            if self.first == 0 {
-                self.last = 0;
-                break;
+    pub fn clear(&mut self, id_map: &mut C) {
+        while self.first != ID::default() {
+            match id_map.remove(&self.first) {
+                Some(node) => self.first = node.next,
+                _ => break
             }
-            let node = index_map.remove(self.first);
-            self.first = node.next;
         }
+        self.first = ID::default();
+        self.last = ID::default();
         self.len = 0;
     }
 
@@ -198,7 +212,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         self.len
     }
 
-    pub fn iter<'a>(&mut self, container: &'a C) -> Iter<'a, T, C> {
+    pub fn iter<'a>(&self, container: &'a C) -> Iter<'a, T, C, ID> {
         Iter{
             next: self.first,
             container: container,
@@ -208,8 +222,8 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
 
 }
 
-impl<T, C: IndexMap<Node<T>>> Clone for Deque<T, C>{
-    fn clone(&self) -> Deque<T, C>{
+impl<T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Clone for Deque<T, C, ID> {
+    fn clone(&self) -> Self{
         Deque {
             first: self.first,
             last: self.last,
@@ -220,27 +234,26 @@ impl<T, C: IndexMap<Node<T>>> Clone for Deque<T, C>{
 }
 
 
-pub struct Iter<'a, T: 'a, C: 'a + IndexMap<Node<T>>> {
-    next: usize,
+pub struct Iter<'a, T: 'a, C: 'a + Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> {
+    next: ID,
     container: &'a C,
     mark: PhantomData<T>
 }
 
-impl<'a, T, C: IndexMap<Node<T>>> Iterator for Iter<'a, T, C> {
+impl<'a, T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>, ID: 'a + Copy + Debug + PartialEq + Default + Send + Sync> Iterator for Iter<'a, T, C, ID> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
-        if self.next == 0 {
+        if self.next == ID::default() {
             return None;
         }
-        
-        let node = unsafe{self.container.get_unchecked(self.next)};
+        let node = unsafe{self.container.get_unchecked(&self.next)};
         self.next = node.next;
         Some(&node.elem)
     }
 }
 
-impl<T, C: IndexMap<Node<T>>> Debug for Deque<T, C> {
+impl<T, C: Map<Key=ID, Val=Node<T, ID>> + IdAllocater<Node<T, ID>, ID=ID>, ID: Copy + Debug + PartialEq + Default + Send + Sync> Debug for Deque<T, C, ID> {
     fn fmt(&self, f: &mut Formatter) -> FResult {
         f.debug_struct("Deque")
             .field("first", &self.first)
@@ -249,27 +262,27 @@ impl<T, C: IndexMap<Node<T>>> Debug for Deque<T, C> {
     }
 }
 
-pub struct Node<T>{
+pub struct Node<T, ID: Copy + Debug + PartialEq + Default + Send + Sync>{
     pub elem: T,
-    pub next: usize,
-    pub pre: usize,
+    pub prev: ID,
+    pub next: ID,
 }
 
-impl<T> Node<T>{
-    fn new(elem: T, pre: usize, next: usize) -> Node<T>{
+impl<T,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Node<T, ID>{
+    pub fn new(elem: T, prev: ID, next: ID) -> Self {
         Node{
             elem,
-            pre,
+            prev,
             next,
         }
     }
 }
 
-impl<T: Debug> Debug for Node<T> {
+impl<T: Debug,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Debug for Node<T, ID> {
     fn fmt(&self, f: &mut Formatter) -> FResult {
         f.debug_struct("Node")
             .field("elem", &self.elem)
-            .field("pre", &self.pre)
+            .field("prev", &self.prev)
             .field("next", &self.next)
             .finish()
     }

@@ -68,7 +68,7 @@ pub enum GenMapType {
     ISizeKeyMap(FnvHashMap<isize, GenType>),
     StrKeyMap(HashMap<Atom, GenType>),
     BinKeyMap(HashMap<Vec<u8>, GenType>),
-    PtrKeyMap(FnvHashMap<*const Any, GenType>),
+    PtrKeyMap(FnvHashMap<*const dyn Any, GenType>),
 }
 
 /*
@@ -98,7 +98,7 @@ pub enum GenType {
     RcBin(Rc<Vec<u8>>),
     ArcBin(Arc<Vec<u8>>),
     PtrBin(*const u8),
-    Pointer(*const Any),
+    Pointer(*const dyn Any),
     Array(Vec<GenType>),
     Map(GenMapType),
     Obj(HashMap<Atom, GenType>),
@@ -176,7 +176,7 @@ impl<A, B, C, D, E, F, G, H> Args<A, B, C, D, E, F, G, H> {
         }
 
         match self {
-            Args::VarArgs(args) => args[index] = Box::new(arg) as Box<Any>,
+            Args::VarArgs(args) => args[index] = Box::new(arg) as Box<dyn Any>,
             _ => (),
         }
         self
@@ -203,7 +203,7 @@ impl<A, B, C, D, E, F, G, H> Args<A, B, C, D, E, F, G, H> {
     //在变长参数列表尾加入一个指定类型的参数，返回参数列表
     pub fn push<T: Any>(&mut self, arg: T) -> &mut Self {
         match self {
-            Args::VarArgs(args) => args.push(Box::new(arg) as Box<Any>),
+            Args::VarArgs(args) => args.push(Box::new(arg) as Box<dyn Any>),
             _ => (),
         }
         self

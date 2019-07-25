@@ -1,31 +1,12 @@
 use std::cmp::{Ord, Ordering};
 use std::fmt::{Debug, Formatter, Result as FResult};
 
-use dyn_uint::{ UintFactory };
+use map::{Empty};
 use heap::Heap;
 
-pub struct IndexFactory;
-
-impl UintFactory for IndexFactory {
-    #[inline]
-    fn load(&self, _index: usize) -> usize{
-        0
-    }
-    #[inline]
-    fn try_load(&self, _index: usize) -> Option<usize>{
-        None
-    }
-    #[inline]
-	fn store(&mut self, _index: usize, _value: usize){}
-    #[inline]
-    fn try_store(&mut self, _index: usize, _value: usize) -> bool{
-        false
-    }
-}
-
 pub struct SimpleHeap<T> {
-    index_factory: IndexFactory,
-    heap: Heap<T>,
+    empty: Empty<usize, usize>,
+    heap: Heap<T, usize>,
 }
 
 impl<T: Ord> SimpleHeap<T> {
@@ -33,7 +14,7 @@ impl<T: Ord> SimpleHeap<T> {
 	//构建一个堆, 如果ord为Ordering::Less, 将创建一个小堆, 如果为Ordering::Greater，将创建一个大堆, 不应该使用Ordering::Equal创建一个堆
 	pub fn new(ord: Ordering) -> Self{
 		SimpleHeap{
-            index_factory: IndexFactory,
+            empty: Empty::default(),
             heap: Heap::new(ord),
         }
 	}
@@ -41,21 +22,21 @@ impl<T: Ord> SimpleHeap<T> {
 	//创建一个堆， 并初始容量
 	pub fn with_capacity(capacity: usize, ord: Ordering) -> Self{
         SimpleHeap{
-            index_factory: IndexFactory,
+            empty: Empty::default(),
             heap: Heap::with_capacity(capacity, ord),
         }
 	}
 
 	//插入元素，返回该元素的位置
 	pub fn push(&mut self, elem: T){
-		self.heap.push(elem, 0, &mut self.index_factory);
+		self.heap.push(elem, 0, &mut self.empty);
 	}
 
 	//Removes the top element from the pile and returns it, or None if it is empty 
 	pub fn pop(&mut self) -> Option<T>{
         match self.heap.len() > 0 {
             true => {
-                let r = unsafe{ self.heap.delete(0, &mut self.index_factory) };
+                let r = unsafe{ self.heap.delete(0, &mut self.empty) };
                 Some(r.0)
             },
             false => None,
@@ -89,6 +70,7 @@ impl<T: Debug> Debug for SimpleHeap<T> where T: Debug {
         )
     }
 }
+
 
 #[test]
 fn test(){

@@ -1,4 +1,5 @@
 pub use slab::Slab;
+pub use ver_index::bit::BitIndex;
 
 
 // TODO 支持 Arc， 需要对slab加读写锁
@@ -6,7 +7,7 @@ pub use slab::Slab;
 macro_rules! rc{
     ($(#[$attr:meta])* $name: ident, $elem: ty, $container: ident) => {
         lazy_static! {
-            pub static ref $container: usize = Box::into_raw(Box::new($crate::rc::Slab::<$elem>::new())) as usize;
+            pub static ref $container: usize = Box::into_raw(Box::new($crate::rc::Slab::<$elem, BitIndex>::default())) as usize;
         }
 
         $(#[$attr])*
@@ -17,31 +18,31 @@ macro_rules! rc{
         impl $name {
             pub fn new(value: $elem) -> $name{
                 $name{
-                    id: <$crate::rc::Slab<$crate::rc::Inner<$elem>>>::insert(unsafe{&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)}, $crate::rc::Inner{count: 1, value: value}),
+                    id: <$crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>>::insert(unsafe{&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)}, $crate::rc::Inner{count: 1, value: value}),
                 }
             }
 
             pub fn strong_count(&self) -> usize{
-                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)).get_unchecked_mut(self.id).count}
+                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).get_unchecked_mut(self.id).count}
             }
         }
 
         impl std::ops::Deref for $name {
             type Target = $elem;
             fn deref(&self) -> &Self::Target {
-                unsafe{&(&*(* $container as *const $crate::rc::Slab<$crate::rc::Inner<$elem>>)).get_unchecked(self.id).value}
+                unsafe{&(&*(* $container as *const $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).get_unchecked(self.id).value}
             }
         }
 
         impl std::ops::DerefMut for $name {
             fn deref_mut(&mut self) -> &mut Self::Target {
-                unsafe{&mut (&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)).get_unchecked_mut(self.id).value}
+                unsafe{&mut (&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).get_unchecked_mut(self.id).value}
             }
         }
 
         impl Clone for $name {
             fn clone(&self) -> $name {
-                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)).get_unchecked_mut(self.id)}.count += 1;
+                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).get_unchecked_mut(self.id)}.count += 1;
                 $name{
                     id: self.id
                 }
@@ -51,13 +52,13 @@ macro_rules! rc{
         impl std::ops::Drop for $name {
             fn drop(&mut self){
                 let count = {
-                    let mut inner = unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)).get_unchecked_mut(self.id)};
+                    let mut inner = unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).get_unchecked_mut(self.id)};
                     inner.count -= 1;
                     inner.count
                 };
                 
                 if count == 0{
-                    unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>>)).remove(self.id)};
+                    unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$crate::rc::Inner<$elem>, BitIndex>)).remove(self.id)};
                 }
             }
         }
@@ -73,7 +74,7 @@ pub struct Inner<T>{
 macro_rules! id{
     ($name: ident, $elem: ty, $container: ident) => {
         lazy_static! {
-            pub static ref $container: usize = Box::into_raw(Box::new($crate::rc::Slab::<$elem>::new())) as usize;
+            pub static ref $container: usize = Box::into_raw(Box::new($crate::rc::Slab::<$elem, BitIndex>::default())) as usize;
         }
 
         pub struct $name{
@@ -83,7 +84,7 @@ macro_rules! id{
         impl $name {
             pub fn new(value: $elem) -> $name{
                 $name{
-                    id: <$crate::rc::Slab<$elem>>::insert(unsafe{&mut *(* $container as *mut $crate::rc::Slab<$elem>)}, value),
+                    id: <$crate::rc::Slab<$elem, BitIndex>>::insert(unsafe{&mut *(* $container as *mut $crate::rc::Slab<$elem>)}, value),
                 }
             }
         }
@@ -97,13 +98,13 @@ macro_rules! id{
 
         impl std::ops::DerefMut for $name {
             fn deref_mut(&mut self) -> &mut Self::Target {
-                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$elem>)).get_unchecked_mut(self.id)}
+                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$elem, BitIndex>)).get_unchecked_mut(self.id)}
             }
         }
 
         impl std::ops::Drop for $name {
             fn drop(&mut self){
-                unsafe{(&mut *(* $container as *mut $crate::rc::Slab<$elem>)).remove(self.id)};
+                (&mut *(* $container as *mut $crate::rc::Slab<$elem, BitIndex>)).remove(self.id);
             }
         }
     }
@@ -116,7 +117,7 @@ pub struct A{
 }
 
 #[cfg(test)]
-rc!(RCA, A, _rc_slab);
+rc!(RCA, A, _RC_SLAB);
 
 #[test]
 fn test(){

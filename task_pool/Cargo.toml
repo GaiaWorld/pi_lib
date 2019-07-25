@@ -6,10 +6,12 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 [dependencies]
 wtree = {path="../wtree"}
 timer = {path="../timer"}
-dyn_uint = {path="../dyn_uint"}
+index_class = {path="../index_class"}
+ver_index={path="../ver_index"}
 deque = {path="../deque"}
 slab = {path="../slab"}
 time = {path="../time"}
+share = {path="../share"}
 rand = "0.5.4"
 flame = "0.2.2"
 flamer = "0.3"

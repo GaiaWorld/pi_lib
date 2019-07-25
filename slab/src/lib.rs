@@ -1,447 +1,319 @@
 
-use std::mem::{size_of, transmute_copy, needs_drop, replace};
+extern crate map;
+extern crate ver_index;
+
+use std::mem::{transmute_copy, needs_drop, replace};
 use std::fmt::{Debug, Formatter, Result as FResult};
-use std::ops::{Index, IndexMut};
 use std::iter::IntoIterator;
 use std::ops::Drop;
 use std::ptr::write;
 
-pub trait IndexMap<T>{
-    fn len(&self) -> usize;
-    fn get(&self, key: usize) -> Option<&T>;
-    fn get_mut(&mut self, key: usize) -> Option<&mut T>;
-    fn contains(&self, key: usize) -> bool;
-    unsafe fn get_unchecked(&self, key: usize) -> &T;
-    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T;
-    fn insert(&mut self, val: T) -> usize;
-    fn remove(&mut self, key: usize) -> T;
+use map::Map;
+use ver_index::VerIndex;
+
+
+pub trait IdAllocater<T> {
+    type ID: Copy + Debug + PartialEq + Default + Send + Sync;
+    fn alloc(&mut self, val: T) -> Self::ID;
 }
 
-pub struct Slab<T> {
+pub struct Slab<T, I: VerIndex> {
     entries: Vec<T>,// Chunk of memory
-    vacancy_sign: Vec<usize>,// sign for vacancy
-    len: usize,// Number of Filled elements currently in the slab
+    indexs: I,// version index
+    len: usize,
     next: usize, //Offset of the next vacancy
 }
 
-impl<T> Default for Slab<T> {
+impl<T, I: VerIndex + Default> Default for Slab<T, I> {
     fn default() -> Self {
-        Slab::new()
+        Slab {
+            entries: Vec::new(),
+            indexs: I::default(),
+            len: 0,
+            next: 0,
+        }
     }
 }
-impl<T: Clone> Clone for Slab<T> {
+impl<T: Clone, I: VerIndex + Clone> Clone for Slab<T, I> {
     fn clone(&self) -> Self {
         Slab {
             entries: self.entries.to_vec(),
-            vacancy_sign: self.vacancy_sign.to_vec(),
+            indexs: self.indexs.clone(),
             len: self.len,
             next: self.next,
         }
     }
 }
 
-impl<T> Slab<T> {
-
-    pub fn new() -> Slab<T> {
-        Slab::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Slab<T> {
-        Slab {
-            entries: Vec::with_capacity(capacity),
-            next: 0,
-            len: 0,
-            vacancy_sign: Vec::with_capacity(usize_size() << 1),
-        }
-    }
+impl<T, I: VerIndex> Slab<T, I> {
 
     pub fn capacity(&self) -> usize {
         self.entries.capacity()
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        if self.capacity() - self.len >= additional {
-            return;
-        }
-        let need_add = self.len + additional - self.entries.len();
-        self.entries.reserve(need_add);
-        self.vacancy_sign.reserve(need_add/usize_size());
-    }
-
-    
-    pub fn reserve_exact(&mut self, additional: usize) {
-        if self.capacity() - self.len >= additional {
-            return;
-        }
-        let need_add = self.len + additional - self.entries.len();
-        self.entries.reserve_exact(need_add);
-        self.vacancy_sign.reserve(need_add/usize_size());
+        self.entries.reserve(additional);
+        self.indexs.reserve(additional);
     }
 
     pub fn shrink_to_fit(&mut self) {
         self.entries.shrink_to_fit();
-        self.vacancy_sign.shrink_to_fit();
+        self.indexs.shrink_to_fit();
     }
 
     pub fn clear(&mut self) {
         self.clear_entries();
-        //self.entries.clear();
-        self.vacancy_sign.clear();
+        self.indexs.clear();
         self.len = 0;
         self.next = 0;
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
 
-    pub fn iter(&self) -> SlabIter<T> {
+    pub fn iter(&self) -> SlabIter<T, I> {
         SlabIter {
             entries: &self.entries,
-            signs: &self.vacancy_sign,
-            curr_index: 0,
+            indexs: &self.indexs,
             len: self.len,
-            curr_len: 0,
+            cur_index: self.indexs.first_true(),
+            cur_len: 0,
         }
     }
 
-    pub fn iter_mut(&mut self) -> SlabIterMut<T> {
+    pub fn iter_mut(&mut self) -> SlabIterMut<T, I> {
         SlabIterMut {
-            entries: &mut self.entries as *mut Vec<T>,
-            signs: &mut self.vacancy_sign,
-            curr_index: 0,
+            entries: &mut self.entries,
+            indexs: &self.indexs,
             len: self.len,
-            curr_len: 0,
+            cur_index: self.indexs.first_true(),
+            cur_len: 0,
         }
     }
 
-    pub fn get(&self, key: usize) -> Option<&T> {
-        if key == 0 || key > self.entries.len() || self.is_one(key - 1){
+    #[inline(always)]
+    pub fn get(&self, key: I::ID) -> Option<&T> {
+        let (v, k) = self.indexs.split(key);
+        if k == 0 || k > self.entries.len() || self.indexs.version(k - 1) != v{
             return None;
         }
-        return Some(&self.entries[key - 1]);
+        return Some(unsafe{self.entries.get_unchecked(k - 1)})
     }
 
-    pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        if key == 0 || key > self.entries.len() || self.is_one(key - 1){
+    #[inline(always)]
+    pub fn get_mut(&mut self, key: I::ID) -> Option<&mut T> {
+        let (v, k) = self.indexs.split(key);
+        if k == 0 || k > self.entries.len() || self.indexs.version(k - 1) != v{
             return None;
         }
-        return Some(&mut self.entries[key - 1])
-        
+        return Some(unsafe{self.entries.get_unchecked_mut(k - 1)})
     }
 
-    pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        return &self.entries[key - 1];
+    #[inline(always)]
+    pub unsafe fn get_unchecked(&self, key: I::ID) -> &T {
+        self.entries.get_unchecked(self.indexs.split(key).1 - 1)
     }
 
-    pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-        return &mut self.entries[key - 1];
+    #[inline(always)]
+    pub unsafe fn get_unchecked_mut(&mut self, key: I::ID) -> &mut T {
+        self.entries.get_unchecked_mut(self.indexs.split(key).1 - 1)
     }
 
-    pub fn alloc_with_is_first(&mut self) -> (usize, &mut T, bool){
-        let key = self.next + 1;
-        let r = self.alloc_with_is_first_at(key);
-        (key, r.0, r.1)
-    }
-
-    pub fn alloc_with_is_first_at(&mut self, key: usize) -> (&mut T, bool) {
-        let key = key - 1;
-        let len = self.entries.len();
-        self.len += 1;
-        let t = if key == len {
-            if len == self.capacity() {
-                self.entries.reserve(1);
-            }
-            unsafe{self.entries.set_len(len + 1)};
-            self.next = key + 1;
-            let s_index = key%usize_size();
-            if s_index == 0{
-                self.vacancy_sign.push(usize::max_value() - 1);
-            }else {
-                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
-            }
-            (&mut self.entries[key], true)
-        } else {
-            self.next = unsafe{*(&self.entries[key] as *const T as usize as *const usize)}.clone();
-            self.one2zero(key);
-            (&mut self.entries[key], false)
-        };
-        t
-    }
-
-    pub fn alloc(&mut self) -> (usize, &mut T){
-        let key = self.next + 1;
-        (key, self.alloc_at(key))
-    }
-
-    pub fn alloc_at(&mut self, key: usize) -> &mut T {
-        let key = key - 1;
-        let len = self.entries.len();
-        self.len += 1;
-        let t = if key == len {
-            if len == self.capacity() {
-                self.entries.reserve(1);
-            }
-            unsafe{self.entries.set_len(len + 1)};
-            self.next = key + 1;
-            let s_index = key%usize_size();
-            if s_index == 0{
-                self.vacancy_sign.push(usize::max_value() - 1);
-            }else {
-                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
-            }
-            &mut self.entries[key]
-        } else {
-            self.next = unsafe{*(&self.entries[key] as *const T as usize as *const usize)}.clone();
-            self.one2zero(key);
-            &mut self.entries[key]
-        };
-        t
-    }
-
-    pub fn insert(&mut self, val: T) -> usize {
-        let key = self.next + 1;
-        self.insert_at(key, val);
-        key
-    }
-
-    pub fn insert_at(&mut self, key: usize, val: T) {
-        let key = key - 1;
+    #[inline(always)]
+    pub fn insert(&mut self, val: T) -> I::ID {
+        let key = self.next;
         if key == self.entries.len() {
-            self.entries.push(val);
-            self.next = key + 1;
-            let s_index = key%usize_size();
-            if s_index == 0{
-                self.vacancy_sign.push(usize::max_value() - 1);
-            }else {
-                one2zero(&mut self.vacancy_sign[key/usize_size()], s_index);
+            if key == self.entries.capacity() {
+                self.reserve(1);
             }
+            self.next = key + 1;
+            unsafe{
+                write(self.entries.as_mut_ptr().add(key), val);
+                self.entries.set_len(key + 1);
+            };
         } else {
             self.next = unsafe{*(&mut self.entries[key] as *mut T as usize as *mut usize)};
-            unsafe{write(&mut self.entries[key] as *mut T, val)};
-            self.one2zero(key);
-           
+            unsafe{write(self.entries.as_mut_ptr().add(key), val)};
         }
         self.len += 1;
+        let version = self.indexs.set_true(key);
+        self.indexs.merge(version, key + 1)
     }
 
-    pub fn remove(&mut self, key: usize) -> T {
-        let key1 = key - 1;
-        let r: T = unsafe{ transmute_copy(&self.entries[key1]) };
-        unsafe{*(&mut self.entries[key1] as *mut T as usize as *mut usize) = self.next };
-        self.next = key1;
-        self.zero2one(key1);
+    #[inline(always)]
+    pub fn remove(&mut self, key: I::ID) -> Option<T> {
+        let (v, k) = self.indexs.split(key);
+        let key = k - 1;
+        if key >= self.entries.len() || !self.indexs.set_false(key, v) {
+            return None;
+        }
         self.len -= 1;
-        r
-    }
-
-    pub unsafe fn replace(&mut self, key: usize, value: T) -> T {
-        replace(&mut self.entries[key - 1], value)
-    }
-
-    pub fn contains(&self, key: usize) -> bool {
-        if key == 0 || key > self.entries.len() || self.is_one(key - 1) {
-            false
-        } else{
-            true
+        unsafe {
+            let v = self.entries.get_unchecked_mut(key);
+            let r = transmute_copy(v);
+            *(v as *mut T as usize as *mut usize) = self.next;
+            self.next = key;
+            Some(r)
         }
     }
 
-    // pub fn retain<F>(&mut self, mut f: F) where F: FnMut(usize, &mut T) -> bool {
-    //     for i in 0..self.entries.len() {
-    //         let keep = match self.entries[i] {
-    //             Entry::Occupied(ref mut v) => f(i, v),
-    //             _ => true,
-    //         };
-
-    //         if !keep {
-    //             self.remove(i);
-    //         }
-    //     }
-    // }
-
-    #[inline]
-    fn zero2one(&mut self, index: usize){
-        zero2one(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
+    #[inline(always)]
+    pub unsafe fn replace(&mut self, key: I::ID, value: T) -> T {
+        replace(self.entries.get_unchecked_mut(self.indexs.split(key).1 - 1), value)
     }
 
-    #[inline]
-    fn one2zero(&mut self, index: usize){
-        one2zero(&mut self.vacancy_sign[index/usize_size()], index%usize_size());
-    }
-
-    #[inline]
-    fn is_one(&self, key: usize) -> bool{
-        let signs = unsafe {self.vacancy_sign.get_unchecked(key/usize_size())};
-        is_one(signs, key%usize_size())
+    pub fn contains(&self, key: I::ID) -> bool {
+        let (v, k) = self.indexs.split(key);
+        !(k == 0 || k > self.entries.len() || self.indexs.version(k - 1) != v)
     }
 
     fn clear_entries(&mut self){
-        if needs_drop::<T>(){
-            let count = 0;
-            if self.entries.len() == 0 {
-                return;
-            }
-            let index = self.entries.len() - 1;
-            let mut index1 = index/usize_size();
-            let mut index2 = index%usize_size();
-            loop {
-                let signs = self.vacancy_sign[index1].clone();
-                let diff = usize_size() - index2 - 1;
-                let signs =  signs<<diff;
-                let len = self.entries.len();
-                if signs == usize::max_value()<<diff {  //如果全是空位， 不需要drop
-                    unsafe{ self.entries.set_len(len - (index2 + 1))};
-                }else{ //否则找到容器尾部的非空位， 移除元素（移除即drop）
-                    let i = (!signs).leading_zeros() as usize;
-                    unsafe{ self.entries.set_len(len - i)};
+        if needs_drop::<T>() {
+            let mut count = self.len;
+            if count > 0 {
+                let mut cur = self.indexs.prev_true(self.entries.len());
+                while count > 0 && cur.0 > 0 {
+                    unsafe{ self.entries.set_len(cur.1 + 1)};
                     self.entries.pop();
-                    if index2 - i != 0{
-                        index2 = index2 - i - 1;
-                        continue;
-                    }
-                }
-                if index1 == 0 {
-                    return;
-                }
-                index1 -= 1;
-                index2 = usize_size() - 1;
-                if count == self.len(){
-                    break;
+                    count -= 1;
+                    cur = self.indexs.prev_true(cur.1);
                 }
             }
         }
+        unsafe{ self.entries.set_len(0)};
     }
 }
 
-impl<T> IndexMap<T> for Slab<T>{
+impl<T, I: VerIndex> Map for Slab<T, I> {
+	type Key = I::ID;
+	type Val = T;
     #[inline]
     fn len(&self) -> usize{
         self.len()
     }
     #[inline]
-    fn get(&self, key: usize) -> Option<&T> {
-        self.get(key)
+    fn get(&self, key: &Self::Key) -> Option<&T> {
+        self.get(*key)
     }
     #[inline]
-    fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        self.get_mut(key)
+    fn get_mut(&mut self, key: &Self::Key) -> Option<&mut T> {
+        self.get_mut(*key)
     }
     #[inline]
-    fn contains(&self, key: usize) -> bool{
-        self.contains(key)
+    fn contains(&self, key: &Self::Key) -> bool{
+        self.contains(*key)
     }
     #[inline]
-    unsafe fn get_unchecked(&self, key: usize) -> &T{
-        self.get_unchecked(key)
+    unsafe fn get_unchecked(&self, key: &Self::Key) -> &T{
+        self.get_unchecked(*key)
     }
     #[inline]
-    unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T{
-        self.get_unchecked_mut(key)
+    unsafe fn get_unchecked_mut(&mut self, key: &Self::Key) -> &mut T{
+        self.get_unchecked_mut(*key)
     }
     #[inline]
-    fn insert(&mut self, val: T) -> usize{
-        self.insert(val)
+    fn insert(&mut self, key: Self::Key, val: T) -> Option<T>{
+        match self.get_mut(key) {
+            Some(r) => Some(replace(r, val)),
+            None => None
+        }
     }
     #[inline]
-    fn remove(&mut self, key: usize) -> T{
-        self.remove(key)
+    fn remove(&mut self, key: &Self::Key) -> Option<T> {
+        self.remove(*key)
+    }
+    #[inline]
+    fn clear(&mut self) {
+        self.clear()
     }
 }
 
-impl<T> Drop for Slab<T>{
+impl<T, I: VerIndex> IdAllocater<T> for Slab<T, I> {
+    type ID = I::ID;
+    #[inline(always)]
+    fn alloc(&mut self, val: T) -> Self::ID {
+        self.insert(val)
+    }
+}
+
+impl<T, I: VerIndex> Drop for Slab<T, I>{
     fn drop(&mut self) {
         self.clear_entries();
     }
 }
 
-impl<T> Index<usize> for Slab<T> {
-    type Output = T;
+impl<'a, T: 'a, I: VerIndex + 'a> IntoIterator for &'a Slab<T, I> {
+    type Item = (I::ID, &'a T);
+    type IntoIter = SlabIter<'a, T, I>;
 
-    fn index(&self, key: usize) -> &T {
-        unsafe{ self.get_unchecked(key) }
-    }
-}
-
-impl<T> IndexMut<usize> for Slab<T> {
-    fn index_mut(&mut self, key: usize) -> &mut T {
-        unsafe{ self.get_unchecked_mut(key) }
-    }
-}
-
-impl<'a, T> IntoIterator for &'a Slab<T> {
-    type Item = (usize, &'a T);
-    type IntoIter = SlabIter<'a, T>;
-
-    fn into_iter(self) -> SlabIter<'a, T> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut Slab<T> {
-    type Item = (usize, &'a mut T);
-    type IntoIter = SlabIterMut<'a, T>;
+impl<'a, T: 'a, I: VerIndex + 'a> IntoIterator for &'a mut Slab<T, I> {
+    type Item = (I::ID, &'a mut T);
+    type IntoIter = SlabIterMut<'a, T, I>;
 
-    fn into_iter(self) -> SlabIterMut<'a, T> {
+    fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl<T> Debug for Slab<T> where T: Debug {
+impl<T, I: VerIndex> Debug for Slab<T, I> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
-        //let vacancy_sign = Vec<()>;
         let mut s = String::from("[");
-        for v in self.vacancy_sign.iter(){
-            s += &format!("{:b}", v);
-            s += ",";
+        for v in self.iter(){
+            s += &format!("({:?} {:?}),", v.0, v.1);
         }
         s += "]";
         write!(fmt,
-               "Slab {{ len: {}, cap: {}, next: {}, vacancy_sign: {}, entries:{:?} }}",
+               "Slab {{ len: {}, cap: {}, entries_len:{}, next: {}, entries: {} }}",
                self.len,
-               self.capacity(),
+               self.entries.capacity(),
+               self.entries.len(),
                self.next,
-               s,
-               self.entries)
+               s)
     }
 }
 
-pub struct SlabIter<'a, T: 'a> {
-    signs: &'a Vec<usize>,
+pub struct SlabIter<'a, T: 'a, I: VerIndex + 'a> {
     entries: &'a Vec<T>,
-    curr_index: usize,
-    curr_len: usize,
+    indexs: &'a I,
     len: usize,
+    cur_index: (usize, usize),
+    cur_len: usize,
 }
 
-pub struct SlabIterMut<'a, T: 'a> {
-    signs: &'a Vec<usize>,
-    entries: *mut Vec<T>,
-    curr_index: usize,
-    curr_len: usize,
+pub struct SlabIterMut<'a, T: 'a, I: VerIndex + 'a> {
+    entries: &'a mut Vec<T>,
+    indexs: &'a I,
     len: usize,
+    cur_index: (usize, usize),
+    cur_len: usize,
 }
 
-impl<'a, T: 'a> Debug for SlabIter<'a, T> where T: Debug {
+impl<'a, T: 'a, I: VerIndex + 'a> Debug for SlabIter<'a, T, I> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
         fmt.debug_struct("Iter")
-            .field("curr", &self.curr_index)
-            .field("remaining", &self.len)
+            .field("curr", &self.cur_index)
+            .field("remaining", &self.cur_len)
             .finish()
     }
 }
 
-impl<'a, T: 'a> Debug for SlabIterMut<'a, T> where T: Debug {
+impl<'a, T: 'a, I: VerIndex + 'a> Debug for SlabIterMut<'a, T, I> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
         fmt.debug_struct("IterMut")
-            .field("curr", &self.curr_index)
-            .field("remaining", &self.len)
+            .field("curr", &self.cur_index)
+            .field("remaining", &self.cur_len)
             .finish()
     }
 }
@@ -449,85 +321,41 @@ impl<'a, T: 'a> Debug for SlabIterMut<'a, T> where T: Debug {
 
 // ===== Iter =====
 
-impl<'a, T> Iterator for SlabIter<'a, T> {
-    type Item = (usize, &'a T);
+impl<'a, T, I: VerIndex + 'a> Iterator for SlabIter<'a, T, I> {
+    type Item = (I::ID, &'a T);
 
-    fn next(&mut self) -> Option<(usize, &'a T)> {
-        if self.curr_len == self.len {
+    fn next(&mut self) -> Option<(I::ID, &'a T)> {
+        if self.cur_index.0 == 0 {
             return None;
         }
-        let sign_index = self.curr_index/usize_size();
-        let mut sign_index1 = self.curr_index%usize_size();
-        for i in sign_index..self.signs.len(){
-            let sign = self.signs[i].clone() >> sign_index1;       
-            if sign != usize::max_value() >> sign_index1{
-                let first_zero = find_zero(sign);
-                let curr = self.curr_index + first_zero;
-                self.curr_index = curr + 1;
-                self.curr_len += 1;
-                return Some((curr + 1, &self.entries[curr]));
-            }else {
-                self.curr_index += usize_size() - sign_index1;
-                sign_index1 = 0;
-            }
+        let r = Some((self.indexs.merge(self.cur_index.0, self.cur_index.1 + 1), unsafe{self.entries.get_unchecked(self.cur_index.1)}));
+        self.cur_len += 1;
+        if self.cur_len < self.len {
+            self.cur_index = self.indexs.next_true(self.cur_index.1);
+        }else{
+            self.cur_index.0 = 0;
         }
-        None
+        r
     }
 }
 
 // ===== IterMut =====
+impl<'a, T, I: VerIndex + 'a> Iterator for SlabIterMut<'a, T, I> {
+    type Item = (I::ID, &'a mut T);
 
-impl<'a, T> Iterator for SlabIterMut<'a, T> {
-    type Item = (usize, &'a mut T);
-
-    fn next(&mut self) -> Option<(usize, &'a mut T)> {
-        if self.curr_len == self.len {
+    fn next(&mut self) -> Option<(I::ID, &'a mut T)> {
+        if self.cur_index.0 == 0 {
             return None;
         }
-        let sign_index = self.curr_index/usize_size();
-        let mut sign_index1 = self.curr_index%usize_size();
-        for i in sign_index..self.signs.len(){
-            let sign = self.signs[i].clone() >> sign_index1;
-            if sign != usize::max_value() >> sign_index1{
-                let first_zero = find_zero(sign);
-                let curr = self.curr_index + first_zero;
-                self.curr_index = curr + 1;
-                self.curr_len += 1;
-                return Some((curr + 1, unsafe{&mut (*self.entries)[curr]} ));
-            }else {
-                self.curr_index += usize_size() - sign_index1;
-                sign_index1 = 0;
-            }
+        let r = Some((self.indexs.merge(self.cur_index.0, self.cur_index.1 + 1), unsafe{&mut *(self.entries.get_unchecked_mut(self.cur_index.1) as *mut T)}));
+        self.cur_len += 1;
+        if self.cur_len < self.len {
+            self.cur_index = self.indexs.next_true(self.cur_index.1);
+        }else{
+            self.cur_index.0 = 0;
         }
-        None
+        r
     }
-}
-
-#[inline]
-fn is_one(i: &usize, index: usize) -> bool {
-    ((i >> index) & 1 == 1)
-}
-
-#[inline]
-fn zero2one(i: &mut usize, index: usize){
-    (*i) = *i | (1 << index);
-}
-
-#[inline]
-fn one2zero(i: &mut usize, index: usize){
-    (*i) = *i - (1 << index);
-}
-
-#[inline]
-fn usize_size() -> usize{
-    size_of::<usize>() * 8
-}
-
-// 返回指定的数字中从最低位开始第一个0的位置
-#[inline]
-fn find_zero(i:usize) -> usize {
-	let a = !i;
-    a.trailing_zeros() as usize
 }
 
 #[cfg(test)]
@@ -535,11 +363,14 @@ extern crate time;
 
 #[test]
 fn test(){
-    let mut slab: Slab<u64> = Slab::new();
+    use ver_index::bit::BitIndex;
+    let mut slab: Slab<u64, BitIndex> = Slab::default();
     for i in 1..71{
         slab.insert(i);
-        println!("slab------{:?}", slab);
     }
+    println!("!!!------{:?}", slab);
+    slab.remove(70);
+    println!("r 70------{:?}", slab);
 
     slab.remove(30);
     println!("r 30------{:?}", slab);
@@ -550,22 +381,6 @@ fn test(){
     slab.remove(69);
     println!("r 69------{:?}", slab);
 
-    slab.remove(70);
-    println!("r 70------{:?}", slab);
-
-    {
-        let mut it = slab.iter_mut();
-        println!("itermut start-----------------------------------------------");
-        loop {
-            match it.next() {
-                Some(n) => {
-                    print!("{:?},", n);
-                },
-                None => break,
-            };
-        }
-        println!("itermut end-----------------------------------------------");
-    }
 
     slab.insert(70);
     println!("i 70------{:?}", slab);
@@ -573,11 +388,11 @@ fn test(){
     slab.insert(60);
     println!("i 60------{:?}", slab);
 
-    slab.insert(31);
-    println!("i 31------{:?}", slab);
-
     slab.insert(30);
     println!("i 31------{:?}", slab);
+
+    slab.insert(31);
+    println!("i 30------{:?}", slab);
 
     slab.insert(71);
     println!("i 71------{:?}", slab);
@@ -590,7 +405,7 @@ fn test(){
     assert_eq!(slab.get(0), None);
     assert_eq!(slab.get(1), Some(&1));
     assert_eq!(slab.get(50), Some(&50));
-    assert_eq!(slab.get(70), Some(&70));
+    assert_eq!(slab.get(70), Some(&31));
     assert_eq!(slab.get(72), None);
 
 
@@ -605,7 +420,7 @@ fn test(){
     assert_eq!(unsafe{slab.get_unchecked(55)}, &55);
     assert_eq!(unsafe{slab.get_unchecked(60)}, &60);
 
-    assert_eq!(unsafe{slab.get_unchecked_mut(31)}, &mut 31);
+    assert_eq!(unsafe{slab.get_unchecked_mut(31)}, &mut 60);
     assert_eq!(unsafe{slab.get_unchecked_mut(44)}, &mut 44);
     assert_eq!(unsafe{slab.get_unchecked_mut(33)}, &mut 33);
     assert_eq!(unsafe{slab.get_unchecked_mut(7)}, &mut 7);
@@ -625,60 +440,53 @@ fn test(){
 
 #[test]
 fn test_alloc(){
-    let mut slab: Slab<u64> = Slab::new();
+    use ver_index::bit::BitIndex;
+    let mut slab: Slab<u64, BitIndex> = Slab::default();
     for i in 1..71{
-        let r = slab.alloc();
-        *r.1 = i;
+        slab.insert(i);
     }
     println!("slab ------{:?}", slab);
 }
 
-
-
 #[test]
 fn test_eff(){
-    use time::now_millis;
-    let mut slab: Slab<u64> = Slab::new();
-    let time = now_millis();
-    for i in 0..1000000{
-        let r = slab.alloc();
-        *r.1 = i;
-    }
-    println!("alloc time-----------------------------------------------{}", now_millis() - time);
-    let mut slab: Slab<u64> = Slab::new();
-    let time = now_millis();
+    extern crate time;
+    use time::now_millisecond;
+    use ver_index::bit::BitIndex;
+    let mut slab: Slab<u64, BitIndex> = Slab::default();
+    let time = now_millisecond();
     for i in 0..1000000{
         slab.insert(i);
     }
-    let time1 = now_millis();
+    println!("alloc time-----------------------------------------------{}", now_millisecond() - time);
+    slab.clear();
+    let time = now_millisecond();
+    for i in 0..1000000{
+        slab.insert(i);
+    }
+    let time1 = now_millisecond();
     println!("insert time-----------------------------------------------{}", time1 - time);
 
     for i in 1..1000001{
         slab.remove(i);
     }
-    let time2 = now_millis();
+    let time2 = now_millisecond();
     println!("remove time-----------------------------------------------{}", time2 - time1);
 
-    let time = now_millis();
+    let time = now_millisecond();
     for i in 0..1000000{
         slab.insert(i);
     }
-    let time1 = now_millis();
+    let time1 = now_millisecond();
     println!("insert1 time-----------------------------------------------{}", time1 - time);
 
     let mut v = Vec::new();
 
-    let time3 = now_millis();
+    let time3 = now_millisecond();
     for i in 1..1000001{
         v.push(i);
     }
 
-    let time4 = now_millis();
+    let time4 = now_millisecond();
     println!("insert vec time-----------------------------------------------{}", time4 - time3);
 }
-
-// #[test]
-// fn m(){
-//     //let a: usize = (usize::max_value() - 1) << 1;
-//     println!("xxxxxxxxxxxxxxxxxxxxxx");
-// }

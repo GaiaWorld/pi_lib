@@ -3,6 +3,7 @@
 extern crate atom;
 extern crate apm;
 extern crate wheel;
+extern crate ver_index;
 extern crate time;
 
 #[macro_use]
@@ -12,13 +13,16 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration};
-use std::sync::atomic::{AtomicUsize, Ordering, AtomicU64};
+use std::sync::atomic::{AtomicUsize, AtomicU64};
 use std::mem::{transmute};
 use std::marker::Send;
+use std::marker::PhantomData;
 
 use atom::Atom;
 use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
-use wheel::slab_wheel::Wheel;
+use wheel::slab_wheel::SlabWheel;
+use ver_index::VerIndex;
+use ver_index::bit::BitIndex;
 use wheel::wheel::Item;
 use time::{run_millis};
 
@@ -35,14 +39,13 @@ lazy_static! {
     pub static ref TIMER_RUN_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("timer_run_time"), 0).unwrap();
 }
 
-pub trait Runer{
-    fn run(self, index: usize);
+pub trait Runer<ID>{
+    fn run(self, id: ID);
 }
 
-impl<T: 'static + Send + Runer> Timer<T>{
+impl<T: 'static + Send + Runer<I::ID>, I:VerIndex+Default+Send+Sync+'static> Timer<T, I>{
     pub fn new(clock_ms: u64) -> Self {
         TIMER_COUNT.sum(1);
-
         Timer(Arc::new(Mutex::new(TimerImpl::new(clock_ms))))
     }
 
@@ -71,14 +74,14 @@ impl<T: 'static + Send + Runer> Timer<T>{
                                 }
                             }
                         };
-                        now = run_task(&s, &mut r);
+                        now = run_task::<T, I>(&mut r);
                         now = run_zero(&s, now);//运行0毫秒任务
                     }
                 }
-		});
+		}).unwrap();
 	}
 
-    pub fn set_timeout(&self, elem: T, ms: u32) -> usize{
+    pub fn set_timeout(&self, elem: T, ms: u32) -> I::ID{
         TIMER_CREATE_COUNT.sum(1);
 
         let mut lock = self.0.lock().unwrap();
@@ -86,9 +89,9 @@ impl<T: 'static + Send + Runer> Timer<T>{
 		lock.wheel.insert(Item{elem: elem, time_point: time + (ms as u64)})
 	}
 
-    pub fn cancel(&self, index: usize) -> Option<T>{
+    pub fn cancel(&self, index: I::ID) -> Option<T>{
         let mut lock = self.0.lock().unwrap();
-		match lock.wheel.try_remove(index) {
+		match lock.wheel.remove(index) {
 			Some(v) => {
                 TIMER_CANCEL_COUNT.sum(1);
 
@@ -103,19 +106,19 @@ impl<T: 'static + Send + Runer> Timer<T>{
 	}
 }
 
-pub struct TimerImpl<T: Send + Runer>{
-	wheel: Wheel<T>,
+pub struct TimerImpl<T: Send + Runer<I::ID>, I:VerIndex>{
+	wheel: SlabWheel<T, I>,
 	statistics: Statistics,
 	clock_ms: u64,
 }
 
-impl<T: Send + Runer> TimerImpl<T>{
+impl<T: Send + Runer<I::ID>, I:VerIndex+Default> TimerImpl<T, I>{
 	pub fn new(mut clock_ms: u64) -> Self{
         if clock_ms < 10{
             clock_ms = 10;
         }
 		TimerImpl{
-			wheel: Wheel::new(), 
+			wheel: SlabWheel::default(),
 			statistics: Statistics::new(),
 			clock_ms: clock_ms,
 		}
@@ -126,29 +129,33 @@ impl<T: Send + Runer> TimerImpl<T>{
 	}
 }
 
-pub struct FuncRuner(usize, usize);
-
-impl FuncRuner{
-    pub fn new(f: Box<FnOnce()>) -> Self {
+pub struct FuncRuner<T>(usize, usize, PhantomData<T>);
+impl<T> Default for FuncRuner<T> {
+    fn default() -> Self {
+        FuncRuner(0, 0, PhantomData)
+    }
+}
+impl<T> FuncRuner<T>{
+    pub fn new(f: Box<dyn Fn()>) -> Self {
         unsafe { transmute(f) }
     }
 }
 
-impl Runer for FuncRuner {
-    fn run(self, _index: usize){
-        let func: Box<FnOnce()> = unsafe { transmute((self.0, self.1)) };
+impl<ID> Runer<ID> for FuncRuner<ID> {
+    fn run(self, _id: ID){
+        let func: Box<dyn Fn()> = unsafe { transmute((self.0, self.1)) };
         func();
     }
 }
 
 
 lazy_static! {
-	pub static ref TIMER: Timer<FuncRuner> = Timer::new(10);
+	pub static ref TIMER: Timer<FuncRuner<usize>, BitIndex> = Timer::new(10);
 }
 
-pub struct Timer<T: 'static + Send + Runer>(Arc<Mutex<TimerImpl<T>>>);
+pub struct Timer<T: 'static + Send + Runer<I::ID>, I: VerIndex>(Arc<Mutex<TimerImpl<T, I>>>);
 
-impl<T: 'static + Send + Runer> Clone for Timer<T> {
+impl<T: 'static + Send + Runer<I::ID>, I: VerIndex> Clone for Timer<T, I> {
     fn clone(&self) -> Self{
         Timer(self.0.clone())
     }
@@ -174,34 +181,34 @@ impl Statistics{
 }
 
 
-fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> u64{
+fn run_zero<T: Send + Runer<I::ID>, I:VerIndex>(timer: &Arc<Mutex<TimerImpl<T, I>>>, mut now: u64) -> u64{
     loop {
-        let mut r = {
+        let mut r:Vec<(Item<T>, I::ID)> = {
             let mut s = timer.lock().unwrap();
+            let temp = s.wheel.replace_zero_cache(Vec::new());
             match s.wheel.zero_size() > 0{
-                true => s.wheel.get_zero(),
+                true => s.wheel.get_zero(temp),
                 false => {
                     break;
                 }
             }
         };
-        now = run_task(timer, &mut r);
+        now = run_task::<T, I>(&mut r);
         r.clear();
-        timer.lock().unwrap().wheel.set_zero_cache(r);
+        timer.lock().unwrap().wheel.replace_zero_cache(r);
     }
     now
 }
 
 //执行任务，返回任务执行完的时间
-fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>) -> u64{
+fn run_task<T: Send + Runer<I::ID>, I:VerIndex>(r: &mut Vec<(Item<T>, I::ID)>) -> u64{
     let start = TIMER_RUN_TIME.start();
-    let mut j = r.len();
-    for _ in 0..r.len(){
-        j -= 1;
-        let e = r.remove(j);
-        e.0.elem.run(e.1);
+    loop {
+        match r.pop() {
+            Some(e) => e.0.elem.run(e.1),
+            _ => break
+        }
     }
-
     TIMER_RUN_COUNT.sum(1);
     TIMER_RUN_TIME.timing(start);
     run_millis()

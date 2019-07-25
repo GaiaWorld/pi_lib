@@ -1,11 +1,10 @@
 [package]
-name = "wcs"
+name = "index_class"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 slab = {path="../slab"}
-atom = {path="../atom"}
-paste = "0.1"
-lazy_static = "*"
-fnv = "*"
+map = {path="../map"}
+ver_index = {path="../ver_index"}
+

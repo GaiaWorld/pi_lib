@@ -5,5 +5,7 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 time = {path="../time"}
-rand = "0.5.4"
-dyn_uint = {path="../dyn_uint"}
+rand = "0.7"
+map = {path="../map"}
+index_class = {path="../index_class"}
+ver_index = {path="../ver_index"}

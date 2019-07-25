@@ -5,4 +5,6 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 time = {path="../time"}
-dyn_uint = {path="../dyn_uint"}
+map = {path="../map"}
+index_class = {path="../index_class"}
+ver_index = {path="../ver_index"}

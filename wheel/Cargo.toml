@@ -5,4 +5,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 heap = {path="../heap"}
-dyn_uint = {path="../dyn_uint"}
+index_class = {path="../index_class"}
+ver_index = {path="../ver_index"}

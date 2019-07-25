@@ -8,36 +8,43 @@
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use slab::Slab;
-use deque::{ Deque, Node, Iter as DIter };
+use ver_index::VerIndex;
+use deque::{ Deque, Direction, Node, Iter as DIter };
 
-pub struct SlabDeque<T>{
-    deque: Deque<T, Slab<Node<T>>>,
-    slab: Slab<Node<T>>,
+pub struct SlabDeque<T, I:VerIndex<ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync>{
+    slab: Slab<Node<T, ID>, I>,
+    deque: Deque<T, Slab<Node<T, ID>, I>, ID>,
 }
 
-impl<T> Default for SlabDeque<T> {
+impl<T, I:VerIndex<ID=ID> + Default,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Default for SlabDeque<T, I, ID> {
     fn default() -> Self {
-        SlabDeque::new()
-    }
-}
-
-impl<T> SlabDeque<T> {
-    pub fn new() -> Self {
         Self {
-            deque: Deque::new(),
-            slab: Slab::new(),
+            slab: Slab::default(),
+            deque: Deque::default(),
         }
     }
+}
 
+impl<T, I:VerIndex<ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> SlabDeque<T, I, ID> {
     /// Append an element to the SlabDeque. return a index
     #[inline]
-    pub fn push_back(&mut self, elem: T) -> usize {
+    pub fn push(&mut self, elem: T, direct: Direction) -> ID {
+        self.deque.push(elem, direct, &mut self.slab)
+    }
+    #[inline]
+    pub fn push_back(&mut self, elem: T) -> ID {
         self.deque.push_back(elem, &mut self.slab)
     }
 
     /// Prepend an element to the SlabDeque. return a index
-    pub fn push_front(&mut self, elem: T) -> usize{
+    #[inline]
+    pub fn push_front(&mut self, elem: T) -> ID{
         self.deque.push_front(elem, &mut self.slab)
+    }
+
+    /// Removes the first or last element from the SlabDeque and returns it, or None if it is empty.
+    pub fn pop(&mut self, direct: Direction) -> Option<T> {
+        self.deque.pop(direct, &mut self.slab)
     }
 
     /// Removes the first element from the SlabDeque and returns it, or None if it is empty.
@@ -51,18 +58,14 @@ impl<T> SlabDeque<T> {
     }
 
     ///Removes and returns the element at index from the SlabDeque.
-    pub fn remove(&mut self, index: usize) -> T {
+    pub fn remove(&mut self, index: ID) -> Option<T> {
         self.deque.remove(index, &mut self.slab)
-    }
-
-    ///Removes and returns the element at index from the SlabDeque.
-    pub fn try_remove(&mut self, index: usize) -> Option<T> {
-        self.deque.try_remove(index, &mut self.slab)
     }
 
     //clear SlabDeque
     pub fn clear(&mut self) {
-        self.deque.clear(&mut self.slab)
+        self.slab.clear();
+        self.deque = Deque::default();
     }
 
     //clear SlabDeque
@@ -70,14 +73,14 @@ impl<T> SlabDeque<T> {
         self.slab.len()
     }
 
-    pub fn iter(&mut self) -> Iter<T> {
+    pub fn iter(&mut self) -> Iter<T, I, ID> {
         Iter{
             d_iter: self.deque.iter(&self.slab),
         }
     }
 }
 
-impl<T: Debug> Debug for SlabDeque<T> {
+impl<T: Debug, I:VerIndex<ID=ID> + Default,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Debug for SlabDeque<T, I, ID> {
     fn fmt(&self, f: &mut Formatter) -> FResult {
         f.debug_struct("SlabDeque")
             .field("slab", &self.slab)
@@ -86,12 +89,12 @@ impl<T: Debug> Debug for SlabDeque<T> {
     }
 }
 
-pub struct Iter<'a, T: 'a> {
-    d_iter: DIter<'a, T, Slab<Node<T>>>,
+pub struct Iter<'a, T: 'a, I:VerIndex<ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> {
+    d_iter: DIter<'a, T, Slab<Node<T, ID>, I>, ID>,
 }
 
 
-impl<'a, T> Iterator for Iter<'a, T> {
+impl<'a, T, I:VerIndex<ID=ID>,  ID: Copy + Debug + PartialEq + Default + Send + Sync> Iterator for Iter<'a, T, I, ID> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<&'a T> {
@@ -101,70 +104,81 @@ impl<'a, T> Iterator for Iter<'a, T> {
 
 
 
-#[cfg(test)]
-use time::now_millis;
+// #[cfg(test)]
+// use time::now_millisecond;
 
-#[cfg(test)]
-use std::collections::{VecDeque, HashMap};
+// #[cfg(test)]
+// use std::collections::{VecDeque, HashMap};
 
-#[test]
-fn test(){
-	let mut fast_deque: SlabDeque<u32> = SlabDeque::new();
+// #[test]
+// fn test(){
+//     use ver_index::bit::BitIndex;
+// 	let mut fast_deque: SlabDeque<u32, BitIndex, usize> = SlabDeque::default();
    
-    let i = fast_deque.push_back(1);
-    fast_deque.remove(i);
-    println!("-----{}", fast_deque.len());
+//     let i = fast_deque.push_back(1);
+//     fast_deque.remove(i);
+//     println!("-----{}", fast_deque.len());
 
-}
+// }
 
 
 #[test]
 fn test_effict(){
-	let mut fast_deque: SlabDeque<u32> = SlabDeque::new();
-    let max = 100000;
+    use std::collections::VecDeque;
+    use std::collections::HashMap;
+    use ver_index::bit::BitIndex;
+    use time::now_millisecond;
+	let mut fast_deque: SlabDeque<u32, BitIndex, usize> = SlabDeque::default();
+    let max = 10;
 
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         fast_deque.push_back(i);
     }
 
-    println!("push back time{}",  now_millis() - now);
+    println!("push back time{}",  now_millisecond() - now);
+    println!("1---{:?}",  fast_deque);
 
-    let now = now_millis();
-    for _ in 0..max {
-        fast_deque.pop_back().unwrap();
+    let now = now_millisecond();
+    let mut ii= 0;
+    for i in 0..max {
+        match fast_deque.pop_back() {
+            Some(_) => (),
+            _ => {ii = i; break}
+        }
         //println!("i---------------------{}", i);
         // let index: usize = ((5- i)/2) as usize;
         // println!("index---------------------{}", index);
         // assert_eq!(fast_SlabDeque.remove(&(index + 1)).unwrap(), index as u32);
         //assert_eq!(fast_SlabDeque.pop_front().unwrap(), i);
     }
-    println!("pop_back time{}",  now_millis() - now);
+    println!("pop_back time{} {}",  now_millisecond() - now, ii);
+    println!("2---{:?}",  fast_deque);
 
     let mut vec_deque = VecDeque::new();
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         vec_deque.push_back(i);
     }
-    println!("push vec front time{}",  now_millis() - now);
+    println!("push vec front time{}",  now_millisecond() - now);
 
-    let now = now_millis();
+    let now = now_millisecond();
     for _ in 0..max{
         vec_deque.pop_back();
     }
-    println!("pop vec front time{}",  now_millis() - now);
+    println!("pop vec front time{}",  now_millisecond() - now);
 
     let mut map = HashMap::new();
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         map.insert(i, i);
     }
-    println!("insert HashMap front time{}",  now_millis() - now);
+    println!("insert HashMap front time{}",  now_millisecond() - now);
 
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         assert_eq!(map.remove(&i).unwrap(), i);
     }
-    println!("remove HashMap front time{}",  now_millis() - now);
+    println!("remove HashMap front time{}",  now_millisecond() - now);
 
 }

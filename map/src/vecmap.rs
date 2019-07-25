@@ -116,7 +116,7 @@ impl<T> VecMap<T> {
     }
 
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
-        self.entries[index - 1].as_ref().unwrap()
+        self.entries[index - 1].as_ref().unwrap()// TODO 使用 get_unchecked
     }
 
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
@@ -126,7 +126,7 @@ impl<T> VecMap<T> {
     pub fn insert(&mut self, index:usize, val: T) -> Option<T>{
         let index = index - 1;
         let len = self.entries.len();
-        if index >= len {
+        if index >= len {// TODO 使用 resize
             for _ in 0..index - len  {
                 self.entries.push(None);
             }
@@ -153,11 +153,6 @@ impl<T> VecMap<T> {
             },
             None => None,
         }
-    }
-
-    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
-        self.len -= 1;
-        replace(&mut self.entries[index - 1], None).unwrap()
     }
 
     pub fn contains(&self, index: usize) -> bool {
@@ -200,11 +195,6 @@ impl<T> Map for VecMap<T> {
     }
 
     #[inline]
-    unsafe fn remove_unchecked(&mut self, key: &usize) -> T {
-        self.remove_unchecked(*key)
-    }
-
-    #[inline]
     fn insert(&mut self, key: usize, val: T) -> Option<T> {
         self.insert(key, val)
     }
@@ -222,6 +212,10 @@ impl<T> Map for VecMap<T> {
     #[inline]
     fn len(&self) -> usize {
         self.len
+    }
+    #[inline]
+    fn clear(&mut self) {
+        self.clear()
     }
 }
 
@@ -360,8 +354,6 @@ impl<T> Debug for VecMap<T> where T: Debug {
 #[cfg(test)]
 extern crate time;
 #[cfg(test)]
-use time::now_microsecond;
-#[cfg(test)]
 use std::time::Instant;
 #[test]
 fn test_time(){
@@ -370,7 +362,7 @@ fn test_time(){
 
     let mut arr = Vec::with_capacity(100000);
     let time = Instant::now();
-    for i in 0..10000 {
+    for _i in 0..10000 {
         arr.push(Some([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]));
     }
     println!("insert vec time: {:?}", Instant::now() - time);
@@ -400,16 +392,16 @@ fn test(){
         println!("map------{:?}", map);
     }
 
-    unsafe {map.remove(30)};
+    map.remove(30).unwrap();
     println!("r 30------{:?}", map);
 
-    unsafe {map.remove(31)};
+    map.remove(31).unwrap();
     println!("r 31------{:?}", map);
 
-    unsafe {map.remove(69)};
+    map.remove(69).unwrap();
     println!("r 69------{:?}", map);
 
-    unsafe {map.remove(70)};
+    map.remove(70).unwrap();
     println!("r 70------{:?}", map);
 
     assert_eq!(map.contains(0), false);

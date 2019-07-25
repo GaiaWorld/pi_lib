@@ -1,28 +1,29 @@
 use std::fmt::{Debug, Formatter, Result as FResult};
 
-use dyn_uint::{UintFactory, SlabFactory};
-use wtree::WeightTree as Wtree;
+use index_class::{IndexClassFactory};
+use ver_index::VerIndex;
+use wtree::WeightTree;
 
-pub struct WeightTree<T> {
-    index_factory: SlabFactory<(), ()>,
-    wtree: Wtree<T>,
+
+pub struct SlabWeightTree<T, I:VerIndex> {
+    factory: IndexClassFactory<(), (), I>,
+    wtree: WeightTree<T, I::ID>,
 }
-
-impl<T> WeightTree<T> {
-
-	//构建一颗权重树
-	pub fn new() -> Self{
-        WeightTree{
-            index_factory: SlabFactory::new(),
-            wtree: Wtree::new(),
+impl<T, I:VerIndex+Default> Default for SlabWeightTree<T, I> {
+    fn default() -> Self {
+        SlabWeightTree{
+            factory: IndexClassFactory::default(),
+            wtree: WeightTree::default(),
         }
-	}
+    }
+}
+impl<T, I:VerIndex+Default> SlabWeightTree<T, I> {
 
 	//创建一颗权重树， 并初始容量
 	pub fn with_capacity(capacity: usize) -> Self{
-		WeightTree{
-            index_factory: SlabFactory::new(),
-            wtree: Wtree::with_capacity(capacity),
+		SlabWeightTree{
+            factory: IndexClassFactory::default(),
+            wtree: WeightTree::with_capacity(capacity),
         }
 	}
 
@@ -41,61 +42,55 @@ impl<T> WeightTree<T> {
 		self.wtree.clear()
 	}
 
-	pub fn push(&mut self, elem: T, weight: usize){
-        let index = self.index_factory.create(0, (), ());
-		self.wtree.push(elem, weight, index, &mut self.index_factory);
+	pub fn push(&mut self, obj: T, weight: usize) -> I::ID {
+        let obj_id = self.factory.create(0, (), ());
+		self.wtree.push(obj, weight, obj_id, &mut self.factory);
+		obj_id
 	}
 
-	pub fn remove(&mut self, index: usize) -> (T, usize, usize){
-		let r = unsafe { self.wtree.delete(self.index_factory.load(index), &mut self.index_factory) };
-        self.index_factory.destroy(index);
-        r
-	}
-
-	pub fn try_remove(&mut self, index: usize) -> Option<(T, usize, usize)>{
-        match self.index_factory.try_load(index) {
+	pub fn remove(&mut self, obj_id: I::ID) -> Option<(T, usize, I::ID)>{
+        match self.factory.remove(obj_id) {
             Some(i) => {
-                let r = unsafe { self.wtree.delete(i, &mut self.index_factory) };
-                self.index_factory.destroy(index);
+                let r = unsafe { self.wtree.delete(i.index, &mut self.factory) };
                 Some(r)
             },
             None => None,
         }
 	}
 
-	pub fn pop(&mut self, weight: usize) -> (T, usize, usize){
-		unsafe { self.wtree.pop(weight, &mut self.index_factory) }
+	pub unsafe fn pop_unchecked(&mut self, weight: usize) -> (T, usize, I::ID){
+		 self.wtree.pop_unchecked(weight, &mut self.factory)
 	}
 
-	pub fn try_pop(&mut self, weight: usize) -> Option<(T, usize, usize)>{
-		self.wtree.try_pop(weight, &mut self.index_factory)
+	pub fn pop(&mut self, weight: usize) -> Option<(T, usize, I::ID)>{
+		self.wtree.pop(weight, &mut self.factory)
 	}
 
     #[inline]
-	pub fn get(&self, index: usize) -> Option<&T>{
-        match self.index_factory.try_load(index) {
-            Some(i) =>  Some(unsafe{self.wtree.get_unchecked(i)}),
+	pub fn get(&self, id: I::ID) -> Option<(&T, usize, I::ID)>{
+        match self.factory.get(id) {
+            Some(i) => Some(unsafe{self.wtree.get_unchecked(i.index)}),
             None => None,
         }
 	}
 
     #[inline]
-	pub fn get_mut(&mut self, index: usize) -> Option<&mut T>{
-		match self.index_factory.try_load(index) {
-            Some(i) => Some(unsafe{self.wtree.get_unchecked_mut(i)}),
+	pub fn get_mut(&mut self, id: I::ID) -> Option<(&mut T, usize, I::ID)>{
+		match self.factory.get(id) {
+            Some(i) => Some(unsafe{self.wtree.get_unchecked_mut(i.index)}),
             None => None,
         }
 	}
 
     #[inline]
-	pub fn update_weight(&mut self, weight: usize, index: usize){
-		unsafe{self.wtree.update_weight(weight, self.index_factory.load(index), &mut self.index_factory)}
+	pub unsafe fn update_weight_unchecked(&mut self, id: I::ID, weight: usize){
+		self.wtree.update_weight(self.factory.get_unchecked(id).index, weight, &mut self.factory)
 	}
 
     #[inline]
-	pub fn try_update_weight(&mut self, weight: usize, index: usize) -> bool{
-        if let Some(i) = self.index_factory.try_load(index) {
-            unsafe{self.wtree.update_weight(weight, i, &mut self.index_factory)};
+	pub fn update_weight(&mut self, id: I::ID, weight: usize) -> bool{
+        if let Some(i) = self.factory.get(id) {
+            unsafe{self.wtree.update_weight(i.index, weight, &mut self.factory)};
             true
         }else {
             false
@@ -103,11 +98,11 @@ impl<T> WeightTree<T> {
 	}
 }
 
-impl<T: Debug> Debug for WeightTree<T> where T: Debug {
+impl<T: Debug, I:VerIndex> Debug for SlabWeightTree<T, I> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> FResult {
         write!(fmt,
-               "SlabWeightTree(index_factory: {:?}, wtree: {:?})",
-               self.index_factory,
+               "SlabSlabWeightTree(factory: {:?}, wtree: {:?})",
+               self.factory,
                self.wtree,
         )
     }
@@ -116,40 +111,43 @@ impl<T: Debug> Debug for WeightTree<T> where T: Debug {
 
 #[test]
 fn test(){
-	let mut wtree: WeightTree<u32> = WeightTree::new();
+	use ver_index::ver::U32Index;
+	let mut wtree: SlabWeightTree<u32, U32Index> = SlabWeightTree::default();
 	wtree.push(100, 100);
 	wtree.push(2000, 2000);
 	wtree.push(50, 50);
 	wtree.push(70, 70);
 	wtree.push(500, 500);
-	wtree.push(20, 20);
+	let r6=wtree.push(20, 20);
+	println!("u0------------{:?}", wtree);
 	assert_eq!(wtree.amount(), 2740);
 
-	wtree.update_weight(60, 6);
+	wtree.update_weight(r6, 60);
+	println!("u1------------{:?}", wtree);
 	assert_eq!(wtree.amount(), 2780);
 
-	wtree.update_weight(20, 6);
+	wtree.update_weight(r6, 20);
 	assert_eq!(wtree.amount(), 2740);
 
-	assert_eq!(wtree.pop(2739).1, 20);
+	assert_eq!(wtree.pop(2739).unwrap().1, 20);
 	assert_eq!(wtree.amount(), 2720);
 
-	assert_eq!(wtree.pop(2000).1, 500);
+	assert_eq!(wtree.pop(2000).unwrap().1, 500);
 	assert_eq!(wtree.amount(), 2220);
 	
-	assert_eq!(wtree.pop(1999).1, 2000);
+	assert_eq!(wtree.pop(1999).unwrap().1, 2000);
 	assert_eq!(wtree.amount(), 220);
 
-	wtree.push(30, 30);
-	wtree.update_weight(80, 7);
+	let r7 = wtree.push(30, 30);
+	wtree.update_weight(r7, 80);
 
-	assert_eq!(wtree.pop(140).1, 80);
+	assert_eq!(wtree.pop(140).unwrap().1, 80);
 	assert_eq!(wtree.amount(), 220);
 
 }
 
 #[cfg(test)]
-use time::now_millis;
+use time::now_millisecond;
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
@@ -157,32 +155,33 @@ use std::collections::VecDeque;
 
 #[test]
 fn test_effic(){
-	let mut weight_tree: WeightTree<u32> = WeightTree::new();
+	use ver_index::ver::U32Index;
+	let mut weight_tree: SlabWeightTree<u32, U32Index> = SlabWeightTree::default();
 	let max = 100000;
-	let now = now_millis();
+	let now = now_millisecond();
 	for i in 0..max{
 		weight_tree.push(i, (i+1) as usize);
 	}
-	println!("slab_wtree push max_heap time{}",  now_millis() - now);
+	println!("slab_wtree push max_heap time{}",  now_millisecond() - now);
 
 	let mut arr = VecDeque::new();
-	let now = now_millis();
+	let now = now_millisecond();
 	for i in 0..max{
 		arr.push_front(i);
 	}
-	println!("push VecDeque time{}",  now_millis() - now);
+	println!("push VecDeque time{}",  now_millisecond() - now);
 
-	let now = now_millis();
+	let now = now_millisecond();
 	for _ in 0..max{
 		rand::thread_rng().gen_range(0, 100000);
 	}
-	println!("slab_wtree rand time{}",  now_millis() - now);
+	println!("slab_wtree rand time{}",  now_millisecond() - now);
 
 
-	let now = now_millis();
+	let now = now_millisecond();
 	for _ in 0..max{
 		//let r = rand::thread_rng().gen_range(0, weight_tree.amount());
-		weight_tree.try_pop(1);
+		weight_tree.pop(1);
 	}
-	println!("slab_wtree pop time{}",  now_millis() - now);
+	println!("slab_wtree pop time{}",  now_millisecond() - now);
 }

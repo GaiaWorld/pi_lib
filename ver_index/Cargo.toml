@@ -1,7 +1,4 @@
 [package]
-name = "dyn_uint"
+name = "ver_index"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
-
-[dependencies]
-slab = {path="../slab"}

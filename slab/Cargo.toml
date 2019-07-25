@@ -5,3 +5,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 time = {path="../time"}
+map = {path="../map"}
+ver_index = {path="../ver_index"}

@@ -6,6 +6,7 @@ extern crate atom;
 extern crate map;
 extern crate listener;
 extern crate pointer;
+extern crate ver_index;
 #[macro_use]
 extern crate any;
 extern crate fx_hashmap;

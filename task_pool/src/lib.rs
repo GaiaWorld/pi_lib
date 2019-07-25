@@ -1,74 +1,68 @@
 #![feature(box_into_raw_non_null)]
 #![feature(proc_macro_hygiene)]
+
 extern crate rand;
 
 extern crate flame;
-#[macro_use]
+
 extern crate flamer;
 
 extern crate wtree;
 extern crate timer;
-extern crate dyn_uint;
+extern crate index_class;
+extern crate ver_index;
 extern crate deque;
 extern crate slab;
+extern crate share;
 
 pub mod enums;
-mod static_pool;
-mod dyn_pool  ;
+mod sync_pool;
 
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicUsize, Ordering as AOrd};
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex};
 use std::marker::Send;
 use std::fmt;
-use std::ptr::NonNull;
 
 use rand::prelude::*;
-use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 
 use timer::{Timer, Runer};
-use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
+use wtree::wtree::WeightTree;
+use wtree::simple_wtree::SimpleWeightTree;
+use index_class::{IndexClassFactory};
+use ver_index::ver::U32Index;
+use deque::deque::{Direction};
+use share::Share;
 
-use enums:: {QueueType, IndexType, Direction, Task, FreeSign};
+use enums:: {TaskType, DequeStat, FreeSign};
+
 
 pub struct TaskPool<T: Debug + 'static>{
-    static_sync_pool: Arc<(AtomicUsize, Mutex<static_pool::SyncPool<T>>)>,
-    // static_lock_queues: Arc<Mutex<Slab<WeightQueue<T>>>>,
+    static_sync_pool: Share<(AtomicUsize, Mutex<sync_pool::SyncPool<T, U32Index>>)>,
+    sync_pool: Share<(AtomicUsize, Mutex<sync_pool::SyncPool<(T, u64), U32Index>>)>,
+    static_async_pool: Share<(AtomicUsize, Mutex<SimpleWeightTree<T>>)>,
+    async_pool: Share<(AtomicUsize, Mutex<(WeightTree<T, u64>, IndexClassFactory<u64, (), U32Index>)>)>,
 
-    sync_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>)>)>,
-    //lock_queues: Arc<Mutex<Slab<WeightQueueD<T>>>>,
+    timer: Timer<DelayTask<T>, U32Index>,
 
-    static_async_pool: Arc<(AtomicUsize, Mutex<static_pool::AsyncPool<T>>)>,
-    async_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>)>)>,
-
-    delay_queue: Timer<DelayTask<T>>,
-
-    handler: Arc<Fn(QueueType, usize)>,
+    handler: Share<dyn Fn(TaskType, usize)>,
     count: AtomicUsize,
-    rng: Arc<Mutex<SmallRng>>,
+    rng: Share<Mutex<SmallRng>>,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
-    pub fn new(timer: Timer<DelayTask<T>>, handler: Arc<Fn(QueueType, usize)>) -> Self {
-        // let timer = Timer::new(10);
-        // timer.run();
+    pub fn new(timer: Timer<DelayTask<T>, U32Index>, handler: Share<dyn Fn(TaskType, usize)>) -> Self {
         TaskPool {
-            static_sync_pool: Arc::new((AtomicUsize::new(0), Mutex::new(static_pool::SyncPool::new()))),
+            static_sync_pool: Share::new((AtomicUsize::new(0), Mutex::new(sync_pool::SyncPool::default()))),
+            sync_pool: Share::new((AtomicUsize::new(0), Mutex::new(sync_pool::SyncPool::default()))),
+            static_async_pool: Share::new((AtomicUsize::new(0), Mutex::new(SimpleWeightTree::default()))),
+            async_pool: Share::new((AtomicUsize::new(0), Mutex::new((WeightTree::default(), IndexClassFactory::default())))),
 
-            //static_lock_queues: Arc::new(Mutex::new(Slab::new())),
-
-            sync_pool: Arc::new((AtomicUsize::new(0), Mutex::new((dyn_pool  ::SyncPool::new(), SlabFactory::new())))),
-            //lock_queues: Arc::new(Mutex::new(Slab::new())),
-
-            static_async_pool: Arc::new((AtomicUsize::new(0), Mutex::new(static_pool::AsyncPool::new()))),
-            async_pool: Arc::new((AtomicUsize::new(0), Mutex::new((dyn_pool  ::AsyncPool::new(), SlabFactory::new())))),
-
-            //index_factory: SlabFactory::new(),
-            delay_queue: timer,
+            timer: timer,
             count: AtomicUsize::new(0),
             handler,
-            rng: Arc::new(Mutex::new(SmallRng::from_entropy())),
+            rng: Share::new(Mutex::new(SmallRng::from_entropy())),
         }
     }
 
@@ -77,420 +71,261 @@ impl<T: Debug + 'static> TaskPool<T> {
     }
 
     // create sync queues, return true, or false if id is exist
-    pub fn create_dyn_queue(&self, weight: usize) -> isize {
-        to_queue_id(self.sync_pool.1.lock().unwrap().0.create_queue(weight))
+    pub fn create_dyn_queue(&self, weight: usize) -> i64 {
+        to_queue_id(self.sync_pool.1.lock().unwrap().create_queue(weight))
     }
 
-    pub fn create_static_queue(&self, weight: usize) -> isize {
+    pub fn create_static_queue(&self, weight: usize) -> i64 {
         to_static_queue_id(self.static_sync_pool.1.lock().unwrap().create_queue(weight))
     }
 
-    // // delete sync queues, return true, or false if id is not exist
-    // pub fn delete_dny_queue(&self, id: isize) -> bool{
-    //     self.sync_pool.1.lock().unwrap().0.remove_queue(from_queue_id(id));
-    // }
-
-    // // // delete sync queues, return true, or false if id is not exist
-    // pub fn delete_static_queue(&self, id: isize) {
-    //     self.static_sync_pool.1.lock().unwrap().remove_queue(from_static_queue_id(id));
-    // }
-    pub fn delete_queue(&self, id: isize) -> bool {
-        if is_queue(id) {
-            self.sync_pool.1.lock().unwrap().0.try_remove_queue(from_queue_id(id));
-            true
-        } else if is_static_queue(id) {
-            self.static_sync_pool.1.lock().unwrap().try_remove_queue(from_static_queue_id(id));
-            true
+    // delete queue, return true, or false if id is not exist
+    pub fn delete_queue(&self, queue_id: i64) -> bool {
+        if is_queue(queue_id) {
+            self.sync_pool.1.lock().unwrap().remove_queue(from_queue_id(queue_id))
+        } else if is_static_queue(queue_id) {
+            self.static_sync_pool.1.lock().unwrap().remove_queue(from_static_queue_id(queue_id))
         } else {
             false
         }
     }
-
-    // push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_dyn_back(&self, task: T, queue_id: isize) -> isize {
-        let (id, opt) = {
-            let mut sync_pool = self.sync_pool.1.lock().unwrap();
-            let id = sync_pool.1.create(0, IndexType::Sync, ());
-            let index = sync_pool.0.push_back(task, from_queue_id(queue_id), id);
-            self.sync_pool.0.store(sync_pool.0.get_weight(), AOrd::Relaxed);
-            sync_pool.1.store(id, index);
-//            println!("!!!!!!push dyn sync push back, weight:{}, len: {}", sync_pool.0.get_weight(), sync_pool.0.queue_len());
-            if sync_pool.0.is_locked(queue_id as usize) {
-                (id, None)
-            } else {
-                (id, Some(sync_pool.0.queue_len()))
-            }
-        };
-//        println!("!!!!!!push dyn sync queue start");
-        if let Some(queue_len) = opt {
-            self.notify(QueueType::DynSync, queue_len);
-        }
-//        println!("!!!!!!push dyn sync queue finish");
-        to_sync_id(id)
+    // // push a sync task, return task id, or 0 if queue id is not exist
+    pub fn push_dyn_front(&self, task: T, queue_id: i64) -> i64 {
+        self.push_dyn(queue_id, task, Direction::Front)
+    }
+    // push a sync task, return task id, or 0 if queue id is not exist
+    pub fn push_dyn_back(&self, task: T, queue_id: i64) -> i64 {
+        self.push_dyn(queue_id, task, Direction::Back)
     }
 
-    // // push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_dyn_front(&self, task: T, queue_id: isize) -> isize {
-        let (id, opt) = {
-            let mut sync_pool = self.sync_pool.1.lock().unwrap();
-            let id = sync_pool.1.create(0, IndexType::Sync, ());
-            let index = sync_pool.0.push_front(task, from_queue_id(queue_id), id);
-            self.sync_pool.0.store(sync_pool.0.get_weight(), AOrd::Relaxed);
-            sync_pool.1.store(id, index);
-            if sync_pool.0.is_locked(queue_id as usize) {
-                (id, None)
+    // // push a sync task, return task id, or 0 if queue id is not exist
+    pub fn push_dyn(&self, queue_id: i64, task: T, direct: Direction) -> i64 {
+        let (id, task_len) = {
+            let mut lock = self.sync_pool.1.lock().unwrap();
+            let (id, locked) = lock.push(from_queue_id(queue_id), (task, 0), direct);
+            if id > 0 {
+                self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+            }
+            if locked {
+                (id, 0)
             } else {
-                (id, Some(sync_pool.0.queue_len()))
+                (id, lock.len())
             }
         };
-        if let Some(queue_len) = opt {
-            self.notify(QueueType::DynSync, queue_len);
+        if task_len > 0 {
+            self.notify(TaskType::DynSync, task_len);
         }
         to_sync_id(id)
     }
-
+    // // push a sync task, return Ok(index), or Err if queue id is exist
+    pub fn push_static_front(&self, task: T, queue_id: i64) -> bool {
+        self.push_static(queue_id, task, Direction::Front)
+    }
     // push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_static_back(&self, task: T, queue_id: isize) {
-        let opt = {
-            let id = from_static_queue_id(queue_id);
-            let mut sync_pool = self.static_sync_pool.1.lock().unwrap();
-            sync_pool.push_back(task, id);
-            self.static_sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
-            if sync_pool.is_locked(id) {
-                None
-            } else {
-                Some(sync_pool.queue_len())
-            }
-        };
-//        println!("!!!!!!push static sync queue start");
-        if let Some(len) = opt {
-            self.notify(QueueType::StaticSync, len);
-        }
-//        println!("!!!!!!push static sync queue start");
+    pub fn push_static_back(&self, task: T, queue_id: i64) -> bool {
+        self.push_static(queue_id, task, Direction::Back)
     }
 
     // // push a sync task, return Ok(index), or Err if queue id is exist
-    pub fn push_static_front(&self, task: T, queue_id: isize) {
-        let opt = {
-            let id = from_static_queue_id(queue_id);
-            let mut sync_pool = self.static_sync_pool.1.lock().unwrap();
-            sync_pool.push_front(task, id);
-            self.static_sync_pool.0.store(sync_pool.get_weight(), AOrd::Relaxed);
-            if sync_pool.is_locked(id) {
-                None
+    pub fn push_static(&self, queue_id: i64, task: T, direct: Direction) -> bool {
+        let (id, task_len) = {
+            let mut lock = self.static_sync_pool.1.lock().unwrap();
+            let (id, locked) = lock.push(from_static_queue_id(queue_id), task, direct);
+            if id > 0 {
+                self.static_sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+            }
+            if locked {
+                (id, 0)
             } else {
-                Some(sync_pool.queue_len())
+                (id, lock.len())
             }
         };
-        if let Some(len) = opt {
-            self.notify(QueueType::StaticSync, len);
+        if task_len > 0 {
+            self.notify(TaskType::StaticSync, task_len);
         }
+        id > 0
     }
 
     // // push a async task
-    pub fn push_dyn_async(&self, task: T, priority: usize) -> isize {
-        let (index, len) = {
+    pub fn push_dyn_async(&self, task: T, weight: usize) -> i64 {
+        let (id, task_len) = {
             let mut lock = self.async_pool.1.lock().unwrap();
-            let (pool, indexs): &mut (wtree::wtree::WeightTree<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let index = indexs.create(0, IndexType::Async, ());
-            pool.push(task, priority, index, indexs);
+            let (pool, factory) = &mut *lock;
+            let id = factory.create(0, 0, ());
+            pool.push(task, weight, id, factory);
             self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-            (index, pool.len())
+            (id, pool.len())
         };
-//        println!("!!!!!!push dyn async queue start");
-        self.notify(QueueType::DynAsync, len);
-//        println!("!!!!!!push dyn async queue finish");
-        to_async_id(index)
+        self.notify(TaskType::DynAsync, task_len);
+        to_async_id(id)
     }
 
-    pub fn push_static_async(&self, task: T, priority: usize) {
+    pub fn push_static_async(&self, task: T, weight: usize) {
         let len = {
             let mut lock = self.static_async_pool.1.lock().unwrap();
-            lock.push(task, priority);
+            lock.push(task, weight);
             self.static_async_pool.0.store(lock.amount(), AOrd::Relaxed);
             lock.len()
         };
-//        println!("!!!!!!push static async queue start");
-        self.notify(QueueType::StaticAsync, len);
-//        println!("!!!!!!push dyn async queue finish");
+        self.notify(TaskType::StaticAsync, len);
     }
 
-    //push a delay task, return Arc<AtomicUsize> as index
-    pub fn push_sync_delay(&self, task: T, queue_id: isize, direc: Direction, ms: u32) -> isize{
-        let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
-
-        let task = DelayTask::Sync {
+    //push a delay task, return Share<AtomicUsize> as index
+    pub fn push_sync_delay(&self, task: T, queue_id: i64, direct: Direction, ms: u32) -> i64{
+        let mut lock = self.sync_pool.1.lock().unwrap();
+        let id = lock.create_node((task, 0));
+        let t = DelayTask::Sync {
             queue_id: from_queue_id(queue_id),
-            direc: direc,
-            index: index,
+            direct: direct,
+            id: id,
             sync_pool: self.sync_pool.clone(),
-            task: Box::into_raw_non_null(Box::new(task)),
             handler: self.handler.clone(),
         };
-        let index1 = self.delay_queue.set_timeout(task, ms);
-        self.sync_pool.1.lock().unwrap().1.store(index, index1);
-        to_sync_id(index)
+        let timer_id = self.timer.set_timeout(t, ms);
+        lock.get_node_mut(id).unwrap().elem.1 = timer_id;
+        to_sync_id(id)
     }
 
-    pub fn push_async_delay(&self, task: T, priority: usize, ms: u32) -> isize{
-        let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
-        let task = DelayTask::Async {
-            priority: priority,
-            index: index,
+    pub fn push_async_delay(&self, task: T, weight: usize, ms: u32) -> i64{
+        let mut lock = self.async_pool.1.lock().unwrap();
+        let id = lock.1.create(0, 0, ());
+        let t = DelayTask::Async {
+            weight: weight,
+            id: id,
             async_pool: self.async_pool.clone(),
-            task: Box::into_raw_non_null(Box::new(task)),
+            task: task,
             handler: self.handler.clone(),
         };
-        let index1 = self.delay_queue.set_timeout(task, ms);
-        self.sync_pool.1.lock().unwrap().1.store(index, index1);
-        to_async_id(index)
+        let timer_id = self.timer.set_timeout(t, ms);
+        unsafe{lock.1.get_unchecked_mut(id)}.class = timer_id;
+        to_async_id(id)
     }
 
     //pop a task
-    pub fn pop_unlock(&self) -> Option<T>{
-        let (async_w, sync_w, static_async_w, static_sync_w, r, mut w) = self.weight_rng();
-
-        //println!("w--------------{:?}", (async_w, sync_w, static_async_w, static_sync_w, r, w));
+    pub fn pop(&self, locked: bool, limit_type: usize) -> Option<(T, i64)>{
+        let (sync_w, static_sync_w, async_w, _static_async_w, rand, mut w) = self.weight_rng(limit_type);
+        if rand == 0 {
+            return None
+        }
         if w < sync_w {
             let mut lock = self.sync_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.get_weight();
+            let w = lock.get_weight();
             if w != 0 {
-                let r = pool.pop_front(r%w).unwrap();
-                self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.destroy(r.1);
-                return Some(r.0);
+                let r = if locked {
+                    lock.pop_lock(rand%w)
+                }else{
+                    lock.pop(rand%w)
+                };
+                match r.0 {
+                    Some((task, _)) => {
+                        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        return Some((task, to_queue_id(r.1)))
+                    },
+                    _ => return None
+                }
             }
         } else {
             w = w - sync_w;
         }
-
-        if w < async_w {
-            let mut lock = self.async_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let w = pool.amount();
-            if w != 0 {
-                let r = unsafe{pool.pop(r%w, indexs)};
-                self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                indexs.destroy(r.2);
-                return Some(r.0);
-            }
-        } else {
-            w = w - async_w;
-        }
-
-        if w < static_async_w {
-            let mut pool = self.static_async_pool.1.lock().unwrap();
-            let w = pool.amount();
-            if w != 0 {
-                let r = Some(pool.pop(r%w).0);
-                self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                return r;
-            }
-        } else {
-            w = w - static_async_w;
-        }
-
         if w < static_sync_w {
-            let mut pool = self.static_sync_pool.1.lock().unwrap();
-            let w = pool.get_weight();
+            let mut lock = self.static_sync_pool.1.lock().unwrap();
+            let w = lock.get_weight();
             if w != 0 {
-                let r = pool.pop_front(r%w);
-                self.static_sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                return r;
-            }
-        }
-        None
-    }
-
-    pub fn pop(&self) -> Option<Task<T>>{
-        let (async_w, sync_w, static_async_w, static_sync_w, r, mut w) = self.weight_rng();
-//        println!("w--------------{:?}", (async_w, sync_w, static_async_w, static_sync_w, r, w));
-        if w < sync_w {
-            let mut lock = self.sync_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let weight = pool.get_weight();
-            if weight != 0 {
-                let r = pool.pop_front_with_lock(r%weight);
-                if let Some(elem) = r.0 {
-                    self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                    indexs.destroy(elem.1);
-//                println!("w---dyn_sync_pop");
-                    return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
-                } else {
-                    w = w - sync_w;
+                let r = if locked {
+                    lock.pop_lock(rand%w)
+                }else{
+                    lock.pop(rand%w)
+                };
+                match r.0 {
+                    Some(task) => {
+                        self.static_sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        return Some((task, to_static_queue_id(r.1)))
+                    },
+                    _ => return None
                 }
             }
         } else {
-            w = w - sync_w;
+            w = w - static_sync_w;
         }
 
         if w < async_w {
             let mut lock = self.async_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let weight = pool.amount();
-            if weight != 0 {
-                let r = unsafe{pool.pop(r%weight, indexs)};
-                self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                indexs.destroy(r.2);
-//                println!("w---dyn_async_pop");
-                return Some(Task::Async(r.0));
+            let (tree, factory) = &mut *lock;
+            let w = tree.amount();
+            if w != 0 {
+                let r = tree.pop(rand%w, factory).unwrap();
+                self.async_pool.0.store(tree.amount(), AOrd::Relaxed);
+                factory.remove(r.2);
+                return Some((r.0, 0));
             }
-        } else {
-            w = w - async_w;
         }
-
-
-        if w < static_async_w {
-            let mut pool = self.static_async_pool.1.lock().unwrap();
-            let weight = pool.amount();
-            if weight != 0 {
-                let r = Some(Task::Async(pool.pop(r%weight).0));
-                self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
-//                println!("w---static_async_pop");
-                return r;
-            }
-        } else {
-            w = w - static_async_w;
+        let mut lock = self.static_async_pool.1.lock().unwrap();
+        let w = lock.amount();
+        if w == 0 {
+            return None
         }
+        let r = lock.pop(rand%w).unwrap();
+        self.static_async_pool.0.store(lock.amount(), AOrd::Relaxed);
+        return Some((r.0, 0));
+    }
 
-        if w < static_sync_w {
-            let mut pool = self.static_sync_pool.1.lock().unwrap();
-            let weight = pool.get_weight();
-            if weight != 0 {
-                let r = pool.pop_front_with_lock(r%weight);
-                if let Some(elem) = r.0 {
-                    self.static_sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-//                println!("w---static_sync_pop");
-                    return Some(Task::Sync(elem, to_static_queue_id(r.1)));
+    pub fn remove_sync(&self, queue_id: i64, id: i64) {
+        if is_queue(queue_id) && is_sync(id) {
+            let timer_id = {
+                let mut lock = self.sync_pool.1.lock().unwrap();
+                match lock.remove(from_queue_id(queue_id) , from_sync_id(id)) {
+                    Some((_, timer_id)) => if timer_id > 0 {
+                        timer_id
+                    }else{
+                        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        return
+                    },
+                    _ => return
                 }
-            }
+            };
+            self.timer.cancel(timer_id);
         }
-//        println!("w---empty_pop");
-        None
     }
 
-    //只弹出动态同步和所有异步任务
-    pub fn pop_inner(&self) -> Option<Task<T>>{
-        let (async_w, sync_w, static_async_w, r, mut w) = self.weight_rng_inner();
-
-        if w < sync_w {
-            let mut lock = self.sync_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let weight = pool.get_weight();
-            if weight != 0 {
-                let r = pool.pop_front_with_lock(r%weight);
-                if let Some(elem) = r.0 {
-                    self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                    indexs.destroy(elem.1);
-                    return Some(Task::Sync(elem.0, to_sync_id(r.1) ));
-                } else {
-                    w = w - sync_w;
-                }
-            }
-        } else {
-            w = w - sync_w;
+    pub fn remove_async(&self, id: i64) {
+        if !is_async(id) {
+            return;
         }
-
-        if w < async_w {
+        let timer_id = {
             let mut lock = self.async_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let weight = pool.amount();
-            if weight != 0 {
-                let r = unsafe{pool.pop(r%weight, indexs)};
-                self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                indexs.destroy(r.2);
-                return Some(Task::Async(r.0));
-            }
-        } else {
-            w = w - async_w;
-        }
-
-
-        if w < static_async_w {
-            let mut pool = self.static_async_pool.1.lock().unwrap();
-            let weight = pool.amount();
-            if weight != 0 {
-                let r = Some(Task::Async(pool.pop(r%weight).0));
-                self.static_async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                return r;
-            }
-        }
-
-        None
-    }
-
-    pub fn remove_sync(&self, queue_id: isize, id: isize) -> T {
-        let mut lock = self.sync_pool.1.lock().unwrap();
-        let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-        let (elem, index) = pool.remove_elem(from_queue_id(queue_id) , indexs.load(from_sync_id(id)));
-        indexs.destroy(index);
-        self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-        elem
-    }
-
-    pub fn try_remove_sync(&self, queue_id: isize, id: isize) -> Option<T> {
-        if is_queue(queue_id) && is_sync(id){
-            let mut lock = self.sync_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let r = pool.try_remove_elem(from_queue_id(queue_id), indexs.load(from_sync_id(id)));
-            match r {
-                Some((elem, index)) => {
-                    indexs.destroy(index);
-                    self.sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                    return Some(elem)
-                },
-                None => return None,
-            }
-        }
-        None
-    }
-
-    pub fn remove_async(&self, id: isize) -> T {
-        let mut lock = self.async_pool.1.lock().unwrap();
-        let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-        let (elem, _, i) = unsafe{pool.delete(indexs.load(from_async_id(id)), indexs)};
-        indexs.destroy(i);
-        self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-        elem
-    }
-
-    pub fn try_remove_async(&self, id: isize) -> Option<T> {
-        if is_async(id){
-            let mut lock = self.async_pool.1.lock().unwrap();
-            let (pool, indexs): &mut(dyn_pool ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-            let index  = from_async_id(id);
-            match indexs.try_load(index) {
-                Some(i) => {
-                    let (elem, _, _) = unsafe{pool.delete(i, indexs)};
-                    indexs.destroy(index);
+            let (pool, factory) = &mut *lock;
+            match factory.remove(from_async_id(id)) {
+                Some(r) => if r.class > 0 {
+                    r.class
+                }else{
+                    unsafe{pool.delete(r.index, factory)};
                     self.async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                    return Some(elem)
+                    return
                 },
-                None => return None,
+                None => return
             }
-        }
-        None
+        };
+        self.timer.cancel(timer_id);
     }
 
     //check queue locked
-    pub fn is_locked(&self, id: isize) -> bool {
+    pub fn get_queue_stat(&self, id: i64) -> Option<DequeStat> {
         if is_queue(id) {
-            self.sync_pool.1.lock().unwrap().0.is_locked(id as usize)
+            self.sync_pool.1.lock().unwrap().get_queue_stat(from_queue_id(id))
         } else if is_static_queue(id) {
-            self.static_sync_pool.1.lock().unwrap().is_locked(from_static_queue_id(id))
+            self.static_sync_pool.1.lock().unwrap().get_queue_stat(from_static_queue_id(id))
         } else {
-            false
+            None
         }
     }
 
     //lock sync_queue
-    pub fn lock_queue(&self, id: isize) -> bool {
+    pub fn lock_queue(&self, id: i64) -> bool {
         if is_queue(id){
             let mut lock = self.sync_pool.1.lock().unwrap();
-            let r = lock.0.lock_queue(from_queue_id(id));
+            let r = lock.lock_queue(from_queue_id(id));
             if r {
-                self.sync_pool.0.store(lock.0.get_weight(), AOrd::Relaxed);
+                self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
             }
             r
         }else if is_static_queue(id) {
@@ -506,35 +341,36 @@ impl<T: Debug + 'static> TaskPool<T> {
     }
 
     //free lock sync_queue
-    pub fn free_queue(&self, id: isize) -> bool{
+    pub fn unlock_queue(&self, id: i64) -> bool{
         if is_queue(id){
             let (r, len) = {
                 let mut lock = self.sync_pool.1.lock().unwrap();
-                let r = lock.0.free_queue(from_queue_id(id));
+                let r = lock.unlock_queue(from_queue_id(id));
                 match r {
                     FreeSign::Success => {
-                        self.sync_pool.0.store(lock.0.get_weight(), AOrd::Relaxed);
-                        (true, lock.0.queue_len())
+                        self.sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                        (true, lock.len())
                     },
                     FreeSign::Ignore => (true, 0),
                     _ => (false, 0)
                 }
             };
-            self.notify(QueueType::DynSync, len);
+            self.notify(TaskType::DynSync, len);
             r
         }else if is_static_queue(id) {
-            let (r, len) = {let mut lock = self.static_sync_pool.1.lock().unwrap();
-                let r = lock.free_queue(from_static_queue_id(id));
+            let (r, len) = {
+                let mut lock = self.static_sync_pool.1.lock().unwrap();
+                let r = lock.unlock_queue(from_static_queue_id(id));
                 match r {
                     FreeSign::Success => {
                         self.static_sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
-                        (true, lock.queue_len())
+                        (true, lock.len())
                     },
                     FreeSign::Ignore => (true, 0),
                     _ => (false, 0)
                 }
             };
-            self.notify(QueueType::StaticSync, len);
+            self.notify(TaskType::StaticSync, len);
             r
         }else {
             false
@@ -543,8 +379,8 @@ impl<T: Debug + 'static> TaskPool<T> {
 
     pub fn clear(&self) {
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
-        sync_pool.0.clear();
-        sync_pool.1.clear();
+        sync_pool.clear();
+        sync_pool.clear();
         self.static_sync_pool.1.lock().unwrap().clear();
 
         let mut async_pool = self.async_pool.1.lock().unwrap();
@@ -556,66 +392,51 @@ impl<T: Debug + 'static> TaskPool<T> {
         self.async_pool.0.store(0, AOrd::Relaxed);
         self.static_sync_pool.0.store(0, AOrd::Relaxed);
         self.static_async_pool.0.store(0, AOrd::Relaxed);
-        self.delay_queue.clear();
-    }
-
-    pub fn dyn_sync_len(&self) -> usize {
-        self.sync_pool.1.lock().unwrap().0.len()
-    }
-
-    pub fn static_sync_len(&self) -> usize {
-        self.static_sync_pool.1.lock().unwrap().len()
-    }
-
-    pub fn dyn_async_len(&self) -> usize {
-        self.async_pool.1.lock().unwrap().0.len()
-    }
-
-    pub fn static_async_len(&self) -> usize {
-        self.static_async_pool.1.lock().unwrap().len()
+        self.timer.clear();
     }
 
     pub fn len(&self) -> usize {
-        let len1 = self.sync_pool.1.lock().unwrap().0.len();
-        let len2 = self.static_async_pool.1.lock().unwrap().len();
-        let len3 = self.async_pool.1.lock().unwrap().0.len();
-        let len4 = self.static_sync_pool.1.lock().unwrap().len();
+        let len1 = self.sync_pool.0.load(AOrd::Relaxed);
+        let len2 = self.static_async_pool.0.load(AOrd::Relaxed);
+        let len3 = self.async_pool.0.load(AOrd::Relaxed);
+        let len4 = self.static_sync_pool.0.load(AOrd::Relaxed);
         len1 + len2 + len3 + len4
     }
 
-    fn notify(&self, task_type: QueueType, task_size: usize) {
+    fn notify(&self, task_type: TaskType, task_size: usize) {
         if task_size <= self.count.load(AOrd::Relaxed) {
             (self.handler)(task_type, task_size)
         }
     }
 
-    fn weight_rng_inner(&self) -> (usize, usize, usize, usize, usize){
-        let async_w = self.async_pool.0.load(AOrd::Relaxed);  //异步池总权重
-        let sync_w = self.sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
-        let static_async_w = self.static_async_pool.0.load(AOrd::Relaxed);  //异步池总权重
-        let r: usize = self.rng.lock().unwrap().gen(); // 由外部实现随机生成器， TODO
-        let amount = async_w + sync_w + static_async_w;
-        let w = if amount == 0 {
+    fn weight_rng(&self, limit_type: usize) -> (usize, usize, usize, usize, usize, usize){
+        let sync_w = if limit_type & TaskType::DynAsync as usize != 0 {
+            self.sync_pool.0.load(AOrd::Relaxed)  //同步池总权重
+        }else{
             0
-        }else {
-            r%amount
         };
-        (async_w, sync_w, static_async_w, r, w)
-    }
-
-    fn weight_rng(&self) -> (usize, usize, usize, usize, usize, usize){
-        let async_w = self.async_pool.0.load(AOrd::Relaxed);  //异步池总权重
-        let sync_w = self.sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
-        let static_async_w = self.static_async_pool.0.load(AOrd::Relaxed);  //异步池总权重
-        let static_sync_w = self.static_sync_pool.0.load(AOrd::Relaxed);  //同步池总权重
-        let r: usize = self.rng.lock().unwrap().gen(); // 由外部实现随机生成器， TODO
+        let static_sync_w = if limit_type & TaskType::DynAsync as usize != 0 {
+            self.static_sync_pool.0.load(AOrd::Relaxed)  //静态同步池总权重
+        }else{
+            0
+        };
+        let async_w = if limit_type & TaskType::DynAsync as usize != 0 {
+            self.async_pool.0.load(AOrd::Relaxed)  //异步池总权重
+        }else{
+            0
+        };
+        let static_async_w = if limit_type & TaskType::DynAsync as usize != 0 {
+            self.static_async_pool.0.load(AOrd::Relaxed)  //静态异步池总权重
+        }else{
+            0
+        };
         let amount = async_w + sync_w + static_async_w + static_sync_w;
-        let w = if amount == 0 {
-            0
+        if amount == 0 {
+            (sync_w, static_sync_w, async_w, static_async_w, 0, 0)
         }else {
-            r%amount
-        };
-        (async_w, sync_w, static_async_w, static_sync_w, r, w)
+            let r: usize = self.rng.lock().unwrap().gen();
+            (sync_w, static_sync_w, async_w, static_async_w, r, r%amount)
+        }
     }
 }
 
@@ -633,13 +454,13 @@ sync_pool: ({:?},{:?}),
 static_sync_pool: ({:?},{:?}),
 async_pool: ({:?},{:?}),
 static_async_pool: ({:?},{:?}),
-        )"##, self.sync_pool.0, sync_pool.0, self.static_sync_pool.0, static_sync_pool, self.async_pool.0, async_pool.0, self.static_async_pool.0, static_async_pool)
+        )"##, self.sync_pool.0, sync_pool, self.static_sync_pool.0, static_sync_pool, self.async_pool.0, async_pool.0, self.static_async_pool.0, static_async_pool)
     }
 }
 
 // pub struct QueueLock<T: 'static>{
-//     sync_pool: Arc<(AtomicUsize, Mutex<SyncPool<T>>)>,
-//     index: Arc<AtomicUsize>,
+//     sync_pool: Share<(AtomicUsize, Mutex<SyncPool<T>>)>,
+//     index: Share<AtomicUsize>,
 //     weight: usize,
 // }
 
@@ -662,45 +483,47 @@ static_async_pool: ({:?},{:?}),
 
 pub enum DelayTask<T: 'static> {
     Async{
-        priority: usize,
-        index: usize,
-        async_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>)>)>,
-        task:  NonNull<T>,
-        handler: Arc<Fn(QueueType, usize)>,
+        weight: usize,
+        id: u64,
+        async_pool: Share<(AtomicUsize, Mutex<(WeightTree<T, u64>, IndexClassFactory<u64, (), U32Index>)>)>,
+        task: T,
+        handler: Share<dyn Fn(TaskType, usize)>,
     },//异步任务
     Sync{
-        queue_id: usize,
-        index: usize,
-        direc: Direction,
-        sync_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>)>)>,
-        task:  NonNull<T>,
-        handler: Arc<Fn(QueueType, usize)>,
+        queue_id: u64,
+        id: u64,
+        direct: Direction,
+        sync_pool: Share<(AtomicUsize, Mutex<sync_pool::SyncPool<(T, u64), U32Index>>)>,
+        handler: Share<dyn Fn(TaskType, usize)>,
     }//同步任务Sync(队列id, push方向)
 }
 
-impl<T: 'static> Runer for DelayTask<T> {
-    fn run(self, _key: usize){
+impl<T: 'static> Runer<u64> for DelayTask<T> {
+    fn run(self, _key: u64){
         match self {
-            DelayTask::Async { priority,index, async_pool,task , handler} => {
+            DelayTask::Async { weight, id, async_pool, task, handler} => {
                 let mut lock = async_pool.1.lock().unwrap();
-                let (pool, indexs): &mut (dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-                pool.push(unsafe {task.as_ptr().read()} , priority, index, indexs);
+                let (pool, factory) = &mut *lock;
+                // 尝试将timer_id清空， 如果找不到该节点，则已被移除
+                match factory.get_mut(id) {
+                    Some(node) => node.class = 0,
+                    _ => return
+                }
+                pool.push(task, weight, id, factory);
                 async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                handler(QueueType::DynAsync, pool.len());
+                handler(TaskType::DynAsync, pool.len());
             },
-            DelayTask::Sync { queue_id, index, direc, sync_pool, task , handler} => {
+            DelayTask::Sync { queue_id, id, direct, sync_pool, handler} => {
                 let mut lock = sync_pool.1.lock().unwrap();
-                let (pool, indexs): &mut (dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-                let id = match direc {
-                    Direction::Front => pool.push_front(unsafe {task.as_ptr().read()}, queue_id, index),
-                    Direction::Back => pool.push_back(unsafe {task.as_ptr().read()}, queue_id, index)
-                };
-                sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.store(index, id);
-                indexs.set_class(index, IndexType::Sync);
-                handler(QueueType::DynSync, pool.queue_len());
+                // 尝试将timer_id清空， 如果找不到该节点，则已被移除
+                match lock.get_node_mut(id) {
+                    Some(node) => node.elem.1 = 0,
+                    _ => return
+                }
+                lock.push_id(queue_id, id, direct);
+                sync_pool.0.store(lock.get_weight(), AOrd::Relaxed);
+                handler(TaskType::DynSync, lock.len());
             }
-
         }
     }
 }
@@ -710,64 +533,63 @@ impl<T: 'static> Runer for DelayTask<T> {
 unsafe impl<T> Send for DelayTask<T> {}
 
 
-
 #[inline]
-fn to_static_queue_id(id: usize) -> isize{
-    -(id as isize)
+fn to_static_queue_id(id: u64) -> i64{
+    -(id as i64)
 }
 
 #[inline]
-fn from_static_queue_id(id: isize) -> usize{
-    (-id) as usize
+fn from_static_queue_id(id: i64) -> u64{
+    (-id) as u64
 }
 
 #[inline]
-fn is_static_queue(id: isize) -> bool{
+fn is_static_queue(id: i64) -> bool{
     id < 0
 }
 
 #[inline]
-fn to_queue_id(id: usize) -> isize{
-    id as isize
+fn to_queue_id(id: u64) -> i64{
+    id as i64
 }
 
 #[inline]
-fn from_queue_id(id: isize) -> usize{
-    id as usize
+fn from_queue_id(id: i64) -> u64{
+    id as u64
 }
 
 #[inline]
-fn is_queue(id: isize) -> bool{
+fn is_queue(id: i64) -> bool{
     id > 0
 }
 
 #[inline]
-fn to_sync_id(id: usize) -> isize{
-    -(id as isize)
+fn to_sync_id(id: u64) -> i64{
+    -(id as i64)
 }
 
 #[inline]
-fn from_sync_id(id: isize) -> usize{
-    -id as usize
+fn from_sync_id(id: i64) -> u64{
+    -id as u64
 }
 
 #[inline]
-fn is_sync(id: isize) -> bool{
+fn is_sync(id: i64) -> bool{
     id < 0
 }
 
 #[inline]
-fn to_async_id(id: usize) -> isize{
-    id as isize
+fn to_async_id(id: u64) -> i64{
+    id as i64
 }
 
 #[inline]
-fn from_async_id(id: isize) -> usize{
-    id as usize
+fn from_async_id(id: i64) -> u64{
+    id as u64
 }
 
 #[inline]
-fn is_async(id: isize) -> bool{
+fn is_async(id: i64) -> bool{
     id > 0
 }
 
@@ -782,14 +604,13 @@ use time::run_millis;
 
 #[test]
 fn test(){
-    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(|| {}));
+    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Share::new(|_, _| {}));
 
     let queue1 = task_pool.create_dyn_queue(1);
     let queue2 = task_pool.create_dyn_queue(2);
     let queue3 = task_pool.create_static_queue(1);
     let queue4 = task_pool.create_static_queue(2);
     let queue5 = task_pool.create_static_queue(3);
-
     /***************************************插入和弹出， 验证接口的正确性*************************************************** */
     task_pool.push_dyn_back(1, queue1);
     task_pool.push_dyn_back(2, queue1);
@@ -807,21 +628,21 @@ fn test(){
     task_pool.push_static_async(13, 1);
     task_pool.push_static_async(14, 2);
 
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
     //println!("create queue--{:?}", task_pool);
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
-    assert!(task_pool.pop_unlock().is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
+    assert!(task_pool.pop(false, 15).is_some());
     // // println!("create queue--{:?}", task_pool);
 
     // /***************************************多次插入和弹出， 验证接口的正确性*************************************************** */
@@ -851,7 +672,7 @@ fn test(){
     }
 
     for _ in 0..m*7 {
-        task_pool.pop_unlock().unwrap();
+        task_pool.pop(false, 15).unwrap();
     }
 
     /***************************************测试移除接口*************************************************** */
@@ -859,22 +680,22 @@ fn test(){
     let index2 = task_pool.push_dyn_back(2, queue2);
     let index3 = task_pool.push_dyn_async(3, 2);
 
-    assert_eq!(task_pool.remove_sync(queue1, index1), 1);
-    assert_eq!(task_pool.remove_sync(queue2, index2), 2);
-    assert_eq!(task_pool.remove_async(index3), 3);
+    task_pool.remove_sync(queue1, index1);
+    task_pool.remove_sync(queue2, index2);
+    task_pool.remove_async(index3);
 
     /******************************************测试带锁的弹出***************************************************************/
     task_pool.push_dyn_back(1, queue1);
     task_pool.push_dyn_back(2, queue1);
     assert!(task_pool.lock_queue(queue1));
-    assert!(task_pool.pop().is_none());
-    assert!(task_pool.free_queue(queue1));
+    assert!(task_pool.pop(true, 15).is_none());
+    assert!(task_pool.unlock_queue(queue1));
     //println!("create queue--{:?}", task_pool);
-    assert!(task_pool.pop().is_some());
-    assert!(task_pool.pop().is_none());
-    assert!(task_pool.free_queue(queue1));
-    assert!(task_pool.pop().is_some());
-    assert!(task_pool.free_queue(queue1));
+    assert!(task_pool.pop(true, 15).is_some());
+    assert!(task_pool.pop(true, 15).is_none());
+    assert!(task_pool.unlock_queue(queue1));
+    assert!(task_pool.pop(true, 15).is_some());
+    assert!(task_pool.unlock_queue(queue1));
 
     task_pool.delete_queue(queue2);
     task_pool.delete_queue(queue4);
@@ -893,7 +714,7 @@ fn test(){
 
 #[test]
 fn test_effect(){
-    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Box::new(|| {}));
+    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Share::new(|_, _| {}));
 
     let time = run_millis();
     for i in 1..100001 {

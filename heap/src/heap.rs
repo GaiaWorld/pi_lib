@@ -7,11 +7,11 @@ use std::mem::transmute_copy;
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ptr::write;
 
-use dyn_uint::{UintFactory};
+use map::Map;
 
-pub struct Heap<T>(Vec<(T, usize)>, Ordering);
+pub struct Heap<T, ID>(Vec<(T, ID)>, Ordering);
 
-impl<T: Ord> Heap<T> {
+impl<T: Ord, ID: Copy> Heap<T, ID> {
 
 	//构建一个堆, 如果ord为Ordering::Less, 将创建一个小堆, 如果为Ordering::Greater，将创建一个大堆, 不应该使用Ordering::Equal创建一个堆
 	pub fn new(ord: Ordering) -> Self{
@@ -41,31 +41,31 @@ impl<T: Ord> Heap<T> {
 	}
 
 	//插入元素，返回该元素的位置
-	pub fn push< F:UintFactory>(&mut self, elem: T, index: usize, index_factor: &mut F ){
+	pub fn push< F:Map<Key=ID, Val=usize>>(&mut self, elem: T, id: ID, id_map: &mut F ){
 		let len = self.0.len();
-		index_factor.store(index, len);
-		self.0.push((elem, index));
-		self.up(len, index_factor);
+		id_map.insert(id, len);
+		self.0.push((elem, id));
+		self.up(len, id_map);
 	}
 
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &T{
         &self.0.get_unchecked(index).0
 	}
-    
+
     #[inline]
 	pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T{
         &mut self.0.get_unchecked_mut(index).0
 	}
 
 	#[inline]
-	pub unsafe fn delete< F:UintFactory>(&mut self, index: usize, index_factory: &mut F) -> (T, usize){
+	pub unsafe fn delete<F:Map<Key=ID, Val=usize>>(&mut self, index: usize, id_map: &mut F) -> (T, ID){
 		let len = self.0.len();
 		let last_elem = self.0.remove(len - 1);
 		//如果需要移除的元素不是堆底元素， 需要将该元素位置设置为栈底元素并下沉, 否则直接返回堆底元素
 		if index < self.0.len() {
 			let cur_elem = transmute_copy(&mut self.0[index]);
-			self.down(index, last_elem, index_factory);
+			self.down(index, last_elem, id_map);
 			cur_elem
 		}else {
 			last_elem
@@ -74,15 +74,15 @@ impl<T: Ord> Heap<T> {
 
 	//上朔， 使用时应该保证cur不会溢出
 	#[inline]
-	fn up< F:UintFactory>(&mut self, mut cur: usize, index_factory: &mut F){
+	fn up<F:Map<Key=ID, Val=usize>>(&mut self, mut cur: usize, id_map: &mut F){
 		if cur >= 1{
 			let arr = &mut self.0;
 			let mut parent = (cur - 1) >> 1;
 			if arr[cur].0.cmp(&arr[parent].0) != self.1 { return;}
-			let elem: (T, usize) = unsafe{ transmute_copy(&arr[cur])};
+			let elem: (T, ID) = unsafe{ transmute_copy(&arr[cur])};
 			// 往上迭代
 			loop {
-				index_factory.store(arr[parent].1, cur);
+				id_map.insert(arr[parent].1, cur);
 				let src = arr.as_mut_ptr();
 				unsafe{src.wrapping_offset(parent as isize).copy_to(src.wrapping_offset(cur as isize), 1)};
 				cur = parent;
@@ -91,7 +91,7 @@ impl<T: Ord> Heap<T> {
 				if elem.0.cmp(&arr[parent].0) != self.1 { break; }
 			}
 			unsafe{write(arr.as_mut_ptr().wrapping_offset(cur as isize), elem)};
-			index_factory.store(arr[cur].1, cur);
+			id_map.insert(arr[cur].1, cur);
 		}
 	}
 
@@ -100,7 +100,7 @@ impl<T: Ord> Heap<T> {
 	* Panics if index is out of bounds.
 	*/
 	#[inline]
-	fn down< F:UintFactory>(&mut self, mut cur: usize, elem: (T, usize), index_factory: &mut F) {
+	fn down<F:Map<Key=ID, Val=usize>>(&mut self, mut cur: usize, elem: (T, ID), id_map: &mut F) {
 		let arr = &mut self.0;
 		let mut left = (cur << 1) + 1;
 		let mut right = left + 1;
@@ -118,7 +118,7 @@ impl<T: Ord> Heap<T> {
 			match elem.0.cmp(&child.0) == self.1 {
 				true => break,
 				false => {
-					index_factory.store(child.1, cur);
+					id_map.insert(child.1, cur);
 					let src = arr.as_mut_ptr();
 					unsafe{src.wrapping_offset(child_index as isize).copy_to(src.wrapping_offset(cur as isize), 1)};
 
@@ -129,11 +129,11 @@ impl<T: Ord> Heap<T> {
 			}
 		}
 		unsafe{write(arr.as_mut_ptr().wrapping_offset(cur as isize), elem)};
-		index_factory.store(arr[cur].1, cur);
+		id_map.insert(arr[cur].1, cur);
 	}
 }
 
-impl<T: Debug> Debug for Heap<T> where T: Debug {
+impl<T: Debug, ID: Debug> Debug for Heap<T, ID> where T: Debug {
 	fn fmt(&self, fmt: &mut Formatter) -> FResult {
 		write!(fmt,
 			"Heap({:?}, {:?})",

@@ -13,7 +13,6 @@ use apm::{allocator::is_alloced_limit, counter::{GLOBAL_PREF_COLLECT, PrefCounte
 
 use task::Task;
 use task_pool::TaskPool;
-use task_pool::enums::Task as BaseTask;
 
 lazy_static! {
     //虚拟机动态同步任务弹出数量
@@ -251,10 +250,10 @@ impl Worker {
 
             let task = if is_alloced_limit() {
                 //已达已分配内存限制，则只获取动态同步和所有异步任务
-                tasks.pop_inner()
+                tasks.pop(false, 13)
             } else {
                 //未达已分配内存限制，则获取任务
-                tasks.pop()
+                tasks.pop(false, 15)
             };
 
             if let Some(t) = task {

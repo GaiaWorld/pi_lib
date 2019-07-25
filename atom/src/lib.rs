@@ -1,6 +1,7 @@
 #![feature(core_intrinsics)]
 #![feature(nll)]
 #![feature(pattern)]
+#![feature(const_string_new)]
 
 /**
  * 全局的线程安全的原子字符串池，为了移植问题，可能需要将实现部分移到其他库
@@ -28,8 +29,10 @@ use fnv::FnvHashMap;
 
 use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 
+
 // 同步原语，可用于运行一次性初始化。用于全局，FFI或相关功能的一次初始化。
 lazy_static! {
+    pub static ref EMPTY: Atom = Atom(Arc::new((String::new(), 0)));
 	static ref ATOM_MAP: Table = Table(RwLock::new(FnvHashMap::default()));
 }
 
@@ -44,6 +47,7 @@ impl Hash for Atom {
 }
 
 impl AsRef<str> for Atom {
+    #[inline(always)]
     fn as_ref(&self) -> &str{
         (*self.0).0.as_ref()
     }
@@ -51,6 +55,7 @@ impl AsRef<str> for Atom {
 
 impl Deref for Atom {
 	type Target = String;
+    #[inline(always)]
 	fn deref(&self) -> &String {
 		&(*self.0).0
 	}
@@ -73,27 +78,28 @@ impl Atom {
 	// fn contain(s: Option<&String>, h: u64) -> Option<usize> {
 	// 	return None
 	// }
+    #[inline(always)]
 	pub fn get_hash(&self) -> u64 {
 		(*self.0).1
 	}
 }
 
 impl From<String> for Atom {
-	#[inline]
+    #[inline(always)]
 	fn from(s: String) -> Atom {
 		Atom(ATOM_MAP.or_insert(s))
 	}
 }
 
 impl<'a> From<&'a str> for Atom {
-	#[inline]
+    #[inline(always)]
 	fn from(s: &str) -> Atom {
 		Atom(ATOM_MAP.or_insert(String::from(s)))
 	}
 }
 
 impl From<Vec<u8>> for Atom {
-	#[inline]
+    #[inline(always)]
 	fn from(s: Vec<u8>) -> Atom {
 		Atom(ATOM_MAP.or_insert(unsafe { String::from_utf8_unchecked(s) }))
 	}
@@ -332,17 +338,17 @@ fn test_atom() {
 
 
     let mut map = FnvHashMap::default();
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for _ in 0..1000000 {
         map.insert("xx", "xx");
     }
-    println!("insert map time{}", time::now_millis() - time);
+    println!("insert map time{}", time::now_millisecond() - time);
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for i in 0..1000000 {
         Atom::from(i.to_string());
     }
-    println!("atom from time{}", time::now_millis() - time);
+    println!("atom from time{}", time::now_millisecond() - time);
 
     
     let mut arr = Vec::new();
@@ -350,40 +356,40 @@ fn test_atom() {
         arr.push(Atom::from(i.to_string()));
     }
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for i in 0..1000{
         for _ in 0..1000{
             Atom::from(arr[i].as_str());
         }
     }
-    println!("atom1 from time{}", time::now_millis() - time);
+    println!("atom1 from time{}", time::now_millisecond() - time);
 
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for i in 0..1000{
         for _ in 0..1000{
             Arc::new((arr[i].as_str().to_string(), 5));
         }
     }
-    println!("arc::new time{}", time::now_millis() - time);
+    println!("arc::new time{}", time::now_millisecond() - time);
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for i in 0..1000{
         for _ in 0..1000{
             arr[i].as_str().to_string();
         }
     }
-    println!("to_string time{}", time::now_millis() - time);
+    println!("to_string time{}", time::now_millisecond() - time);
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     for i in 0..10{
         for _ in 0..1000{
             let _ = str_hash(arr[i].as_str(), &mut DefaultHasher::new());
         }
     }
-    println!("cul hash{}", time::now_millis() - time);
+    println!("cul hash{}", time::now_millisecond() - time);
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     let xx = Arc::new(1);
     let w = Arc::downgrade(&xx);
     for _ in 0..1000{
@@ -391,9 +397,9 @@ fn test_atom() {
             w.upgrade();
         }
     }
-    println!("upgrade{}", time::now_millis() - time);
+    println!("upgrade{}", time::now_millisecond() - time);
 
-    let time = time::now_millis();
+    let time = time::now_millisecond();
     let xx = Arc::new(1);
     //let w = Arc::downgrade(&xx);
     for _ in 0..1000{
@@ -401,6 +407,6 @@ fn test_atom() {
             let _a = xx.clone();
         }
     }
-    println!("clone {}", time::now_millis() - time);
+    println!("clone {}", time::now_millisecond() - time);
 
 }

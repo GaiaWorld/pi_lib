@@ -5,4 +5,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 slab = {path="../slab"}
+ver_index = {path="../ver_index"}
 lazy_static = "*"
