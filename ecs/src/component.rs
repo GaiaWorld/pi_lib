@@ -118,6 +118,14 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
         }
         None
     }
+
+    pub fn insert_no_notify(&mut self, id: usize, c: C) -> Option<C> {
+        let r = self.map.insert(id, c);
+        if let None = r {
+            self.entity.borrow_mut().mark(id, self.bit_index)
+        }
+        r
+    }
     
     pub fn delete(&mut self, id: usize) {
         self.entity.borrow_mut().un_mark(id, self.bit_index);
