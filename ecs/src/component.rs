@@ -137,6 +137,10 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
         self.notify.clone()
     }
 
+    pub fn get_notify_ref(&self) -> &NotifyImpl{
+        &self.notify
+    }
+
     // fn remove(&mut self, id: usize) -> DeleteListeners {
     //     self.map.remove(&id);
     //     self.notify.delete.clone()
