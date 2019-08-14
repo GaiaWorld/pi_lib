@@ -682,23 +682,31 @@ impl<T: 'static> Runer for DelayTask<T> {
     fn run(self, _key: usize){
         match self {
             DelayTask::Async { priority,index, async_pool,task , handler} => {
-                let mut lock = async_pool.1.lock().unwrap();
-                let (pool, indexs): &mut (dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-                pool.push(unsafe {task.as_ptr().read()} , priority, index, indexs);
-                async_pool.0.store(pool.amount(), AOrd::Relaxed);
-                handler(QueueType::DynAsync, pool.len());
+                let pool_len;
+                {
+                    let mut lock = async_pool.1.lock().unwrap();
+                    let (pool, indexs): &mut (dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
+                    pool.push(unsafe {task.as_ptr().read()} , priority, index, indexs);
+                    async_pool.0.store(pool.amount(), AOrd::Relaxed);
+                    pool_len = pool.len();
+                }
+                handler(QueueType::DynAsync, pool_len);
             },
             DelayTask::Sync { queue_id, index, direc, sync_pool, task , handler} => {
-                let mut lock = sync_pool.1.lock().unwrap();
-                let (pool, indexs): &mut (dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
-                let id = match direc {
-                    Direction::Front => pool.push_front(unsafe {task.as_ptr().read()}, queue_id, index),
-                    Direction::Back => pool.push_back(unsafe {task.as_ptr().read()}, queue_id, index)
-                };
-                sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
-                indexs.store(index, id);
-                indexs.set_class(index, IndexType::Sync);
-                handler(QueueType::DynSync, pool.queue_len());
+                let queue_len;
+                {
+                    let mut lock = sync_pool.1.lock().unwrap();
+                    let (pool, indexs): &mut (dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
+                    let id = match direc {
+                        Direction::Front => pool.push_front(unsafe {task.as_ptr().read()}, queue_id, index),
+                        Direction::Back => pool.push_back(unsafe {task.as_ptr().read()}, queue_id, index)
+                    };
+                    sync_pool.0.store(pool.get_weight(), AOrd::Relaxed);
+                    indexs.store(index, id);
+                    indexs.set_class(index, IndexType::Sync);
+                    queue_len = pool.queue_len()
+                }
+                handler(QueueType::DynSync, queue_len);
             }
 
         }
