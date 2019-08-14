@@ -9,6 +9,7 @@ members = [
   "guid",
   "handler",
   "heap",
+  "lru",
   "ordmap",
   "rsync",
   "sinfo",
