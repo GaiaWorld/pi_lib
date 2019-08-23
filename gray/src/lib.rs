@@ -10,6 +10,9 @@ pub trait GrayVersion {
 
 pub trait Gray{}
 
+/**
+* 灰度表
+*/
 pub struct GrayTab<T: Gray>{
     last: usize,
     tab: FnvHashMap<usize, T>,
