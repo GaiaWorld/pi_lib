@@ -1,0 +1,8 @@
+[package]
+name = "lru"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+deque = {path="../deque"}
+dyn_uint={path="../dyn_uint"}
