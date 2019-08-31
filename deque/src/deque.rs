@@ -108,7 +108,16 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         e.next = index;
         i
     }
-
+    /// Removes the first element from the Deque and returns it, or None if it is empty.
+    pub unsafe fn pop_front_unchecked(&mut self, index_map: &mut C) -> T {
+        self.len -= 1;
+        let node = index_map.remove(self.first);
+        self.first = node.next;
+        if self.first == 0 {
+            self.last = 0;
+        }
+        node.elem
+    }
     /// Removes the first element from the Deque and returns it, or None if it is empty.
     pub fn pop_front(&mut self, index_map: &mut C) -> Option<T> {
         if self.first == 0{
@@ -198,7 +207,7 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
         self.len
     }
 
-    pub fn iter<'a>(&mut self, container: &'a C) -> Iter<'a, T, C> {
+    pub fn iter<'a>(&self, container: &'a C) -> Iter<'a, T, C> {
         Iter{
             next: self.first,
             container: container,

@@ -1,0 +1,12 @@
+[package]
+name = "res"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+slab = { path = "../slab"}
+deque = {path = "../deque"}
+lru = {path = "../lru"}
+any = {path="../any"}
+share = { path = "../share" }
+fx_hashmap = {path="../fx_hashmap"}

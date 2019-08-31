@@ -146,7 +146,7 @@ impl<T: AsAny + AsMutAny> BoxAny for T {
      fn into_any(self: Box<Self>) -> Box<Any> { self }
 }
 
-pub trait RcAny: AsAny {
+pub trait RcAny: AsAny + 'static {
     fn into_any(self: Rc<Self>) -> Rc<Any>;
 }
 

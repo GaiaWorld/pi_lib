@@ -5,4 +5,4 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 deque = {path="../deque"}
-dyn_uint={path="../dyn_uint"}
+slab={path="../slab"}
