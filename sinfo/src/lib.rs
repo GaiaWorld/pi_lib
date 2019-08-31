@@ -108,6 +108,9 @@ impl Decode for EnumType{
 	}
 }
 
+/**
+* 自定义对象序列化元信息
+*/
 #[derive(Debug)]
 pub struct StructInfo {
 	pub name: Atom,
@@ -117,6 +120,12 @@ pub struct StructInfo {
 }
 
 impl StructInfo {
+	/**
+	* 构建自定义对象序列化元信息
+	* @param name 自定义对象名称
+	* @param name_hash 自定义对象名称hash
+	* @returns 返回自定义对象序列化元信息
+	*/
 	pub fn new(name:Atom, name_hash:u32) -> Self {
 		StructInfo {
 			name:name,

@@ -85,27 +85,35 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
             replace(&mut e.next, i)
         };
 
-        index_map.get_unchecked_mut(next).pre = i;
-        let e = index_map.get_unchecked_mut(i);
-        e.pre = index;
-        e.next = next;
+        match index_map.get_mut(next) {
+            Some(next_elem) =>  {
+                next_elem.pre = i;
+                let e = index_map.get_unchecked_mut(i);
+                e.next = next;
+            },
+            None => ()
+        };
         i
     }
 
     /// Prepend an element to the Deque. return a index
     pub unsafe fn push_to_front(&mut self, elem: T, index: usize, index_map: &mut C) -> usize{
         self.len += 1;
-        let i = index_map.insert(Node::new(elem, index, 0));
+        let i = index_map.insert(Node::new(elem, 0, index));
 
         let pre = {
             let e = index_map.get_unchecked_mut(index);
             replace(&mut e.pre, i)
         };
 
-        index_map.get_unchecked_mut(pre).next = i;
-        let e = index_map.get_unchecked_mut(i);
-        e.pre = pre;
-        e.next = index;
+        match index_map.get_mut(pre) {
+            Some(pre_elem) =>  {
+                pre_elem.next = i;
+                let e = index_map.get_unchecked_mut(i);
+                e.pre = pre;
+            },
+            None => ()
+        };
         i
     }
     /// Removes the first element from the Deque and returns it, or None if it is empty.
@@ -128,6 +136,8 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
             self.first = node.next;
             if self.first == 0 {
                 self.last = 0;
+            } else {
+                unsafe { index_map.get_unchecked_mut(self.first) }.pre = 0;
             }
             Some(node.elem)
         }
@@ -143,6 +153,8 @@ impl<T, C: IndexMap<Node<T>>> Deque<T, C> {
             self.last = node.pre;
             if self.last == 0 {
                 self.first = 0;
+            } else {
+                unsafe { index_map.get_unchecked_mut(self.last) }.next = 0;
             }
             Some(node.elem)
         }

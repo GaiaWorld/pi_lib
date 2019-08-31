@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "async",
   "adler32",
   "base58",
   "atom",

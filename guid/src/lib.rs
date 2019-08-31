@@ -41,7 +41,9 @@ impl Guid {
 	}
 }
 
-// Guid生成器
+/**
+* 全局唯一id生成器
+*/
 #[derive(Default)]
 pub struct GuidGen {
 	time: AtomicU64,
@@ -50,6 +52,12 @@ pub struct GuidGen {
 }
 
 impl GuidGen {
+	/**
+	* 构建全局唯一id生成器
+	* @param node_time 本地节点运行时长，单位纳秒
+	* @param node_id 本地节点编号
+	* @returns 返回全局唯一id生成器
+	*/
 	pub fn new(node_time: u64, node_id: u16) -> Self {
 		let time = if node_time == 0 {
 			start_secs()
