@@ -45,4 +45,6 @@ members = [
   "hashmap",
   "share",
   "fx_hashmap",
+  "densevec",
+  "bincode"
 ]

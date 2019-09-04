@@ -64,9 +64,8 @@ impl Dispatcher for SeqDispatcher {
         // }
     }
     fn run(&self) {
-        // let time = std::time::Instant::now();
+        // println!("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         self.vec.listen(&());
-        // println!("time----------{:?}", std::time::Instant::now() - time);
     }
 }
 

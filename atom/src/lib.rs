@@ -12,6 +12,9 @@ extern crate bon;
 
 #[macro_use]
 extern crate lazy_static;
+#[cfg(feature = "serde")]
+#[macro_use]
+extern crate serde;
 
 
 use std::ops::Deref;
@@ -25,6 +28,8 @@ use std::iter::Map;
 use std::str::Split;
 
 use fnv::FnvHashMap;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 
@@ -36,6 +41,25 @@ lazy_static! {
 // 原子字符串
 #[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Atom(Arc<(String, u64)>);
+
+#[cfg(feature = "serde")]
+impl Serialize for Atom {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        (self.0).0.serialize(serializer)
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Atom {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        Ok(Self::from(String::deserialize(deserializer)?))
+    }
+}
 
 impl Hash for Atom {
     fn hash<H: Hasher>(&self, h: &mut H) {
@@ -313,94 +337,94 @@ impl<'a> Iterator for Iter<'a>{
 }
 
 
-#[cfg(test)]
-extern crate time;
+// #[cfg(test)]
+// extern crate time;
 
-#[test]
-fn test_atom() {
+// #[test]
+// fn test_atom() {
 
-    Atom::from("abc");
-	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 1);
-	Atom::from("afg");
-	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
-	let at3 = Atom::from("afg");
-	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
-	assert_eq!((at3.0).0, "afg");
-    let mut buf = WriteBuffer::new();
-    let a = Atom::from("vvvvvvv");
-    a.encode(&mut buf);
+//     Atom::from("abc");
+// 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 1);
+// 	Atom::from("afg");
+// 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
+// 	let at3 = Atom::from("afg");
+// 	assert_eq!(ATOM_MAP.0.read().expect("ATOM_MAP:error").len(), 2);
+// 	assert_eq!((at3.0).0, "afg");
+//     let mut buf = WriteBuffer::new();
+//     let a = Atom::from("vvvvvvv");
+//     a.encode(&mut buf);
 
 
-    let mut map = FnvHashMap::default();
-    let time = time::now_millis();
-    for _ in 0..1000000 {
-        map.insert("xx", "xx");
-    }
-    println!("insert map time{}", time::now_millis() - time);
+//     let mut map = FnvHashMap::default();
+//     let time = time::now_millis();
+//     for _ in 0..1000000 {
+//         map.insert("xx", "xx");
+//     }
+//     println!("insert map time{}", time::now_millis() - time);
 
-    let time = time::now_millis();
-    for i in 0..1000000 {
-        Atom::from(i.to_string());
-    }
-    println!("atom from time{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     for i in 0..1000000 {
+//         Atom::from(i.to_string());
+//     }
+//     println!("atom from time{}", time::now_millis() - time);
 
     
-    let mut arr = Vec::new();
-    for i in 0..1000{
-        arr.push(Atom::from(i.to_string()));
-    }
+//     let mut arr = Vec::new();
+//     for i in 0..1000{
+//         arr.push(Atom::from(i.to_string()));
+//     }
 
-    let time = time::now_millis();
-    for i in 0..1000{
-        for _ in 0..1000{
-            Atom::from(arr[i].as_str());
-        }
-    }
-    println!("atom1 from time{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     for i in 0..1000{
+//         for _ in 0..1000{
+//             Atom::from(arr[i].as_str());
+//         }
+//     }
+//     println!("atom1 from time{}", time::now_millis() - time);
 
 
-    let time = time::now_millis();
-    for i in 0..1000{
-        for _ in 0..1000{
-            Arc::new((arr[i].as_str().to_string(), 5));
-        }
-    }
-    println!("arc::new time{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     for i in 0..1000{
+//         for _ in 0..1000{
+//             Arc::new((arr[i].as_str().to_string(), 5));
+//         }
+//     }
+//     println!("arc::new time{}", time::now_millis() - time);
 
-    let time = time::now_millis();
-    for i in 0..1000{
-        for _ in 0..1000{
-            arr[i].as_str().to_string();
-        }
-    }
-    println!("to_string time{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     for i in 0..1000{
+//         for _ in 0..1000{
+//             arr[i].as_str().to_string();
+//         }
+//     }
+//     println!("to_string time{}", time::now_millis() - time);
 
-    let time = time::now_millis();
-    for i in 0..10{
-        for _ in 0..1000{
-            let _ = str_hash(arr[i].as_str(), &mut DefaultHasher::new());
-        }
-    }
-    println!("cul hash{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     for i in 0..10{
+//         for _ in 0..1000{
+//             let _ = str_hash(arr[i].as_str(), &mut DefaultHasher::new());
+//         }
+//     }
+//     println!("cul hash{}", time::now_millis() - time);
 
-    let time = time::now_millis();
-    let xx = Arc::new(1);
-    let w = Arc::downgrade(&xx);
-    for _ in 0..1000{
-        for _ in 0..1000{
-            w.upgrade();
-        }
-    }
-    println!("upgrade{}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     let xx = Arc::new(1);
+//     let w = Arc::downgrade(&xx);
+//     for _ in 0..1000{
+//         for _ in 0..1000{
+//             w.upgrade();
+//         }
+//     }
+//     println!("upgrade{}", time::now_millis() - time);
 
-    let time = time::now_millis();
-    let xx = Arc::new(1);
-    //let w = Arc::downgrade(&xx);
-    for _ in 0..1000{
-        for _ in 0..1000{
-            let _a = xx.clone();
-        }
-    }
-    println!("clone {}", time::now_millis() - time);
+//     let time = time::now_millis();
+//     let xx = Arc::new(1);
+//     //let w = Arc::downgrade(&xx);
+//     for _ in 0..1000{
+//         for _ in 0..1000{
+//             let _a = xx.clone();
+//         }
+//     }
+//     println!("clone {}", time::now_millis() - time);
 
-}
+// }

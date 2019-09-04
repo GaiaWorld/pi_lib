@@ -8,3 +8,8 @@ fnv = "1.0.6"
 lazy_static = "*"
 bon = {path="../bon"}
 time = {path="../time"}
+
+[dependencies.serde]
+version = "1.0"
+features = ["serde_derive"]
+optional = true

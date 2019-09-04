@@ -127,10 +127,10 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
         r
     }
     
-    pub fn delete(&mut self, id: usize) {
+    pub fn delete(&mut self, id: usize) -> Option<C> {
         self.entity.borrow_mut().un_mark(id, self.bit_index);
         self.notify.delete_event(id);
-        self.map.remove(&id);
+        self.map.remove(&id)
     }
 
     pub fn get_notify(&self) -> NotifyImpl{

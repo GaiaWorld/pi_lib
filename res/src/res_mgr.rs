@@ -4,10 +4,7 @@
 // 如果有LRU有空闲， 则会减少其max_capacity, 按权重提高那些满的LRU的max_capacity
 
 
-use std::any::{ TypeId, Any };
-use std::cell::{RefCell};
-use std::ops::{DerefMut};
-
+use std::any::{ TypeId };
 
 use fx_hashmap::FxHashMap32;
 use share::{Share};
@@ -87,7 +84,7 @@ impl ResMgr {
         let capacity = self.total_capacity - self.min_capacity;
         let mut up_size = 0; // 超过权重的总大小
         let mut down_size = 0; // 小于权重的总大小
-        let mut vec = Vec::new(); // 超过权重并满了的map_index
+        let mut vec = Vec::new(); // map引用
         let mut up_full = Vec::new(); // 超过权重并满了的map_index
         let mut up_ok = Vec::new(); // 超过权重并Ok的map_index
 
