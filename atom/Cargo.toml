@@ -8,6 +8,8 @@ fnv = "1.0.6"
 lazy_static = "*"
 bon = {path="../bon"}
 time = {path="../time"}
+share = { path = "../share" }
+hash = {path="../hash"}
 
 [dependencies.serde]
 version = "1.0"

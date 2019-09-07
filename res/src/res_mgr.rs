@@ -6,7 +6,7 @@
 
 use std::any::{ TypeId };
 
-use fx_hashmap::FxHashMap32;
+use hash::XHashMap;
 use share::{Share};
 
 use super::res_map::{Res, ResMap, ResCollect, StateInfo};
@@ -14,7 +14,7 @@ use super::res_map::{Res, ResMap, ResCollect, StateInfo};
 pub static CAPACITY: usize = 16*1024*1024;
 
 pub struct ResMgr {
-    tables: FxHashMap32<TypeId, (Share<dyn ResCollect>, [usize;3])>,
+    tables: XHashMap<TypeId, (Share<dyn ResCollect>, [usize;3])>,
     total_capacity: usize,
     weight: usize,
     min_capacity: usize,
@@ -27,7 +27,7 @@ impl Default for ResMgr {
 impl ResMgr {
     pub fn with_capacity(total_capacity: usize) -> Self{
         ResMgr{
-            tables: FxHashMap32::default(),
+            tables: XHashMap::default(),
             total_capacity,
             weight: 0,
             min_capacity: 0,

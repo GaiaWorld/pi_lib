@@ -5,7 +5,7 @@ use std::hash::Hash;
 use slab::Slab;
 use lru::{LruCache, Entry};
 use deque::deque::{Node};
-use fx_hashmap::FxHashMap32;
+use hash::XHashMap;
 use share::{Share, ShareWeak};
 use any::RcAny;
 
@@ -29,7 +29,7 @@ pub enum StateInfo {
 
 //资源表
 pub struct ResMap<T: Res + 'static> {
-    map: FxHashMap32<<T as Res>::Key, ResEntry<T>>,
+    map: XHashMap<<T as Res>::Key, ResEntry<T>>,
     array: Vec<(KeyRes<T>, usize, usize)>,
     slab: Slab<Node<Entry<KeyRes<T>>>>,
     caches: [LruCache<KeyRes<T>>;3],
@@ -37,7 +37,7 @@ pub struct ResMap<T: Res + 'static> {
 impl<T: Res + 'static> Default for ResMap<T> {
     fn default() -> Self {
         ResMap{
-            map: FxHashMap32::with_capacity_and_hasher(0, Default::default()),
+            map: XHashMap::default(),
             array: Vec::new(),
             slab: Slab::default(),
             caches: [LruCache::default(), LruCache::default(), LruCache::default()],
@@ -48,7 +48,7 @@ impl<T: Res + 'static> ResMap<T> {
 
     pub fn with_config(configs: &[usize; 9]) -> Self {
         ResMap{
-            map: FxHashMap32::with_capacity_and_hasher(0, Default::default()),
+            map: XHashMap::default(),
             array: Vec::new(),
             slab: Slab::default(),
             caches: [LruCache::with_config(configs[0], configs[1], configs[2]), LruCache::with_config(configs[3], configs[4], configs[5]), LruCache::with_config(configs[6], configs[7], configs[8])],

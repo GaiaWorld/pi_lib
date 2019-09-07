@@ -1,8 +1,8 @@
 [package]
-name = "map"
+name = "hash"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
-time = {path="../time"}
-hash = {path="../hash"}
+fxhash = "0.2.1"
+twox-hash = "1"
