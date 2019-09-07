@@ -1,17 +1,18 @@
 extern crate im;
+extern crate share;
 
 use std::{
-    sync::Arc,
     ops::{Deref, DerefMut},
     default::Default,
 };
 use im::vector::Vector;
+use share::Share;
 
 pub trait Listener<E> {
     fn listen(&self, e: &E);
 }
 
-pub struct FnListener<E>(pub Arc<Fn(&E)>);
+pub struct FnListener<E>(pub Share<dyn Fn(&E)>);
 
 unsafe impl<E> Sync for FnListener<E> {}
 unsafe impl<E> Send for FnListener<E> {}
@@ -23,7 +24,7 @@ impl<E> Listener<E> for FnListener<E> {
 }
 impl<E> PartialEq for FnListener<E> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Share::ptr_eq(&self.0, &other.0)
     }
 }
 impl<E> Clone for FnListener<E> {

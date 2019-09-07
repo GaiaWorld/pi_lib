@@ -12,6 +12,7 @@ pointer = {path="../pointer"}
 listener = {path="../listener"}
 fx_hashmap = {path="../fx_hashmap"}
 time = {path="../time"}
+share = {path="../share"}
 paste = "0.1"
 lazy_static = "*"
 # im = "*"

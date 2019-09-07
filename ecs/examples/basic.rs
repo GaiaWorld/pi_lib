@@ -7,6 +7,7 @@ extern crate ecs;
 extern crate map;
 extern crate pointer;
 extern crate atom;
+extern crate share;
 
 use atom::Atom;
 

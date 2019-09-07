@@ -5,3 +5,4 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 im = "*"
+share = { path = "../share" }
