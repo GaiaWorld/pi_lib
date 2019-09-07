@@ -68,32 +68,32 @@ macro_rules! impl_system {
 
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, CreateEvent) => {
         let r: Box<Fn(&CreateEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_create(&*$setup_target, &r);
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, CreateEvent) => {
         let r: Box<Fn(&CreateEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_create(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, ModifyEvent) => {
         let r: Box<Fn(&ModifyEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, ModifyEvent) => {
         let r: Box<Fn(&ModifyEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, DeleteEvent) => {
         let r: Box<Fn(&DeleteEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_delete(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, DeleteEvent) => {
         let r: Box<Fn(&DeleteEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{std::sync::Arc::from_raw(Box::into_raw(r))});
+        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_delete(&*$setup_target, &r)
     };
 
@@ -129,7 +129,7 @@ macro_rules! impl_system {
         let write = <<<$system <$($sg),*> as $crate::system::$sign<'_, $($gen$(<$($g),*>)*),* >>::WriteData as $crate::system::SystemMutData>::FetchTarget as  $crate::Fetch>::fetch($world);
         let read_data = $crate::Lend::lend1(&read);
         let write_data = $crate::LendMut::lend_mut1(&write);
-        let f = $crate::monitor::FnListener(std::sync::Arc::new( move |e| {
+        let f = $crate::monitor::FnListener(share::Share::new( move |e| {
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             // let read_data = $crate::Lend::lend(&read);
@@ -138,7 +138,7 @@ macro_rules! impl_system {
         }));
         impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen$(<$($g),*>)*),* );
         impl_system!(@add_monitor setup_target, f, $($gen$(<$($g),*>)*),* );
-        let ptr: (usize, usize) = unsafe {std::mem::transmute(std::sync::Arc::into_raw(f.0))};
+        let ptr: (usize, usize) = unsafe {std::mem::transmute(share::Share::into_raw(f.0))};
         $arr.push(ptr); // 裸指针
         impl_system!(@listener_setup $arr $world $me $system <$($sg),*>, $($t)*);
     };
@@ -184,8 +184,8 @@ macro_rules! impl_system {
             // let write_data = $crate::LendMut::lend_mut(&write);
             $s.borrow_mut1().setup(read_data, write_data);
         }
-        $s.run_fn = Some($crate::monitor::FnListener(std::sync::Arc::new( move |e: &()| {
-            let time = std::time::Instant::now();
+        $s.run_fn = Some($crate::monitor::FnListener(share::Share::new( move |e: &()| {
+            // let time = std::time::Instant::now();
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             // let read_data = $crate::Lend::lend(&read);
@@ -256,7 +256,7 @@ macro_rules! impl_system {
                     //runner setup
                     impl_system!(@runner_setup self world me $system <$($sg),*>, $has_runner);
                     //dispose
-                    self.dispose_listener_fn = Some($crate::monitor::FnListener(std::sync::Arc::new(move |world: &$crate::world::World| {
+                    self.dispose_listener_fn = Some($crate::monitor::FnListener(share::Share::new(move |world: &$crate::world::World| {
                         impl_system!(@listener_dispose 0; listen_arr world me $system <$($sg),*>, $($t)*);
                     })));
                 }
