@@ -9,6 +9,7 @@ members = [
   "gray",
   "guid",
   "handler",
+  "hash",
   "heap",
   "lru",
   "res",

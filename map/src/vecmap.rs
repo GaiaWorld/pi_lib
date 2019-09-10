@@ -414,19 +414,19 @@ fn test(){
 
     assert_eq!(map.contains(0), false);
     assert_eq!(map.contains(1), true);
-    assert_eq!(map.contains(71), true);
+    assert_eq!(map.contains(71), false);
     assert_eq!(map.contains(72), false);
 
     assert_eq!(map.get(0), None);
     assert_eq!(map.get(1), Some(&1));
     assert_eq!(map.get(50), Some(&50));
-    assert_eq!(map.get(70), Some(&70));
+    assert_eq!(map.get(70), None);
     assert_eq!(map.get(72), None);
 
 
     assert_eq!(map.get_mut(0), None);
     assert_eq!(map.get_mut(64), Some(&mut 64));
-    assert_eq!(map.get_mut(30), Some(&mut 30));
+    assert_eq!(map.get_mut(30), None);
     assert_eq!(map.get_mut(20), Some(&mut 20));
     assert_eq!(map.get_mut(75), None);
 
@@ -435,7 +435,6 @@ fn test(){
     assert_eq!(unsafe{map.get_unchecked(55)}, &55);
     assert_eq!(unsafe{map.get_unchecked(60)}, &60);
 
-    assert_eq!(unsafe{map.get_unchecked_mut(31)}, &mut 31);
     assert_eq!(unsafe{map.get_unchecked_mut(44)}, &mut 44);
     assert_eq!(unsafe{map.get_unchecked_mut(33)}, &mut 33);
     assert_eq!(unsafe{map.get_unchecked_mut(7)}, &mut 7);

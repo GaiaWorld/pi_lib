@@ -4,7 +4,7 @@ extern crate slab;
 extern crate deque;
 extern crate lru;
 extern crate share;
-extern crate fx_hashmap;
+extern crate hash;
 #[macro_use]
 extern crate any;
 
