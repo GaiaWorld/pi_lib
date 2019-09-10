@@ -32,7 +32,7 @@ impl World {
     pub fn register_entity<E: 'static>(&mut self) {
         let id = TypeId::of::<E>();
         match self.entity.insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new()))) {
-            Some(_) => panic!("duplicate registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
+            Some(_) => panic!("duplicate registration, entity: {:?}, id: {:?}", type_name::<E>(), id),
             _ => ()
         }
     }
@@ -40,7 +40,7 @@ impl World {
     pub fn register_single<T: 'static>(&mut self, t: T) {
         let id = TypeId::of::<T>();
         match self.single.insert(id, Arc::new(SingleCaseImpl::new(t))) {
-            Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", unsafe{type_name::<T>()}, id),
+            Some(_) => panic!("duplicate registration, component: {:?}, id: {:?}", type_name::<T>(), id),
             _ => ()
         }
     }
@@ -58,14 +58,14 @@ impl World {
                         let m: Arc<CellMultiCase<E, C>> = Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
                         entity.register_component(m.clone());
                         match self.multi.insert((eid, cid), m) {
-                            Some(_) => panic!("duplicate registration, entity: {:?}, component: {:?}", unsafe{type_name::<E>()}, unsafe{type_name::<C>()}),
+                            Some(_) => panic!("duplicate registration, entity: {:?}, component: {:?}", type_name::<E>(), type_name::<C>()),
                             _ => ()
                         }
                     },
                     Err(_) => panic!("downcast err")
                 };
             },
-            _ => panic!("need registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, eid),
+            _ => panic!("need registration, entity: {:?}, id: {:?}", type_name::<E>(), eid),
         }
     }
     pub fn register_system<T:System>(&mut self, name: Atom, sys: T) {
@@ -97,7 +97,7 @@ impl World {
                 },
                 Err(_) => panic!("downcast err")
             }
-            _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, id),
+            _ => panic!("not registration, entity: {:?}, id: {:?}", type_name::<E>(), id),
         }
     }
     pub fn free_entity<E: 'static>(&self, id: usize) {
@@ -110,7 +110,7 @@ impl World {
                 },
                 Err(_) => panic!("downcast err")
             },
-            _ => panic!("not registration, entity: {:?}, id: {:?}", unsafe{type_name::<E>()}, eid),
+            _ => panic!("not registration, entity: {:?}, id: {:?}", type_name::<E>(), eid),
         }
     }
     pub fn add_dispatcher<D: Dispatcher + 'static>(&mut self, name: Atom, dispatcher: D) {

@@ -8,5 +8,8 @@ extern crate fx_hashmap;
 #[macro_use]
 extern crate any;
 
-pub mod res_map;
-pub mod res_mgr;
+mod res_map;
+mod res_mgr;
+
+pub use res_map::*;
+pub use res_mgr::*;

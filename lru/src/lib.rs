@@ -45,6 +45,14 @@ impl<T> LruCache<T> {
             size: 0,
         }
     }
+	/**
+     * 更改配置
+     */
+	pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize){
+		self.min_capacity = min_capacity;
+		self.timeout = timeout;
+		self.max_capacity = if max_capacity > min_capacity {max_capacity}else{min_capacity};
+	}
     /**
      * 获得配置
      */

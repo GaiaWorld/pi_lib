@@ -54,6 +54,13 @@ impl<T: Res + 'static> ResMap<T> {
             caches: [LruCache::with_config(configs[0], configs[1], configs[2]), LruCache::with_config(configs[3], configs[4], configs[5]), LruCache::with_config(configs[6], configs[7], configs[8])],
         }
     }
+	pub fn modify_config(&mut self, configs: &[usize; 9]) -> [(usize, usize, usize); 3] {
+		let old = [self.caches[0].get_config(), self.caches[1].get_config(), self.caches[2].get_config()];
+		self.caches[0].modify_config(configs[0], configs[1], configs[2]);
+		self.caches[0].modify_config(configs[3], configs[4], configs[5]);
+		self.caches[0].modify_config(configs[6], configs[7], configs[8]);
+		old
+	}
 	// 获得指定键的资源
     #[inline]
 	pub fn get(&mut self, key: &<T as Res>::Key) -> Option<Share<T>> {
@@ -102,8 +109,10 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
     // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
     fn collect(&mut self, now: usize) -> [StateInfo;3] {
         // 将无人使用的资源放入到LruCache
-        for i in 0..self.array.len() {
+		let mut i = 0;
+        while i < self.array.len() {
             let j = self.array.len() - i - 1;
+			i += 1;
             let el = unsafe{self.array.get_unchecked(j)};
             if el.0.res.strong_count() > 1 {
                 continue
@@ -131,8 +140,9 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
                 _ => ()
             }
         }
+
         let mut carr = [StateInfo::None, StateInfo::None, StateInfo::None];
-        let mut i = 0;
+        i = 0;
         // 清理过时的资源
         for c in self.caches.iter_mut() {
             loop {
