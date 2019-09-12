@@ -5,7 +5,7 @@ use std::{
     intrinsics::type_name,
 };
 
-use fx_hashmap::FxHashMap32;
+use hash::XHashMap;
 // use im::hashmap::HashMap;
 
 use atom::Atom;
@@ -21,11 +21,11 @@ use cell::StdCell;
 
 #[derive(Default, Clone)]
 pub struct World {
-    entity: FxHashMap32<TypeId, Arc<dyn Entity>>,
-    single: FxHashMap32<TypeId, Arc<dyn SingleCase>>,
-    multi: FxHashMap32<(TypeId, TypeId), Arc<dyn MultiCase>>,
-    system: FxHashMap32<Atom, Arc<dyn System>>,
-    runner: FxHashMap32<Atom, Arc<dyn Dispatcher>>,
+    entity: XHashMap<TypeId, Arc<dyn Entity>>,
+    single: XHashMap<TypeId, Arc<dyn SingleCase>>,
+    multi: XHashMap<(TypeId, TypeId), Arc<dyn MultiCase>>,
+    system: XHashMap<Atom, Arc<dyn System>>,
+    runner: XHashMap<Atom, Arc<dyn Dispatcher>>,
 }
 
 impl World {

@@ -69,7 +69,7 @@ impl<T: Res + 'static> ResMap<T> {
                 if r.id > 0 {
                     // 将lru中缓存的数据放回到array中
                     let e = self.caches[r.rtype].remove(r.id, &mut self.slab).unwrap();
-                    self.array.push((e.0, r.rtype, e.1));
+                    self.array.push((e.0, e.1, r.rtype));
                     r.id = 0;
                 }
                 Some(r.res.clone())

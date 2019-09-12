@@ -53,7 +53,6 @@ impl ResMgr {
 			e.1 = arr;
 			*weight -= old_total;
 			*min_capacity -= old[0].0 + old[1].0 + old[2].0;
-			println!("*weight: {}, *min_capacity: {}", *weight, *min_capacity);
 		}).or_insert((Share::new(ResMap::<T>::with_config(&configs)), arr));
     }
 

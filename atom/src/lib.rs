@@ -299,7 +299,6 @@ fn read(mut list: &CowList, s: &str) -> Option<Atom> {
 	}
 }
 fn free(list: CowList, nil_count: usize) -> Option<Share<CowList>> {
-	println!("free -------{:?}, {}", list, nil_count);
 	if list.value.strong_count() > 0 {
 		let next = (*list.next.unwrap()).clone();
 		Some(Share::new(CowList::with_next(list.value.clone(), free(next, nil_count))))
