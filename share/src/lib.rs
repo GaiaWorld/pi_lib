@@ -1,6 +1,5 @@
 #[cfg(not(feature = "arc"))]
 use std::rc::{Rc, Weak};
-#[cfg(not(feature = "arc"))]
 use std::cell::{RefCell, Ref, RefMut, BorrowError, BorrowMutError};
 #[cfg(not(feature = "arc"))]
 pub type Share<T> = Rc<T>;
