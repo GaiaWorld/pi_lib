@@ -47,5 +47,6 @@ members = [
   "share",
   "fx_hashmap",
   "densevec",
-  "bincode"
+  "bincode",
+  "local_timer"
 ]

@@ -1,0 +1,9 @@
+[package]
+name = "local_timer"
+version = "0.1.0"
+authors = ["vmos <vmos@fairblock.io>"]
+edition = "2018"
+
+[dependencies]
+time = { path = "../time" }
+wheel = { path = "../wheel" }
