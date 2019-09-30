@@ -41,7 +41,7 @@ lazy_static! {
 * 检查指定计数器名称与计数器id是否匹配
 */
 pub fn check_counter(name: &str, cid: u64) -> bool {
-    Atom::from(name).get_hash() == cid
+    Atom::from(name).get_hash() as u64 == cid 
 }
 
 /*
@@ -219,15 +219,15 @@ impl PrefCollect {
         }
 
         let cid = target.get_hash();
-        if let Some(counter) = self.0.dynamic_table.read().get(&cid) {
+        if let Some(counter) = self.0.dynamic_table.read().get(&(cid as u64)) {
             //存在指定的动态计数器
             return Some(PrefCounter(counter.clone()));
         }
 
         //不存在指定的动态计数器
         let counter = Arc::new(AtomicUsize::new(init));
-        self.0.dynamic_collect.push((cid, counter.clone()));
-        self.0.dynamic_table.write().insert(cid, counter.clone());
+        self.0.dynamic_collect.push((cid as u64, counter.clone()));
+        self.0.dynamic_table.write().insert(cid as u64, counter.clone());
         Some(PrefCounter(counter))
     }
 
@@ -239,15 +239,15 @@ impl PrefCollect {
         }
 
         let cid = target.get_hash();
-        if let Some(counter) = self.0.dynamic_table.read().get(&cid) {
+        if let Some(counter) = self.0.dynamic_table.read().get(&(cid as u64)) {
             //存在指定的动态计时器
             return Some(PrefTimer(counter.clone()));
         }
 
         //不存在指定的动态计时器
         let counter = Arc::new(AtomicUsize::new(init));
-        self.0.dynamic_collect.push((cid, counter.clone()));
-        self.0.dynamic_table.write().insert(cid, counter.clone());
+        self.0.dynamic_collect.push((cid as u64, counter.clone()));
+        self.0.dynamic_table.write().insert(cid as u64, counter.clone());
         Some(PrefTimer(counter))
     }
 
@@ -278,7 +278,7 @@ impl PrefCollect {
 
         let cid = target.get_hash();
         let counter = Arc::new(AtomicUsize::new(init));
-        self.0.static_collect.push((cid, counter.clone()));
+        self.0.static_collect.push((cid as u64, counter.clone()));
         Some(PrefCounter(counter))
     }
 
@@ -291,7 +291,7 @@ impl PrefCollect {
 
         let cid = target.get_hash();
         let counter = Arc::new(AtomicUsize::new(init));
-        self.0.static_collect.push((cid, counter.clone()));
+        self.0.static_collect.push((cid as u64, counter.clone()));
         Some(PrefTimer(counter))
     }
 
