@@ -9,7 +9,7 @@ struct Token(pub usize);
 #[test]
 fn test_local_timer() {
     let mut timeout = 0;
-    let mut timer = LocalTimer::new(10);
+    let mut timer = LocalTimer::with_tick(10);
     for n in 0..20 {
         timeout = n * 5;
         timer.set_timeout(Token(timeout), timeout);
