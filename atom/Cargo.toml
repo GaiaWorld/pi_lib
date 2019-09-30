@@ -8,10 +8,14 @@ fnv = "1.0.6"
 lazy_static = "*"
 bon = {path="../bon"}
 time = {path="../time"}
-share = {path = "../share", features = ["arc"]}
+share = {path = "../share"}
 hash = {path="../hash", features = ["xxhash"]}
 
 [dependencies.serde]
 version = "1.0"
 features = ["serde_derive"]
 optional = true
+
+[features]
+default = ["arc"]
+arc = []
