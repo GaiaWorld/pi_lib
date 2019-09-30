@@ -44,7 +44,7 @@ lazy_static! {
 
 // 原子字符串
 #[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct Atom(Share<(String, u64)>);
+pub struct Atom(Share<(String, usize)>);
 unsafe impl Sync for Atom {}
 unsafe impl Send for Atom {}
 
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for Atom {
 
 impl Hash for Atom {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        h.write_u64(((self.0).1).clone())
+        h.write_usize(((self.0).1).clone())
     }
 }
 
@@ -102,16 +102,22 @@ impl Decode for Atom{
 
 impl Atom {
 	// 返回的正整数为0表示静态原子，1表示为动态原子
-	// fn contain(s: Option<&String>, h: u64) -> Option<usize> {
+	// fn contain(s: Option<&String>, h: usize) -> Option<usize> {
 	// 	return None
 	// }
     #[inline(always)]
-	pub fn get_hash(&self) -> u64 {
+	pub fn get_hash(&self) -> usize {
 		(*self.0).1
 	}
-	pub fn get(hash: u64) -> Option<Atom> {
+
+	pub fn get(hash: usize) -> Option<Atom> {
 		ATOM_MAP.get(hash)
 	}
+
+	// #[inline(always)]
+	// pub fn from_hash(hash: usize) -> Option<Atom> {
+		
+	// }
 }
 
 impl From<String> for Atom {
@@ -150,7 +156,7 @@ pub fn split<'a, P: Pattern<'a>>(s: &'a String, pat: P) -> Map<Split<'a, P>, fn(
 
 //todo
 // 为完美hash准备的方法
-// impl From<u64> for Atom {
+// impl From<usize> for Atom {
 // 	#[inline]
 // 	fn from(s: String) -> Atom {
 // 		(Share::new((s, 0)))
@@ -172,10 +178,10 @@ pub fn split<'a, P: Pattern<'a>>(s: &'a String, pat: P) -> Map<Split<'a, P>, fn(
 
 // 为静态编译的完美hash的字符串准备的常量数组
 // const NB_BUCKETS: usize = 1 << 12;  // 4096
-// const BUCKET_MASK: u64 = (1 << 12) - 1;
+// const BUCKET_MASK: usize = (1 << 12) - 1;
 
 // struct StringCache {
-//     buckets: [Option<Box<(String, u64)>>; NB_BUCKETS],
+//     buckets: [Option<Box<(String, usize)>>; NB_BUCKETS],
 // }
 
 // impl StringCache{
@@ -187,11 +193,11 @@ pub fn split<'a, P: Pattern<'a>>(s: &'a String, pat: P) -> Map<Split<'a, P>, fn(
 //     static ref STRING_CACHE: Mutex<StringCache> = Mutex::new(StringCache::new());
 // }
 
-struct Table(ShareRwLock<XHashMap<u64, VerCowList>>);
+struct Table(ShareRwLock<XHashMap<usize, VerCowList>>);
 unsafe impl Send for Table {}
 
 impl Table{
-	pub fn get(&self, h: u64) -> Option<Atom>{
+	pub fn get(&self, h: usize) -> Option<Atom>{
 		let map = self.0.read().unwrap();
 		match map.get(&h) {
 			Some(v) => match v.list.value.upgrade() {
@@ -261,9 +267,9 @@ impl Table{
 
 }
 #[inline(always)]
-fn str_hash<T: Hasher>(s: &str, hasher: &mut T) -> u64{
+fn str_hash<T: Hasher>(s: &str, hasher: &mut T) -> usize{
 	s.hash(hasher);
-	hasher.finish()
+	hasher.finish() as usize
 }
 
 fn read_nil(mut list: &CowList, s: &str, nil_count: &mut usize) -> Option<Atom> {
@@ -319,18 +325,18 @@ unsafe impl Sync for VerCowList {}
 
 #[derive(Clone, Debug)]
 struct CowList{
-	value:ShareWeak<(String, u64)>,
+	value:ShareWeak<(String, usize)>,
 	next:Option<Share<CowList>>,
 }
 
 impl CowList{
-	pub fn new(value: ShareWeak<(String, u64)>) -> Self {
+	pub fn new(value: ShareWeak<(String, usize)>) -> Self {
 		CowList{
 			value,
 			next: None,
 		}
 	}
-	pub fn with_next(value: ShareWeak<(String, u64)>, next:Option<Share<CowList>>) -> Self {
+	pub fn with_next(value: ShareWeak<(String, usize)>, next:Option<Share<CowList>>) -> Self {
 		CowList{
 			value,
 			next,
