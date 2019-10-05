@@ -83,7 +83,7 @@ pub struct DirtyIterator<'a> {
 }
 
 impl<'a> Iterator for DirtyIterator<'a> {
-    type Item = &'a usize;
+    type Item = (&'a usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut r = self.iter.next();
@@ -98,7 +98,11 @@ impl<'a> Iterator for DirtyIterator<'a> {
                     break;
                 }
             }
+			
         }
-        r
+		match r {
+			Some(r) => Some((r, self.layer - 1)),
+			None => None,
+		}
     }
 }
