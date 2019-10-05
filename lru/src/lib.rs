@@ -126,7 +126,6 @@ impl<T> LruCache<T> {
         if self.size <= self.max_capacity {
             return None
         }
-		println!("self.size: {}, max_capacity:{}", self.size, self.max_capacity);
         let r = unsafe{ self.deque.pop_front_unchecked(slab)};
         self.size -= r.cost;
         Some((r.value, r.cost))
