@@ -130,11 +130,15 @@ impl ResMgr {
 			let arr = map.collect(now);
 			let mut i = 0;
 			for ss in arr.iter() {
-				let calc_max = capacity / self.weight * v.1[i]; // 该lru根据权重算出来的可增加的内存总量，如果加上min_capacity则是最大容量max_capacity
+				let calc_max = if self.weight == 0 {
+					0
+				}else{
+					(capacity as f32 * v.1[i] as f32 / self.weight as f32) as usize
+				};
+				// let calc_max = (capacity as f32 * v.1[i] as f32 / self.weight as f32) as usize; // 该lru根据权重算出来的可增加的内存总量，如果加上min_capacity则是最大容量max_capacity
 				match ss {
 					&StateInfo::Full(min, size) => {
 						// 如果当前大小小于权重大小，则扩大容量到权重大小
-						println!("size:{}, min + calc_max: {}", size, min + calc_max);
 						if size < min + calc_max {
 							map.set_max_capacity(i, min + calc_max);
 						}else if size > min + calc_max {
@@ -165,7 +169,7 @@ impl ResMgr {
 			}
 			vec.push(map);
 		}
-		if up_size > down_size { // 如果超过的权重比小于的权重大，表示需要控制大小，将up_full和up_ok的lru的容量变小，
+		if up_size > down_size && up_full.len() + up_ok.len() > 0{ // 如果超过的权重比小于的权重大，表示需要控制大小，将up_full和up_ok的lru的容量变小，
 			let del = (up_size - down_size) / (up_full.len() + up_ok.len());
 			for v in up_full {
 				let map = unsafe {vec.get_unchecked_mut(v.0)};
@@ -175,7 +179,7 @@ impl ResMgr {
 				let map = unsafe {vec.get_unchecked_mut(v.0)};
 				map.set_max_capacity(v.1, if v.2 > del {v.2 - del}else{0});
 			}
-		}else if up_size < down_size { // 表示有空闲大小， 将up_full的lru的容量扩大
+		}else if up_size < down_size && up_full.len() > 0{ // 表示有空闲大小， 将up_full的lru的容量扩大
 			let add = (down_size - up_size) / up_full.len();
 			for v in up_full {
 				let map = unsafe {vec.get_unchecked_mut(v.0)};
