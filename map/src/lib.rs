@@ -27,6 +27,8 @@ pub trait Map{
 	type Key;
 	type Val;
     fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
+    fn mem_size(&self) -> usize;
     fn contains(&self, key: &Self::Key) -> bool;
     fn get(&self, key: &Self::Key) -> Option<&Self::Val>;
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Val>;

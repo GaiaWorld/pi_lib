@@ -223,6 +223,14 @@ impl<T> Map for VecMap<T> {
     fn len(&self) -> usize {
         self.len
     }
+    #[inline]
+    fn capacity(&self) -> usize {
+        self.entries.capacity()
+    }
+    #[inline]
+    fn mem_size(&self) -> usize {
+        self.capacity() * std::mem::size_of::<T>()
+    }
 }
 
 impl<T> Index<usize> for VecMap<T> {

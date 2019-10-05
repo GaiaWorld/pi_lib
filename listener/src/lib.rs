@@ -39,6 +39,9 @@ pub type FnListeners<E> = Listeners<FnListener<E>>;
 pub struct Listeners<T: Clone> (Vector<T>);
 
 impl<T: Clone + PartialEq> Listeners<T> {
+    pub fn mem_size(&self) -> usize {
+        self.0.len() * std::mem::size_of::<T>()
+    }
     pub fn delete(&mut self, listener: &T) -> bool {
 		match self.0.index_of(listener) {
 			Some(i) => {

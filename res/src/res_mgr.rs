@@ -33,6 +33,15 @@ impl ResMgr {
             min_capacity: 0,
         }
     }
+
+	pub fn mem_size(&self) -> usize {
+		let mut r = 0;
+		for (_, v) in self.tables.iter() {
+			r += v.0.mem_size();
+		}
+		r
+	}
+
     /// 注册指定类型的资源表。 参数为资源表的3种lru的配置。 [min_capacity1, max_capacity1, timeout1, min_capacity2, max_capacity2, timeout2, min_capacity3, max_capacity3, timeout3]。 如果不使用后2种，直接将min_capacity, max_capacity都设成0。
     #[inline]
     pub fn register<T: Res + 'static>(&mut self, configs: [usize; 9]) {

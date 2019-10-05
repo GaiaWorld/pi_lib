@@ -86,6 +86,9 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
             marker: PhantomData,
         })
     }
+    pub fn mem_size(&self) -> usize {
+        self.map.mem_size() + self.notify.mem_size()
+    }
     pub fn get(&self, id: usize) -> Option<&C> {
         self.map.get(&id)
     }

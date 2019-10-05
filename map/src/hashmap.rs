@@ -17,6 +17,16 @@ impl<K: Hash + Eq, V> Map for HashMap<K, V>{
     }
 
     #[inline]
+    fn capacity(&self) -> usize{
+        self.0.capacity()
+    }
+
+    #[inline]
+    fn mem_size(&self) -> usize{
+        self.0.capacity() * (std::mem::size_of::<K>() + std::mem::size_of::<V>())
+    }
+
+    #[inline]
     fn contains(&self, key: &Self::Key) -> bool{
         self.0.contains_key(key)
     }

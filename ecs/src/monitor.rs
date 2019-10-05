@@ -29,6 +29,9 @@ pub struct NotifyImpl {
     pub modify: ModifyListeners,
 }
 impl NotifyImpl {
+    pub fn mem_size(&self) -> usize {
+        self.create.mem_size() + self.delete.mem_size() + self.modify.mem_size()
+    }
     pub fn create_event(&self, id: usize) {
         let e = CreateEvent{
             id: id,

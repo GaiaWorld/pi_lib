@@ -33,6 +33,7 @@ impl<T> Default for LruCache<T> {
 }
 
 impl<T> LruCache<T> {
+
     /** 
      * 根据配置新建LRU缓冲
      */

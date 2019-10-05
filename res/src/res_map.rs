@@ -14,6 +14,9 @@ pub trait Res {
     type Key: Hash + Eq + Clone;
 }
 pub trait ResCollect: RcAny {
+
+    fn mem_size(&self) -> usize;
+
     fn set_max_capacity(&mut self, index: usize, max_capacity: usize);
     // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
     fn collect(&mut self, now: usize) -> [StateInfo;3];
@@ -99,6 +102,15 @@ impl<T: Res + 'static> ResMap<T> {
 }
 
 impl<T: Res + 'static> ResCollect for ResMap<T> {
+
+    fn mem_size(&self) -> usize {
+        let mut r = 0;
+        r += self.map.capacity() * (std::mem::size_of::<<T as Res>::Key>() + std::mem::size_of::<ResEntry::<T>>());
+        
+        r += self.array.capacity() * std::mem::size_of::<(KeyRes<T>, usize, usize)>();
+        r += self.slab.mem_size();
+        r
+    }
 
     // 设置指定lru的最大容量
     #[inline]
