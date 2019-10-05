@@ -10,7 +10,7 @@ pub static TIMEOUT: usize = 3*60*1000;
 
 pub struct Entry<T>{
     value: T,
-    cost: usize,
+    pub cost: usize,
     timeout: usize,
 }
 /**
@@ -125,6 +125,7 @@ impl<T> LruCache<T> {
         if self.size <= self.max_capacity {
             return None
         }
+		println!("self.size: {}, max_capacity:{}", self.size, self.max_capacity);
         let r = unsafe{ self.deque.pop_front_unchecked(slab)};
         self.size -= r.cost;
         Some((r.value, r.cost))

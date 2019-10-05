@@ -9,10 +9,10 @@ use hash::XHashMap;
 use share::{Share, ShareWeak};
 use any::RcAny;
 
-
 pub trait Res {
     type Key: Hash + Eq + Clone;
 }
+
 pub trait ResCollect: RcAny {
     fn set_max_capacity(&mut self, index: usize, max_capacity: usize);
     // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
@@ -45,6 +45,10 @@ impl<T: Res + 'static> Default for ResMap<T> {
     }
 }
 impl<T: Res + 'static> ResMap<T> {
+	// 所有资源（lru 和 正在使用得）
+	pub fn all_res(&self) -> (&Vec<(KeyRes<T>, usize, usize)>, &Slab<Node<Entry<KeyRes<T>>>>){
+		(&self.array, &self.slab)
+	}
 
     pub fn with_config(configs: &[usize; 9]) -> Self {
         ResMap{
@@ -173,11 +177,11 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
 }
 
 
-struct KeyRes<T: Res + 'static>{
+pub struct KeyRes<T: Res + 'static>{
     key: T::Key,
     res: ShareWeak<T>,
 }
-struct ResEntry<T: Res + 'static>{
+pub struct ResEntry<T: Res + 'static>{
     res: Share<T>,
     rtype: usize,
     id: usize,

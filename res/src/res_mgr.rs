@@ -125,6 +125,7 @@ impl ResMgr {
 				match ss {
 					&StateInfo::Full(min, size) => {
 						// 如果当前大小小于权重大小，则扩大容量到权重大小
+						println!("size:{}, min + calc_max: {}", size, min + calc_max);
 						if size < min + calc_max {
 							map.set_max_capacity(i, min + calc_max);
 						}else if size > min + calc_max {
