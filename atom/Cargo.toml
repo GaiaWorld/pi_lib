@@ -17,5 +17,5 @@ features = ["serde_derive"]
 optional = true
 
 [features]
-default = []
+default = ["arc"]
 arc = ["share/arc"]
