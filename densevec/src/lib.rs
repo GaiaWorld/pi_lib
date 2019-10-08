@@ -135,6 +135,16 @@ impl<T> Map for DenseVecMap<T> {
     fn len(&self) -> usize {
         self.len()
     }
+
+    #[inline]
+    fn capacity(&self) -> usize {
+        self.data.capacity()
+    }
+
+    #[inline]
+    fn mem_size(&self) -> usize {
+        self.data_id.mem_size() + self.data.capacity() * std::mem::size_of::<T>() + self.indexs.capacity() * std::mem::size_of::<usize>()
+    }
 }
 
 

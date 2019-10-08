@@ -88,6 +88,15 @@ impl<T> EntityImpl<T> {
             marker: PhantomData,
         }
     }
+    
+    pub fn mem_size(&self) -> usize {
+        let mut r = 0;
+        r += self.slab.mem_size();
+        r += self.components.capacity() * std::mem::size_of::<Arc<dyn MultiCase>>();
+        r += self.notify.mem_size();
+        r
+    }
+    
     pub fn is_exist(&self, id: usize) -> bool {
         match self.slab.get(id) {
             Some(_) => true,

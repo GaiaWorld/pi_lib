@@ -10,7 +10,7 @@ pub static TIMEOUT: usize = 3*60*1000;
 
 pub struct Entry<T>{
     value: T,
-    cost: usize,
+    pub cost: usize,
     timeout: usize,
 }
 /**
@@ -33,6 +33,7 @@ impl<T> Default for LruCache<T> {
 }
 
 impl<T> LruCache<T> {
+
     /** 
      * 根据配置新建LRU缓冲
      */
