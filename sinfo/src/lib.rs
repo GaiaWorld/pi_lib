@@ -12,6 +12,60 @@ use std::sync::Arc;
 use atom::Atom;
 use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 
+/**
+* 自定义对象序列化元信息
+*/
+#[derive(Debug)]
+pub struct StructInfo {
+	pub name: Atom,
+	pub name_hash: u32,
+	pub notes: Option<HashMap<Atom, Atom>>,
+	pub fields: Vec<FieldInfo>,
+}
+
+impl StructInfo {
+	/**
+	* 构建自定义对象序列化元信息
+	* @param name 自定义对象名称
+	* @param name_hash 自定义对象名称hash
+	* @returns 返回自定义对象序列化元信息
+	*/
+	pub fn new(name:Atom, name_hash:u32) -> Self {
+		StructInfo {
+			name:name,
+			name_hash: name_hash,
+			notes: None,
+			fields: Vec::new(),
+		}
+	}
+	pub fn get_note(&self, key: &Atom) -> Option<&Atom> {
+		match self.notes {
+			Some(ref map) => map.get(key),
+			_ => None
+		}
+	}
+}
+
+impl Encode for StructInfo{
+	fn encode(&self, bb: &mut WriteBuffer){
+		self.name.encode(bb);
+		self.name_hash.encode(bb);
+        self.notes.encode(bb);
+        self.fields.encode(bb);
+	}
+}
+
+impl Decode for StructInfo{
+	fn decode(bb: &mut ReadBuffer) -> Result<StructInfo, ReadBonErr> {
+		Ok(StructInfo{
+			name: Atom::decode(bb)?,
+			name_hash: u32::decode(bb)?,
+			notes: Option::decode(bb)?,
+			fields: Vec::decode(bb)?,
+		})
+	}
+}
+
 // 枚举结构体字段的所有类型
 #[derive(Debug)]
 pub enum EnumType {
@@ -105,60 +159,6 @@ impl Decode for EnumType{
 			24 => Ok(EnumType::Enum(Arc::new(EnumInfo::decode(bb)?))),
 			_ => panic!("EnumType is not exist:{}", t)
 		}
-	}
-}
-
-/**
-* 自定义对象序列化元信息
-*/
-#[derive(Debug)]
-pub struct StructInfo {
-	pub name: Atom,
-	pub name_hash: u32,
-	pub notes: Option<HashMap<Atom, Atom>>,
-	pub fields: Vec<FieldInfo>,
-}
-
-impl StructInfo {
-	/**
-	* 构建自定义对象序列化元信息
-	* @param name 自定义对象名称
-	* @param name_hash 自定义对象名称hash
-	* @returns 返回自定义对象序列化元信息
-	*/
-	pub fn new(name:Atom, name_hash:u32) -> Self {
-		StructInfo {
-			name:name,
-			name_hash: name_hash,
-			notes: None,
-			fields: Vec::new(),
-		}
-	}
-	pub fn get_note(&self, key: &Atom) -> Option<&Atom> {
-		match self.notes {
-			Some(ref map) => map.get(key),
-			_ => None
-		}
-	}
-}
-
-impl Encode for StructInfo{
-	fn encode(&self, bb: &mut WriteBuffer){
-		self.name.encode(bb);
-		self.name_hash.encode(bb);
-        self.notes.encode(bb);
-        self.fields.encode(bb);
-	}
-}
-
-impl Decode for StructInfo{
-	fn decode(bb: &mut ReadBuffer) -> Result<StructInfo, ReadBonErr> {
-		Ok(StructInfo{
-			name: Atom::decode(bb)?,
-			name_hash: u32::decode(bb)?,
-			notes: Option::decode(bb)?,
-			fields: Vec::decode(bb)?,
-		})
 	}
 }
 
