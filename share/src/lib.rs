@@ -1,28 +1,28 @@
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut, BorrowError, BorrowMutError};
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 pub type Share<T> = Rc<T>;
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 pub type ShareWeak<T> = Weak<T>;
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 pub type ShareMutex<T> = RwCell<T>;
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 pub type ShareRwLock<T> = RwCell<T>;
-#[cfg(not(feature = "arc"))]
+#[cfg(feature = "rc")]
 pub type ShareCell<T> = RefCell<T>;
 
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 use std::sync::{Arc, Weak, Mutex, RwLock};
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 pub type Share<T> = Arc<T>;
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 pub type ShareWeak<T> = Weak<T>;
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 pub type ShareMutex<T> = Mutex<T>;
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 pub type ShareRwLock<T> = RwLock<T>;
-#[cfg(feature = "arc")]
+#[cfg(not(feature = "rc"))]
 pub type ShareCell<T> = cell::TrustCell<T>;
 
 

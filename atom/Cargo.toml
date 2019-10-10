@@ -15,7 +15,3 @@ hash = {path="../hash", features = ["xxhash"]}
 version = "1.0"
 features = ["serde_derive"]
 optional = true
-
-[features]
-default = ["arc"]
-arc = ["share/arc"]

@@ -8,5 +8,5 @@ slab = { path = "../slab"}
 deque = {path = "../deque"}
 lru = {path = "../lru"}
 any = {path="../any"}
-share = { path = "../share" }
+share = { path = "../share", features=["rc"]}
 hash = {path="../hash"}
