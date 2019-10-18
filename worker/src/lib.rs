@@ -15,6 +15,9 @@ extern crate threadpool;
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate log;
+
 extern crate atom;
 extern crate apm;
 extern crate timer;

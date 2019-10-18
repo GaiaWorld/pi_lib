@@ -307,7 +307,7 @@ fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) 
                 }
             },
         };
-        println!("!!!> {} Run Error, time: {:?}, thread: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task, reason);
+        warn!("!!!> {} Run Error, time: {:?}, thread: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task, reason);
     } else {
         //执行任务成功
         let elapsed = time.elapsed();
@@ -316,7 +316,7 @@ fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) 
             worker.slow_counter.sum(1);
             worker.slow_timer.timing(time);
 
-            println!("===> Slow {}, time: {:?}, thread: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task);
+            info!("===> Slow {}, time: {:?}, thread: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task);
         }
     }
 }
