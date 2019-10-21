@@ -9,7 +9,6 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 use threadpool::ThreadPool;
 
 use atom::Atom;
-use apm::allocator::is_alloced_limit;
 use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
 
 use task::Task;

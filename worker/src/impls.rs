@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex, Condvar};
 
 use atom::Atom;
-use apm::allocator::is_alloced_limit;
 use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter};
 use timer::Timer;
 use task_pool::{enums::{Direction, QueueType}, TaskPool, DelayTask};
