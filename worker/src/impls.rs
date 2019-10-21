@@ -29,19 +29,11 @@ lazy_static! {
 */
 lazy_static! {
 	pub static ref JS_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
-	    match task_type {
-	        QueueType::StaticSync if is_alloced_limit() => {
-	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	            return;
-	        },
-	        _ => {
-	            //唤醒虚拟机工作者
-                let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
-                let mut wake = lock.lock().unwrap();
-                *wake = true;
-                cvar.notify_one();
-	        },
-	    }
+        //唤醒虚拟机工作者
+        let &(ref lock, ref cvar) = &**JS_WORKER_WALKER;
+        let mut wake = lock.lock().unwrap();
+        *wake = true;
+        cvar.notify_one();
 	})));
 }
 
@@ -50,19 +42,11 @@ lazy_static! {
 */
 lazy_static! {
 	pub static ref STORE_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
-	    match task_type {
-	        QueueType::StaticSync if is_alloced_limit() => {
-	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	            return;
-	        },
-	        _ => {
-	            //唤醒存储工作者
-                let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
-                let mut wake = lock.lock().unwrap();
-                *wake = true;
-                cvar.notify_one();
-	        },
-	    }
+        //唤醒存储工作者
+        let &(ref lock, ref cvar) = &**STORE_WORKER_WALKER;
+        let mut wake = lock.lock().unwrap();
+        *wake = true;
+        cvar.notify_one();
 	})));
 }
 
@@ -71,19 +55,11 @@ lazy_static! {
 */
 lazy_static! {
 	pub static ref NET_TASK_POOL: Arc<TaskPool<Task>> = Arc::new(TaskPool::new((*TASK_POOL_TIMER).clone(), Arc::new(|task_type, _task_size| {
-	    match task_type {
-	        QueueType::StaticSync if is_alloced_limit() => {
-	            //如果是静态同步任务唤醒，且当前已达最大可分配内存限制，则忽略唤醒
-	            return;
-	        },
-	        _ => {
-	            //唤醒网络工作者
-                let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
-                let mut wake = lock.lock().unwrap();
-                *wake = true;
-                cvar.notify_one();
-	        },
-	    }
+	    //唤醒网络工作者
+        let &(ref lock, ref cvar) = &**NET_WORKER_WALKER;
+        let mut wake = lock.lock().unwrap();
+        *wake = true;
+        cvar.notify_one();
 	})));
 }
 
