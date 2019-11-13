@@ -5,5 +5,5 @@ authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
 [dependencies]
-futures-preview = "=0.3.0-alpha.19"
+futures = "0.3"
 crossbeam-channel = "0.3"
