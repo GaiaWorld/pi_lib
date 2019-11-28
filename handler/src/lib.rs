@@ -66,7 +66,8 @@ pub enum GenMapType {
     I64KeyMap(FnvHashMap<i64, GenType>),
     I128KeyMap(FnvHashMap<i128, GenType>),
     ISizeKeyMap(FnvHashMap<isize, GenType>),
-    StrKeyMap(HashMap<Atom, GenType>),
+    StrKeyMap(HashMap<String, GenType>),
+    StringKeyMap(HashMap<Atom, GenType>),
     BinKeyMap(HashMap<Vec<u8>, GenType>),
     PtrKeyMap(FnvHashMap<*const Any, GenType>),
 }
