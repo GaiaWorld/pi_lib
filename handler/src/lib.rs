@@ -92,6 +92,7 @@ pub enum GenType {
     ISize(isize),
     F32(f32),
     F64(f64),
+    Str(String),
     String(Atom),
     Bin(Vec<u8>),
     BoxBin(Box<Vec<u8>>),
