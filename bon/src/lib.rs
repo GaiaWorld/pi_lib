@@ -115,6 +115,7 @@ pub enum ReadBonErr{
 	TypeNoMatch{
 		try_read: String,
 		act_type: (String, u8),
+		head: usize,
 	},
 	Other(String),
 }
@@ -127,7 +128,7 @@ impl ReadBonErr{
 		}
 	}
 
-	fn type_no_match(try_read: String, type_code: u8) -> ReadBonErr{
+	fn type_no_match(try_read: String, type_code: u8, head: usize) -> ReadBonErr{
 		let t = match type_code{
 			0 => "null".to_string(),
 			1 => "false".to_string(),
@@ -147,7 +148,8 @@ impl ReadBonErr{
 
 		ReadBonErr::TypeNoMatch{
 			try_read: try_read,
-			act_type: (t, type_code)
+			act_type: (t, type_code),
+			head: head,
 		}
 	}
 
@@ -235,7 +237,7 @@ impl<'a> ReadBuffer<'a>{
 		match t {
 			1 => Ok(false),
 			2 => Ok(true),
-			_ => Err(ReadBonErr::type_no_match("bool".to_string(), t))
+			_ => Err(ReadBonErr::type_no_match("bool".to_string(), t, self.head - 1))
 		}
 	}
 
@@ -306,7 +308,11 @@ impl<'a> ReadBuffer<'a>{
 				Ok(self.bytes.get_lf32(self.head - 4))
 			},
 			_ => {
-				return Err(ReadBonErr::type_no_match("f32".to_string(), t));
+				self.head -= 1;
+				if let Ok(r) = self.read_integer::<u32>() {
+					return Ok(r as f32);
+				}
+				return Err(ReadBonErr::type_no_match("f32".to_string(), t, self.head - 1));
 			}
 		}
 	}
@@ -329,7 +335,11 @@ impl<'a> ReadBuffer<'a>{
 				Ok(self.bytes.get_lf64(self.head - 8))
 			},
 			_ => {
-				return Err(ReadBonErr::type_no_match("f64".to_string(), t));
+				self.head -= 1;
+				if let Ok(r) = self.read_integer::<u64>() {
+					return Ok(r as f64);
+				}
+				return Err(ReadBonErr::type_no_match("f64".to_string(), t, self.head - 1));
 			}
 		}
 	}
@@ -350,7 +360,7 @@ impl<'a> ReadBuffer<'a>{
 			self.head += 4;
 			Ok(self.bytes.get_bu32(self.head - 4) as u32 - 0xC0000000)
 		}else{
-			return Err(ReadBonErr::type_no_match("lengthen".to_string(), t));
+			return Err(ReadBonErr::type_no_match("lengthen".to_string(), t, self.head - 1));
 		}
 	}
 
@@ -381,7 +391,7 @@ impl<'a> ReadBuffer<'a>{
 					self.head += len + 6;
 				}
 				_ => {
-					return Err(ReadBonErr::type_no_match("bin".to_string(), t));
+					return Err(ReadBonErr::type_no_match("bin".to_string(), t, self.head - 1));
 				}
 			};
 		}
@@ -419,7 +429,7 @@ impl<'a> ReadBuffer<'a>{
 					self.head += len + 6;
 				}
 				_ => {
-					return Err(ReadBonErr::type_no_match("string".to_string(), t));
+					return Err(ReadBonErr::type_no_match("string".to_string(), t, self.head - 1));
 				}
 			}
 		}
@@ -433,39 +443,39 @@ impl<'a> ReadBuffer<'a>{
 		}
 	}
 
-	pub fn read_container<T, F>(&mut self, read_next: F) -> Result<T, ReadBonErr> where F: FnOnce(&mut ReadBuffer, &u32) -> Result<T, ReadBonErr>{
+	pub fn read_container<T, F>(&mut self, read_next: F) -> Result<T, ReadBonErr> where F: FnOnce(&mut ReadBuffer, u32, u64) -> Result<T, ReadBonErr>{
 		self.probe_border(1)?;
 		let t = self.bytes.get_u8(self.head);
 		self.head += 1;
-		let len: usize;
+		let len: u64;
 		if t >= 180 && t <= 244{
-			len = t as usize - 180;
-			self.head += len;
+			len = t as u64 - 180;
+			self.head += len as usize;
 		}else{
 			match t {
 				245 => {
-					//len = self.bytes.get_u8(self.head) as usize;
+					len = self.bytes.get_u8(self.head) as u64;
 					self.head += 5;
 				},
 				246 => {
-					//len = self.bytes.get_lu16(self.head) as usize;
+					len = self.bytes.get_lu16(self.head) as u64;
 					self.head += 6;
 				},
 				247 => {
-					//len = self.bytes.get_lu32(self.head) as usize;
+					len = self.bytes.get_lu32(self.head) as u64;
 					self.head += 8;
 				},
 				248 => {
-					//len = self.bytes.get_lu16(self.head) as usize + (self.bytes.get_lu32(self.head + 2) * 0x10000) as usize;
+					len = self.bytes.get_lu16(self.head) as u64 + (self.bytes.get_lu32(self.head + 2) * 0x10000) as u64;
 					self.head += 10;
 				}
 				_ => {
-					ReadBonErr::type_no_match("container".to_string(), t);
+					return Err(ReadBonErr::type_no_match("container".to_string(), t, self.head - 1));
 				}
 			}
 		}
-		let tt = &self.bytes.get_lu32(self.head - 4);
-		read_next(self, tt)
+		let tt = self.bytes.get_lu32(self.head - 4);
+		read_next(self, tt, len)
 	}
 
 	pub fn is_nil(&mut self) -> Result<bool, ReadBonErr>{
@@ -621,7 +631,7 @@ impl<'a> ReadBuffer<'a>{
 				},
 				_ => {
 					println!("read integer error, act_type: {}, bin: {:?}", t, self.bytes);
-					Err(ReadBonErr::type_no_match("integer".to_string(), t))
+					Err(ReadBonErr::type_no_match("integer".to_string(), t, self.head - 1))
 				}
 			}
 		}
