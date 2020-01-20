@@ -44,7 +44,7 @@ impl Guid {
 /**
 * 全局唯一id生成器
 */
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct GuidGen {
 	time: AtomicU64,
 	node_time: u64,
