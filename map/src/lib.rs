@@ -1,5 +1,4 @@
 #![feature(rustc_private)]
-#![feature(const_vec_new)]
 #![feature(integer_atomics)]
 #![feature(asm,box_syntax,box_patterns)]
 #![feature(core_intrinsics)]

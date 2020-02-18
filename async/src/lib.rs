@@ -1,8 +1,11 @@
 extern crate futures;
 extern crate crossbeam_channel;
+extern crate twox_hash;
+extern crate dashmap;
 
 pub mod task;
 pub mod local_queue;
+pub mod multi_thread;
 
 use std::thread;
 use std::io::Result;

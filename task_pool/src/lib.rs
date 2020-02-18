@@ -901,7 +901,7 @@ fn test(){
 
 #[test]
 fn test_effect(){
-    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Box::new(|| {}));
+    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|| {}));
 
     let time = run_millis();
     for i in 1..100001 {

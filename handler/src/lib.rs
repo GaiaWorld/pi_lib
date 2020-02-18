@@ -107,6 +107,59 @@ pub enum GenType {
 }
 
 /*
+* 安全的通用Map属性值
+*/
+#[derive(Debug, Clone)]
+pub enum SGenMapType {
+    U8KeyMap(FnvHashMap<u8, SGenType>),
+    U16KeyMap(FnvHashMap<u16, SGenType>),
+    U32KeyMap(FnvHashMap<u32, SGenType>),
+    U64KeyMap(FnvHashMap<u64, SGenType>),
+    U128KeyMap(FnvHashMap<u128, SGenType>),
+    USizeKeyMap(FnvHashMap<usize, SGenType>),
+    I8KeyMap(FnvHashMap<i8, SGenType>),
+    I16KeyMap(FnvHashMap<i16, SGenType>),
+    I32KeyMap(FnvHashMap<i32, SGenType>),
+    I64KeyMap(FnvHashMap<i64, SGenType>),
+    I128KeyMap(FnvHashMap<i128, SGenType>),
+    ISizeKeyMap(FnvHashMap<isize, SGenType>),
+    StrKeyMap(HashMap<String, SGenType>),
+    StringKeyMap(HashMap<Atom, SGenType>),
+    BinKeyMap(HashMap<Vec<u8>, SGenType>),
+}
+
+/*
+* 安全的通用属性值
+*/
+#[derive(Debug, Clone)]
+pub enum SGenType {
+    Nil,
+    Bool(bool),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    USize(usize),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    ISize(isize),
+    F32(f32),
+    F64(f64),
+    Str(String),
+    String(Atom),
+    Bin(Vec<u8>),
+    BoxBin(Box<Vec<u8>>),
+    ArcBin(Arc<Vec<u8>>),
+    Array(Vec<SGenType>),
+    Map(SGenMapType),
+    Obj(HashMap<Atom, SGenType>),
+}
+
+/*
 * 通用参数列表
 */
 pub enum Args<A, B, C, D, E, F, G, H> {

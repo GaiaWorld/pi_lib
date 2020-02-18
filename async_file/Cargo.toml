@@ -1,11 +1,9 @@
 [package]
-name = "async"
+name = "async_file"
 version = "0.1.0"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
 [dependencies]
-futures = "0.3"
-crossbeam-channel = "0.4"
-twox-hash = "1.5"
-dashmap = "3.4"
+parking_lot = "0.10"
+async = { path = "../async" }

@@ -48,5 +48,6 @@ members = [
   "fx_hashmap",
   "densevec",
   "bincode",
-  "local_timer"
+  "local_timer",
+  "async_file"
 ]

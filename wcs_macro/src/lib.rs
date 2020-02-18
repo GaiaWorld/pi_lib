@@ -1,4 +1,3 @@
-#![feature(custom_attribute)]
 #![recursion_limit="512"]
 extern crate slab;
 extern crate wcs;

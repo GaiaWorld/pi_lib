@@ -87,7 +87,7 @@ impl<T: AsyncTask<Out = O>, O> AsyncExecutor for LocalQueue<T, O> {
                     let mut context = Context::from_waker(&*waker);
                     if let Some(mut future) = task.get_inner() {
                         if let Poll::Pending = future.as_mut().poll(&mut context) {
-                            //当前未准备好，则恢复任务，以保证任务不被释放
+                            //当前未准备好，则恢复异步任务，以保证异步任务不会被提前释放
                             task.set_inner(Some(future));
                         }
                     }
