@@ -15,8 +15,8 @@ use std::fs::{File, OpenOptions, Metadata,
               create_dir_all as sync_create_dir_all,
               remove_file as sync_remove_file,
               copy as sync_copy,
-              remove_dir_all as sync_remove_dir_all};
-use std::io::{Seek, Read, Write, Result, SeekFrom, Error, ErrorKind};
+              remove_dir as sync_remove_dir};
+use std::io::{Seek, Write, Result, SeekFrom, Error, ErrorKind};
 
 use parking_lot::RwLock;
 use r#async::multi_thread::{MultiTaskPool, MultiTaskRuntime};
@@ -224,7 +224,7 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> Future for AsyncRemo
         let path = self.as_ref().path.as_ref().to_path_buf();
         let result = self.as_ref().result.clone();
         let task = async move {
-            match sync_remove_dir_all(path) {
+            match sync_remove_dir(path) {
                 Err(e) => {
                     //异步移除目录失败，则设置等待异步移除目录的任务的值
                     *result.0.borrow_mut() = Some(Err(e));
@@ -574,8 +574,8 @@ impl<O: Default + 'static> AsyncFile<O> {
         }
 
         let mut buf = Vec::with_capacity(len);
-        buf.resize(len, 0);
-        AsyncReadFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, len).await
+        unsafe { buf.set_len(len); }
+        AsyncReadFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, len, 0).await
     }
 
     //从指定位置开始异步写指定字节
@@ -585,7 +585,7 @@ impl<O: Default + 'static> AsyncFile<O> {
             return Ok(0);
         }
 
-        AsyncWriteFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, options).await
+        AsyncWriteFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, options, 0).await
     }
 }
 
@@ -707,6 +707,7 @@ struct AsyncReadFile<O: Default + 'static> {
     file:       AsyncFile<O>,           //文件
     pos:        u64,                    //文件指针位置
     len:        usize,                  //需要读取的字节数
+    readed:     usize,                  //已读取的字节数
     result:     ReadFileResult,         //读取文件结果
 }
 
@@ -730,6 +731,7 @@ impl<O: Default + 'static> Future for AsyncReadFile<O> {
         let file = self.as_ref().file.clone();
         let pos = self.as_ref().pos;
         let len = self.as_ref().len;
+        let readed = self.as_ref().readed;
         let result = self.as_ref().result.clone();
         let task = async move {
             #[cfg(any(unix))]
@@ -738,22 +740,24 @@ impl<O: Default + 'static> Future for AsyncReadFile<O> {
                 let r = file.0.inner.read().seek_read(&mut buf[(buf_pos as usize)..(buf_pos as usize + len)], pos);
 
             match r {
-                Ok(readed_len) if readed_len < len => {
+                Ok(readed_len) if readed_len > 0 && readed_len < len => {
                     //读指定字节未完成，则继续读剩余字节
                     *result.0.borrow_mut() = Some(Self::new(runtime.clone(),
                                                             buf,
                                                             buf_pos + readed_len as u64,
                                                             file,
                                                             pos + readed_len as u64,
-                                                            len - readed_len).await);
+                                                            len - readed_len,
+                                                            readed + readed_len).await);
                 },
-                Ok(_) => {
+                Ok(readed_len) => {
                     //读指定字节完成，则设置等待异步读指定字节的任务的值
+                    buf.truncate(readed + readed_len);
                     *result.0.borrow_mut() = Some(Ok(buf));
                 },
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => {
                     //需要尝试重读
-                    *result.0.borrow_mut() = Some(Self::new(runtime.clone(), buf, buf_pos, file, pos, len).await);
+                    *result.0.borrow_mut() = Some(Self::new(runtime.clone(), buf, buf_pos, file, pos, len, readed).await);
                 },
                 Err(e) => {
                     //读指定字节失败，则设置等待异步读指定字节的任务的值
@@ -779,7 +783,7 @@ impl<O: Default + 'static> Future for AsyncReadFile<O> {
 
 impl<O: Default + 'static> AsyncReadFile<O> {
     //构建从指定位置开始异步读指定字节的方法
-    pub fn new(runtime: MultiTaskRuntime<O>, buf: Vec<u8>, buf_pos: u64, file: AsyncFile<O>, pos: u64, len: usize) -> Self {
+    pub fn new(runtime: MultiTaskRuntime<O>, buf: Vec<u8>, buf_pos: u64, file: AsyncFile<O>, pos: u64, len: usize, readed: usize) -> Self {
         AsyncReadFile {
             runtime,
             buf: Some(buf),
@@ -787,6 +791,7 @@ impl<O: Default + 'static> AsyncReadFile<O> {
             file,
             pos,
             len,
+            readed,
             result: ReadFileResult(Arc::new(RefCell::new(None))), //设置初始值
         }
     }
@@ -811,6 +816,7 @@ struct AsyncWriteFile<O: Default + 'static> {
     file:       AsyncFile<O>,           //文件
     pos:        u64,                    //文件指针位置
     options:    WriteOptions,           //写文件选项
+    writed:     usize,                  //已写入的字节数
     result:     WriteFileResult,        //写入文件结果
 }
 
@@ -830,11 +836,11 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
         let task_id = self.as_ref().runtime.alloc();
         let runtime = self.as_ref().runtime.clone();
         let buf = self.as_mut().buf.clone();
-        let buf_len = buf.len();
         let buf_pos = self.as_ref().buf_pos;
         let file = self.as_ref().file.clone();
         let pos = self.as_ref().pos;
         let options = self.as_ref().options.clone();
+        let writed = self.as_ref().writed;
         let result = self.as_ref().result.clone();
         let task = async move {
             #[cfg(any(unix))]
@@ -843,30 +849,41 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
                 let r = file.0.inner.read().seek_write(&buf[(buf_pos as usize)..], pos);
 
             match r {
-                Ok(writed_len) if writed_len < (buf_len - buf_pos as usize) => {
+                Ok(writed_len) if writed_len < (buf.len() - buf_pos as usize) => {
                     //写指定字节未完成，则继续写剩余字节
                     *result.0.borrow_mut() = Some(Self::new(runtime.clone(),
                                                             buf,
                                                             buf_pos + writed_len as u64,
                                                             file,
                                                             pos + writed_len as u64,
-                                                            options).await);
+                                                            options,
+                                                            writed + writed_len).await);
                 },
-                Ok(_) => {
+                Ok(writed_len) => {
                     //写指定字节完成，则根据写选项同步文件，并设置等待异步写指定字节的任务的值
                     let sync_result = match options {
-                        WriteOptions::None => Ok(buf_len),
-                        WriteOptions::Flush => file.0.inner.write().flush().and(Ok(buf_len)),
-                        WriteOptions::Sync(true) => file.0.inner.write().flush().and_then(|_| file.0.inner.read().sync_data()).and(Ok(buf_len)),
-                        WriteOptions::Sync(false) => file.0.inner.read().sync_data().and(Ok(buf_len)),
-                        WriteOptions::SyncAll(true) => file.0.inner.write().flush().and_then(|_| file.0.inner.read().sync_all()).and(Ok(buf_len)),
-                        WriteOptions::SyncAll(false) => file.0.inner.read().sync_all().and(Ok(buf_len)),
+                        WriteOptions::None => Ok(writed + writed_len),
+                        WriteOptions::Flush => file.0.inner.write().flush().and(Ok(writed + writed_len)),
+                        WriteOptions::Sync(true) => {
+                            let flush_result = file.0.inner.write().flush();
+                            flush_result
+                                .and_then(|_| file.0.inner.read().sync_data())
+                                .and(Ok(writed + writed_len))
+                        },
+                        WriteOptions::Sync(false) => file.0.inner.read().sync_data().and(Ok(writed + writed_len)),
+                        WriteOptions::SyncAll(true) => {
+                            let flush_result = file.0.inner.write().flush();
+                            flush_result
+                                .and_then(|_| file.0.inner.read().sync_all())
+                                .and(Ok(writed + writed_len))
+                        },
+                        WriteOptions::SyncAll(false) => file.0.inner.read().sync_all().and(Ok(writed + writed_len)),
                     };
                     *result.0.borrow_mut() = Some(sync_result);
                 },
                 Err(ref e) if e.kind() == ErrorKind::Interrupted => {
                     //需要尝试重写
-                    *result.0.borrow_mut() = Some(Self::new(runtime.clone(), buf, buf_pos, file, pos, options).await);
+                    *result.0.borrow_mut() = Some(Self::new(runtime.clone(), buf, buf_pos, file, pos, options, writed).await);
                 },
                 Err(e) => {
                     //写指定字节失败，则设置等待异步写指定字节的任务的值
@@ -892,7 +909,7 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
 
 impl<O: Default + 'static> AsyncWriteFile<O> {
     //构建从指定位置开始异步读指定字节的方法
-    pub fn new(runtime: MultiTaskRuntime<O>, buf: Arc<Vec<u8>>, buf_pos: u64, file: AsyncFile<O>, pos: u64, options: WriteOptions) -> Self {
+    pub fn new(runtime: MultiTaskRuntime<O>, buf: Arc<Vec<u8>>, buf_pos: u64, file: AsyncFile<O>, pos: u64, options: WriteOptions, writed: usize) -> Self {
         AsyncWriteFile {
             runtime,
             buf,
@@ -900,6 +917,7 @@ impl<O: Default + 'static> AsyncWriteFile<O> {
             file,
             pos,
             options,
+            writed,
             result: WriteFileResult(Arc::new(RefCell::new(None))), //设置初始值
         }
     }
