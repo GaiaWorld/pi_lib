@@ -15,5 +15,5 @@ atom = { path = "../../pi_lib/atom" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
-psutil = "1.6"
+psutil = "1.7"
 walkdir = "2.2"

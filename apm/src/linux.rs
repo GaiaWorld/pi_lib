@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use libc;
-use psutil::{system, process, disk, network};
+use psutil::{cpu, host, memory, process, disk, network};
 use walkdir::{DirEntry, WalkDir};
 
 use ::SysSpecialStat;
@@ -49,7 +49,7 @@ pub struct LinuxSysStat {
 
 impl SysSpecialStat for LinuxSysStat {
     fn sys_cpu_usage(&self) -> Option<f64> {
-        if let Ok(usage) = system::cpu_percent(self.interval) {
+        if let Ok(usage) = cpu::cpu_percent(self.interval) {
             return Some(usage);
         }
 
@@ -57,7 +57,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_processores_usage(&self) -> Option<Vec<f64>> {
-        if let Ok(usages) = system::cpu_percent_percpu(self.interval) {
+        if let Ok(usages) = cpu::cpu_percent_percpu(self.interval) {
             return Some(usages);
         }
 
@@ -65,7 +65,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_cpu_detal(&self) -> Option<(f64, f64, f64, f64, f64, f64, f64, f64, f64, f64)> {
-        if let Ok(info) = system::cpu_times_percent(self.interval) {
+        if let Ok(info) = cpu::cpu_times_percent(self.interval) {
             return Some((info.user,         //用户占用率，包括虚拟环境中虚拟cpu占用率
                          info.nice,         //低优先级进程占用率，包括虚拟环境中低优先级的虚拟cpu占用率
                          info.system,       //内核占用率
@@ -84,7 +84,7 @@ impl SysSpecialStat for LinuxSysStat {
     fn sys_processores_detal(&self) -> Option<Vec<(f64, f64, f64, f64, f64, f64, f64, f64, f64, f64)>> {
         let mut vec = Vec::new();
 
-        if let Ok(infos) = system::cpu_times_percent_percpu(self.interval) {
+        if let Ok(infos) = cpu::cpu_times_percent_percpu(self.interval) {
             for info in infos {
                 vec.push((info.user,
                           info.nice,
@@ -105,7 +105,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_loadavg(&self) -> Option<(f32, f32, f32)> {
-        if let Ok(info) = system::loadavg() {
+        if let Ok(info) = host::loadavg() {
             return Some((info.one,          //1分钟前的负载系数
                          info.five,         //5分钟前的负载系数
                          info.fifteen));    //15分钟前的负载系数
@@ -115,7 +115,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_virtual_memory_detal(&self) -> Option<(u64, u64, u64, u64, u64, u64, u64, u64, u64, f32)> {
-        if let Ok(info) = system::virtual_memory() {
+        if let Ok(info) = memory::virtual_memory() {
             return Some((info.total,        //虚拟内存总大小，单位KB
                          info.free,         //虚拟内存空闲大小，单位KB
                          info.used,         //虚拟内存已使用大小，单位KB
@@ -132,7 +132,7 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_swap_detal(&self) -> Option<(u64, u64, u64, u64, u64, f32)> {
-        if let Ok(info) = system::swap_memory() {
+        if let Ok(info) = memory::swap_memory() {
             return Some((info.total,        //交换区总大小，单位KB
                          info.free,         //交换区空闲大小，单位KB
                          info.used,         //交换区已使用大小，单位KB
@@ -145,11 +145,11 @@ impl SysSpecialStat for LinuxSysStat {
     }
 
     fn sys_uptime(&self) -> isize {
-        system::uptime()
+        host::uptime()
     }
 
     fn process_current_pid(&self) -> i32 {
-        psutil::getpid()
+        unsafe { libc::getpid() }
     }
 
     fn process_detal(&self, pid: i32) -> Option<(u32, u32, i64, i64, u32, f64, f64, u64, i64, u64, u64, u64, u64, u64, i32, i64, f64, String, String, String, PathBuf)> {
@@ -353,7 +353,7 @@ fn get_cpu_usage_by_process(sys: &LinuxSysStat, pid: i32) -> (f64, f64, Option<p
 
 //获取系统和进程在内核态和用户态的cpu占用时间
 fn get_cpu_args(process: &process::Process) -> (u64, u64, i64, i64) {
-    if let Ok(sys) = system::cpu_times() {
+    if let Ok(sys) = cpu::cpu_times() {
         return (sys.system,                                         //系统内核态cpu占用时间，单位tick
                 sys.user + sys.nice,                                //系统用户态cpu占用时间，单位tick
                 process.stime_ticks as i64 + process.cstime_ticks,  //进程内核态cpu占用时间，单位tick
