@@ -5,6 +5,7 @@ extern crate dashmap;
 
 pub mod task;
 pub mod local_queue;
+pub mod single_thread;
 pub mod multi_thread;
 
 use std::thread;
@@ -12,6 +13,9 @@ use std::io::Result;
 use std::time::Duration;
 
 use futures::{future::BoxFuture, task::ArcWake};
+
+use single_thread::SingleTaskRuntime;
+use multi_thread::MultiTaskRuntime;
 
 /*
 * 异步任务
@@ -78,4 +82,24 @@ pub enum AsyncExecutorResult {
     Sleep(usize),       //休眠指定毫秒数后，继续运行
     Stop(Result<()>),   //关闭当前执行器
     Ok,                 //执行成功
+}
+
+/*
+* 异步运行时
+*/
+pub enum AsyncRuntime<O: Default + 'static> {
+    Single(SingleTaskRuntime<O>),   //单线程运行时
+    Multi(MultiTaskRuntime<O>),     //多线程运行时
+}
+
+unsafe impl<O: Default + 'static> Send for AsyncRuntime<O> {}
+unsafe impl<O: Default + 'static> Sync for AsyncRuntime<O> {}
+
+impl<O: Default + 'static> Clone for AsyncRuntime<O> {
+    fn clone(&self) -> Self {
+        match self {
+            AsyncRuntime::Single(rt) => AsyncRuntime::Single(rt.clone()),
+            AsyncRuntime::Multi(rt) => AsyncRuntime::Multi(rt.clone()),
+        }
+    }
 }

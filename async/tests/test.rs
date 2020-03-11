@@ -21,7 +21,8 @@ use crossbeam_channel::Sender;
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use r#async::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+use r#async::{AsyncTask, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+              single_thread::{TaskId as Tid, SingleTask, SingleTaskRuntime, SingleTaskRunner},
               multi_thread::{TaskId, MultiTask, MultiTaskRuntime, MultiTaskPool},
               local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
 
@@ -142,6 +143,77 @@ struct SyncUsize(Arc<RefCell<usize>>);
 unsafe impl Send for SyncUsize {}
 unsafe impl Sync for SyncUsize {}
 
+struct TestFuture0(SyncUsize, Tid, SingleTaskRuntime<()>);
+
+unsafe impl Send for TestFuture0 {}
+unsafe impl Sync for TestFuture0 {}
+
+impl Future for TestFuture0 {
+    type Output = String;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let index = *(self.as_ref().0).0.borrow();
+        if index % 2 == 0 {
+            self.2.pending(self.1.clone(), cx.waker().clone())
+        } else {
+            Poll::Ready("future ready".to_string())
+        }
+    }
+}
+
+impl TestFuture0 {
+    pub fn new(rt: SingleTaskRuntime<()>, index: SyncUsize, uid: Tid) -> Self {
+        TestFuture0(index, uid, rt)
+    }
+}
+
+#[test]
+fn test_single_task() {
+    let mut runner = SingleTaskRunner::new();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let mut ids = Vec::with_capacity(50);
+    for index in 0..100 {
+        let uid = rt.alloc();
+        let value = SyncUsize(Arc::new(RefCell::new(index)));
+        let future = TestFuture0::new(rt.clone(), value.clone(), uid);
+        if let Err(e) = rt.spawn(uid, async move {
+            println!("!!!!!!async task start, uid: {:?}", uid);
+            let r = future.await;
+            println!("!!!!!!async task finish, uid: {:?}, r: {:?}", uid, r);
+        }) {
+            println!("!!!> spawn task failed, uid: {:?}, reason: {:?}", uid, e);
+        }
+        ids.push((uid, value));
+    }
+
+    thread::sleep(Duration::from_millis(3000));
+
+    for (id, value) in ids {
+        let uid = rt.alloc();
+        let rt_copy = rt.clone();
+        if let Err(e) = rt.spawn(uid, async move {
+            //修改值，并继续中止的任务
+            *value.0.borrow_mut() += 1;
+            rt_copy.wakeup(id);
+        }) {
+            println!("!!!> spawn waker failed, id: {:?}, uid: {:?}, reason: {:?}", id, uid, e);
+        }
+    }
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
 struct TestFuture1(SyncUsize, TaskId, MultiTaskRuntime<()>);
 
 unsafe impl Send for TestFuture1 {}
@@ -165,7 +237,6 @@ impl TestFuture1 {
         TestFuture1(index, uid, rt)
     }
 }
-
 
 #[test]
 fn test_multil_task() {
@@ -200,6 +271,53 @@ fn test_multil_task() {
             println!("!!!> spawn waker failed, id: {:?}, uid: {:?}, reason: {:?}", id, uid, e);
         }
     }
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
+#[test]
+fn test_async_wait() {
+    let mut runner = SingleTaskRunner::new();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let rt0 = pool.startup();
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 2, 1024 * 1024, 10);
+    let rt1 = pool.startup();
+
+    let rt_copy = rt.clone();
+    let future = async move {
+        let rt0_copy = rt0.clone();
+        let r = rt_copy.clone().wait(AsyncRuntime::Multi(rt0), async move {
+            let rt1_copy = rt1.clone();
+            rt0_copy.wait(AsyncRuntime::Multi(rt1), async move {
+                rt1_copy.wait(AsyncRuntime::Single(rt_copy), async move {
+                    Ok(true)
+                }).await
+            }).await
+        }).await;
+
+        match r {
+            Err(e) => {
+                println!("!!!!!!wait failed, reason: {:?}", e);
+            },
+            Ok(result) => {
+                println!("!!!!!!wait ok, result: {:?}", result);
+            },
+        }
+    };
+    rt.spawn(rt.alloc(), future);
 
     thread::sleep(Duration::from_millis(100000000));
 }
