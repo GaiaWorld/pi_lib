@@ -1,7 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::future::Future;
-use std::time::Duration;
 use std::cell::{UnsafeCell, RefCell};
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
