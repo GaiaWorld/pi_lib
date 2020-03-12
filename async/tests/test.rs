@@ -21,9 +21,9 @@ use crossbeam_channel::Sender;
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use r#async::{AsyncTask, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
-              single_thread::{TaskId as Tid, SingleTask, SingleTaskRuntime, SingleTaskRunner},
-              multi_thread::{TaskId, MultiTask, MultiTaskRuntime, MultiTaskPool},
+use r#async::{AsyncTask, TaskId, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+              single_thread::{SingleTask, SingleTaskRuntime, SingleTaskRunner},
+              multi_thread::{MultiTask, MultiTaskRuntime, MultiTaskPool},
               local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
 
 struct TestFuture(usize, Weak<RefCell<HashMap<usize, Waker>>>);
@@ -143,7 +143,7 @@ struct SyncUsize(Arc<RefCell<usize>>);
 unsafe impl Send for SyncUsize {}
 unsafe impl Sync for SyncUsize {}
 
-struct TestFuture0(SyncUsize, Tid, SingleTaskRuntime<()>);
+struct TestFuture0(SyncUsize, TaskId, SingleTaskRuntime<()>);
 
 unsafe impl Send for TestFuture0 {}
 unsafe impl Sync for TestFuture0 {}
@@ -162,7 +162,7 @@ impl Future for TestFuture0 {
 }
 
 impl TestFuture0 {
-    pub fn new(rt: SingleTaskRuntime<()>, index: SyncUsize, uid: Tid) -> Self {
+    pub fn new(rt: SingleTaskRuntime<()>, index: SyncUsize, uid: TaskId) -> Self {
         TestFuture0(index, uid, rt)
     }
 }

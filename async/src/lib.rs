@@ -75,6 +75,12 @@ pub trait AsyncExecutor {
 }
 
 /*
+* 多线程任务唯一id
+*/
+#[derive(Debug, Clone, Copy)]
+pub struct TaskId(usize);
+
+/*
 * 异步执行返回值
 */
 #[derive(Debug)]

@@ -13,13 +13,7 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use crate::{AsyncTask, AsyncRuntime};
-
-/*
-* 多线程任务唯一id
-*/
-#[derive(Debug, Clone, Copy)]
-pub struct TaskId(usize);
+use crate::{AsyncTask, TaskId, AsyncRuntime};
 
 /*
 * 多线程任务
