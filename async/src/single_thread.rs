@@ -2,11 +2,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::future::Future;
 use std::time::Duration;
-use std::thread::Builder;
 use std::cell::{UnsafeCell, RefCell};
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crossbeam_channel::{Sender, Receiver, unbounded};
 use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
@@ -276,7 +275,7 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWait<O,
 * 单线程异步任务执行器
 */
 pub struct SingleTaskRunner<O: Default + 'static> {
-    is_running: bool,                   //是否开始运行
+    is_running: AtomicBool,             //是否开始运行
     runtime:    SingleTaskRuntime<O>,   //异步单线程任务运行时
 }
 
@@ -302,25 +301,24 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
         )));
 
         SingleTaskRunner {
-            is_running: false,
+            is_running: AtomicBool::new(false),
             runtime,
         }
     }
 
     //启动单线程异步任务执行器
-    pub fn startup(&mut self) -> Option<SingleTaskRuntime<O>> {
-        if self.is_running {
+    pub fn startup(&self) -> Option<SingleTaskRuntime<O>> {
+        if self.is_running.compare_and_swap(false, true, Ordering::SeqCst) {
             //已启动，则忽略
             return None;
         }
 
-        self.is_running = true;
         Some(self.runtime.clone())
     }
 
-    //运行一次单线程异步任务执行器
-    pub fn run_once(&self) -> Result<()> {
-        if !self.is_running {
+    //运行一次单线程异步任务执行器，返回当前任务队列中任务的数量
+    pub fn run_once(&self) -> Result<usize> {
+        if !self.is_running.load(Ordering::Relaxed) {
             //未启动，则返回错误原因
             return Err(Error::new(ErrorKind::Other, "single thread runtime not running"));
         }
@@ -329,7 +327,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             run_task(task);
         }
 
-        Ok(())
+        Ok((self.runtime.0).2.consumer.len())
     }
 }
 
