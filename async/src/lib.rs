@@ -75,12 +75,6 @@ pub trait AsyncExecutor {
 }
 
 /*
-* 多线程任务唯一id
-*/
-#[derive(Debug, Clone, Copy)]
-pub struct TaskId(usize);
-
-/*
 * 异步执行返回值
 */
 #[derive(Debug)]
@@ -89,6 +83,12 @@ pub enum AsyncExecutorResult {
     Stop(Result<()>),   //关闭当前执行器
     Ok,                 //执行成功
 }
+
+/*
+* 异步任务唯一id
+*/
+#[derive(Debug, Clone, Copy)]
+pub struct TaskId(usize);
 
 /*
 * 异步运行时
