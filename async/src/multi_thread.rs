@@ -13,7 +13,7 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use crate::{AsyncTask, TaskId, AsyncRuntime};
+use crate::{AsyncTask, TaskId, AsyncWaitResult, AsyncRuntime};
 
 /*
 * 多线程任务
@@ -160,20 +160,6 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
               V: Send + 'static,
               F: Future<Output = Result<V>> + Send + 'static {
         AsyncWait::new(self.clone(), rt, Some(Box::new(future).boxed())).await
-    }
-}
-
-/*
-* 等待异步任务运行的结果
-*/
-struct AsyncWaitResult<V: Send + 'static>(Arc<RefCell<Option<Result<V>>>>);
-
-unsafe impl<V: Send + 'static> Send for AsyncWaitResult<V> {}
-unsafe impl<V: Send + 'static> Sync for AsyncWaitResult<V> {}
-
-impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
-    fn clone(&self) -> Self {
-        AsyncWaitResult(self.0.clone())
     }
 }
 

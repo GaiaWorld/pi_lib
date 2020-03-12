@@ -9,7 +9,9 @@ pub mod single_thread;
 pub mod multi_thread;
 
 use std::thread;
+use std::sync::Arc;
 use std::io::Result;
+use std::cell::RefCell;
 use std::time::Duration;
 
 use futures::{future::BoxFuture, task::ArcWake};
@@ -89,6 +91,20 @@ pub enum AsyncExecutorResult {
 */
 #[derive(Debug, Clone, Copy)]
 pub struct TaskId(usize);
+
+/*
+* 等待异步任务运行的结果
+*/
+pub struct AsyncWaitResult<V: Send + 'static>(Arc<RefCell<Option<Result<V>>>>);
+
+unsafe impl<V: Send + 'static> Send for AsyncWaitResult<V> {}
+unsafe impl<V: Send + 'static> Sync for AsyncWaitResult<V> {}
+
+impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
+    fn clone(&self) -> Self {
+        AsyncWaitResult(self.0.clone())
+    }
+}
 
 /*
 * 异步运行时
