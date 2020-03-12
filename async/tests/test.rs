@@ -21,7 +21,7 @@ use crossbeam_channel::Sender;
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use r#async::{AsyncTask, TaskId, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+use r#async::{AsyncTask, TaskId, AsyncValue, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
               single_thread::{SingleTask, SingleTaskRuntime, SingleTaskRunner},
               multi_thread::{MultiTask, MultiTaskRuntime, MultiTaskPool},
               local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
@@ -318,6 +318,40 @@ fn test_async_wait() {
         }
     };
     rt.spawn(rt.alloc(), future);
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
+#[test]
+fn test_async_value() {
+    let mut runner = SingleTaskRunner::new();
+    let rt0 = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let rt1 = pool.startup();
+
+    let rt0_copy = rt0.clone();
+    let future = async move {
+        let value = AsyncValue::new(AsyncRuntime::Single(rt0_copy));
+        let value_copy = value.clone();
+
+        rt1.spawn(rt1.alloc(), async move {
+            value_copy.set(true);
+        });
+
+        println!("!!!!!!async value: {:?}", value.await);
+    };
+    rt0.spawn(rt0.alloc(), future);
 
     thread::sleep(Duration::from_millis(100000000));
 }

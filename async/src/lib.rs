@@ -9,10 +9,14 @@ pub mod single_thread;
 pub mod multi_thread;
 
 use std::thread;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::io::Result;
 use std::cell::RefCell;
 use std::time::Duration;
+use std::future::Future;
+use std::task::{Context, Poll};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::{future::BoxFuture, task::ArcWake};
 
@@ -103,6 +107,94 @@ unsafe impl<V: Send + 'static> Sync for AsyncWaitResult<V> {}
 impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
     fn clone(&self) -> Self {
         AsyncWaitResult(self.0.clone())
+    }
+}
+
+/*
+* 异步值
+*/
+pub struct AsyncValue<V: Send + 'static> {
+    rt:         AsyncRuntime<()>,           //异步值的运行时
+    task_id:    TaskId,                     //异步值的任务唯一id
+    value:      Arc<RefCell<Option<V>>>,    //值
+    evaluated:  Arc<AtomicBool>,            //是否已求值
+}
+
+unsafe impl<V: Send + 'static> Send for AsyncValue<V> {}
+unsafe impl<V: Send + 'static> Sync for AsyncValue<V> {}
+
+impl<V: Send + 'static> Clone for AsyncValue<V> {
+    fn clone(&self) -> Self {
+        AsyncValue {
+            rt: self.rt.clone(),
+            task_id: self.task_id,
+            value: self.value.clone(),
+            evaluated: self.evaluated.clone(),
+        }
+    }
+}
+
+impl<V: Send + 'static> Future for AsyncValue<V> {
+    type Output = V;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if let Some(value) = self.as_ref().value.borrow_mut().take() {
+            //异步值已就绪
+            return Poll::Ready(value);
+        }
+
+        match &self.as_ref().rt {
+            AsyncRuntime::Single(rt) => {
+                rt.pending(self.as_ref().task_id, cx.waker().clone())
+            },
+            AsyncRuntime::Multi(rt) => {
+                rt.pending(self.as_ref().task_id, cx.waker().clone())
+            },
+        }
+    }
+}
+
+impl<V: Send + 'static> AsyncValue<V> {
+    //构建异步值，默认值为未就绪
+    pub fn new(rt: AsyncRuntime<()>) -> Self {
+        let task_id = match &rt {
+            AsyncRuntime::Single(rt) => {
+                rt.alloc()
+            },
+            AsyncRuntime::Multi(rt) => {
+                rt.alloc()
+            },
+        };
+
+        AsyncValue {
+            rt,
+            task_id,
+            value: Arc::new(RefCell::new(None)),
+            evaluated: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    //设置异步值
+    pub fn set(self, value: V) {
+        if self.evaluated.compare_and_swap(false, true, Ordering::SeqCst) {
+            //已求值，则忽略
+            return;
+        }
+
+        //设置后立即释放可写引用，防止唤醒时出现冲突
+        {
+            *self.value.borrow_mut() = Some(value);
+        }
+
+        //唤醒异步值
+        match &self.rt {
+            AsyncRuntime::Single(rt) => {
+                rt.wakeup(self.task_id)
+            },
+            AsyncRuntime::Multi(rt) => {
+                rt.wakeup(self.task_id)
+            },
+        }
     }
 }
 
