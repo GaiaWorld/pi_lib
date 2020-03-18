@@ -1,7 +1,6 @@
-use std::pin::Pin;
 use std::sync::Arc;
 use std::future::Future;
-use std::cell::{UnsafeCell, RefCell};
+use std::cell::UnsafeCell;
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -11,7 +10,7 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use crate::{AsyncTask, TaskId, AsyncWaitResult, AsyncRuntime};
+use crate::{AsyncTask, TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap};
 
 /*
 * 单线程任务
@@ -114,7 +113,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         TaskId((self.0).0.fetch_add(1, Ordering::Relaxed))
     }
 
-    //派发一个指定的异步任务到异步单线程任务池，返回异步任务的唯一id
+    //派发一个指定的异步任务到异步单线程运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         let queue = (self.0).2.clone();
@@ -138,6 +137,18 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
             waker.wake();
         }
     }
+
+    //构建用于派发多个异步任务到指定运行时的映射
+    pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
+        let (producor, consumer) = unbounded();
+
+        AsyncMap {
+            count: 0,
+            futures: Vec::new(),
+            producor,
+            consumer,
+        }
+    }
 }
 
 /*
@@ -149,110 +160,14 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         where R: Default + 'static,
               V: Send + 'static,
               F: Future<Output = Result<V>> + Send + 'static {
-        AsyncWait::new(self.clone(), rt, Some(Box::new(future).boxed())).await
+        AsyncWait::new(AsyncRuntime::Single(self.clone()), rt, Some(Box::new(future).boxed())).await
     }
-}
 
-/*
-* 等待异步任务执行完成
-*/
-struct AsyncWait<O: Default + 'static, R: Default + 'static, V: Send + 'static> {
-    wait:   SingleTaskRuntime<O>,                   //需要等待的异步运行时
-    runner: AsyncRuntime<R>,                        //需要运行的异步运行时
-    future: Option<BoxFuture<'static, Result<V>>>,  //需要等待执行的异步任务
-    result: AsyncWaitResult<V>,                     //需要等待执行的异步任务的结果
-}
-
-unsafe impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Send for AsyncWait<O, R, V> {}
-unsafe impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Sync for AsyncWait<O, R, V> {}
-
-impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for AsyncWait<O, R, V> {
-    type Output = Result<V>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Some(result) = self.as_ref().result.0.borrow_mut().take() {
-            //任务已完成，则返回
-            return Poll::Ready(result);
-        }
-
-        //在指定运行时运行指定的任务
-        let task_id = self.as_ref().wait.alloc();
-        let wait = self.as_ref().wait.clone();
-        let runner = self.as_ref().runner.clone();
-        let future = self.as_mut().future.take();
-        let result = self.as_ref().result.clone();
-        let task = async move {
-            let wait_copy = wait.clone();
-            let result_copy = result.clone();
-            match runner {
-                AsyncRuntime::Single(rt) => {
-                    //将指定任务派发到单线程运行时
-                    if let Err(e) = rt.spawn(rt.alloc(), async move {
-                        if let Some(f) = future {
-                            //指定了任务
-                            *result_copy.0.borrow_mut() = Some(f.await);
-                        } else {
-                            //未指定任务
-                            *result_copy.0.borrow_mut() = Some(Err(Error::new(ErrorKind::NotFound, "invalid future")));
-                        }
-
-                        wait_copy.wakeup(task_id);
-
-                        //返回异步任务的默认值
-                        Default::default()
-                    }) {
-                        //派发指定的任务失败，则立即唤醒等待的任务
-                        *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async SingleTask Runner Error, reason: {:?}", e))));
-                        wait.wakeup(task_id);
-                    }
-                },
-                AsyncRuntime::Multi(rt) => {
-                    //将指定任务派发到多线程运行时
-                    if let Err(e) = rt.spawn(rt.alloc(), async move {
-                        if let Some(f) = future {
-                            //指定了任务
-                            *result_copy.0.borrow_mut() = Some(f.await);
-                        } else {
-                            //未指定任务
-                            *result_copy.0.borrow_mut() = Some(Err(Error::new(ErrorKind::NotFound, "invalid future")));
-                        }
-
-                        wait_copy.wakeup(task_id);
-
-                        //返回异步任务的默认值
-                        Default::default()
-                    }) {
-                        //派发指定的任务失败，则立即唤醒等待的任务
-                        *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async MultiTask Runner Error, reason: {:?}", e))));
-                        wait.wakeup(task_id);
-                    }
-                },
-            }
-
-            //返回异步任务的默认值
-            Default::default()
-        };
-        if let Err(e) = self.as_ref().wait.spawn(task_id, task) {
-            //派发异步等待的任务失败，则立即返回错误原因
-            return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Error, reason: {:?}", e))));
-        }
-
-        //挂起当前任务，并返回值未就绪
-        self.as_ref().wait.pending(task_id, cx.waker().clone())
-    }
-}
-
-impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWait<O, R, V> {
-    //构建等待异步任务执行完成的方法
-    fn new(wait: SingleTaskRuntime<O>,
-           runner: AsyncRuntime<R>,
-           future: Option<BoxFuture<'static, Result<V>>>) -> Self {
-        AsyncWait {
-            wait,
-            runner,
-            future,
-            result: AsyncWaitResult(Arc::new(RefCell::new(None))), //设置初始值
-        }
+    //挂起当前单线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
+        where R: Default + 'static,
+              V: Send + 'static  {
+        AsyncWaitAny::new(AsyncRuntime::Single(self.clone()), futures).await
     }
 }
 

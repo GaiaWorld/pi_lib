@@ -9,3 +9,6 @@ futures = "0.3"
 crossbeam-channel = "0.4"
 twox-hash = "1.5"
 dashmap = "3.4"
+
+[dev-dependencies]
+rand = "0.7"

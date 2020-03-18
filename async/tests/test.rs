@@ -5,6 +5,7 @@ extern crate crossbeam_channel;
 extern crate twox_hash;
 extern crate dashmap;
 extern crate r#async;
+extern crate rand;
 
 use std::thread;
 use std::rc::{Weak, Rc};
@@ -20,8 +21,9 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 use crossbeam_channel::Sender;
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
+use rand::prelude::*;
 
-use r#async::{AsyncTask, TaskId, AsyncValue, AsyncRuntime, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+use r#async::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner, TaskId, AsyncRuntime, AsyncValue,
               single_thread::{SingleTask, SingleTaskRuntime, SingleTaskRunner},
               multi_thread::{MultiTask, MultiTaskRuntime, MultiTaskPool},
               local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
@@ -276,6 +278,40 @@ fn test_multil_task() {
 }
 
 #[test]
+fn test_async_value() {
+    let mut runner = SingleTaskRunner::new();
+    let rt0 = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let rt1 = pool.startup();
+
+    let rt0_copy = rt0.clone();
+    let future = async move {
+        let value = AsyncValue::new(AsyncRuntime::Single(rt0_copy));
+        let value_copy = value.clone();
+
+        rt1.spawn(rt1.alloc(), async move {
+            value_copy.set(true);
+        });
+
+        println!("!!!!!!async value: {:?}", value.await);
+    };
+    rt0.spawn(rt0.alloc(), future);
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
+#[test]
 fn test_async_wait() {
     let mut runner = SingleTaskRunner::new();
     let rt = runner.startup().unwrap();
@@ -323,9 +359,9 @@ fn test_async_wait() {
 }
 
 #[test]
-fn test_async_value() {
+fn test_async_wait_any() {
     let mut runner = SingleTaskRunner::new();
-    let rt0 = runner.startup().unwrap();
+    let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
         loop {
@@ -338,20 +374,132 @@ fn test_async_value() {
     });
 
     let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let rt0 = pool.startup();
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 2, 1024 * 1024, 10);
     let rt1 = pool.startup();
 
-    let rt0_copy = rt0.clone();
+    let rt_copy = rt.clone();
     let future = async move {
-        let value = AsyncValue::new(AsyncRuntime::Single(rt0_copy));
-        let value_copy = value.clone();
+        let f0 = Box::new(async move {
+            let mut rng = rand::thread_rng();
+            let timeout: u64 = rng.gen_range(0, 10000);
+            thread::sleep(Duration::from_millis(timeout));
+            Ok("rt0-".to_string() + timeout.to_string().as_str())
+        }).boxed();
+        let f1 = Box::new(async move {
+            let mut rng = rand::thread_rng();
+            let timeout: u64 = rng.gen_range(0, 10000);
+            thread::sleep(Duration::from_millis(timeout));
+            Ok("rt1-".to_string() + timeout.to_string().as_str())
+        }).boxed();
 
-        rt1.spawn(rt1.alloc(), async move {
-            value_copy.set(true);
+        match rt_copy.wait_any(vec![(AsyncRuntime::Multi(rt0), f0), (AsyncRuntime::Multi(rt1), f1)]).await {
+            Err(e) => {
+                println!("!!!!!!wait any failed, reason: {:?}", e);
+            },
+            Ok(result) => {
+                println!("!!!!!!wait any ok, result: {:?}", result);
+            },
+        }
+    };
+    rt.spawn(rt.alloc(), future);
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
+#[test]
+fn test_async_wait_all() {
+    let mut runner = SingleTaskRunner::new();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let rt0 = pool.startup();
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 2, 1024 * 1024, 10);
+    let rt1 = pool.startup();
+
+    let rt_copy = rt.clone();
+    let future = async move {
+        let mut map = rt_copy.map();
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            0
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            1
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            2
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            3
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            4
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            5
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            6
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            7
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            8
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            9
         });
 
-        println!("!!!!!!async value: {:?}", value.await);
+        println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Single(rt_copy.clone()), false).await);
+
+        let mut map = rt_copy.map();
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            0
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            1
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            2
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            3
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            4
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            5
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            6
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            7
+        });
+        map.join(AsyncRuntime::Multi(rt0.clone()), async move {
+            8
+        });
+        map.join(AsyncRuntime::Multi(rt1.clone()), async move {
+            9
+        });
+
+        println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Single(rt_copy), true).await);
     };
-    rt0.spawn(rt0.alloc(), future);
+    rt.spawn(rt.alloc(), future);
 
     thread::sleep(Duration::from_millis(100000000));
 }
