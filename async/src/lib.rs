@@ -503,17 +503,17 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWaitAny
 * 异步映射，用于将多个任务派发到多个异步运行时
 */
 pub struct AsyncMap<O: Default + 'static, V: Send + 'static> {
-    count:      usize,                                                  //派发的任务数量
-    futures:    Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, V>)>,   //待派发任务
-    producor:   Sender<(usize, Result<V>)>,                             //异步返回值生成器
-    consumer:   Receiver<(usize, Result<V>)>,                           //异步返回值接收器
+    count:      usize,                                                          //派发的任务数量
+    futures:    Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>,   //待派发任务
+    producor:   Sender<(usize, Result<V>)>,                                     //异步返回值生成器
+    consumer:   Receiver<(usize, Result<V>)>,                                   //异步返回值接收器
 }
 
 unsafe impl<O: Default + 'static, V: Send + 'static> Send for AsyncMap<O, V> {}
 
 impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
     pub fn join<F>(&mut self, rt: AsyncRuntime<O>, future: F)
-        where F: Future<Output = V> + Send + 'static {
+        where F: Future<Output = Result<V>> + Send + 'static {
         let count = self.count;
         self.futures.push((count, rt, Box::new(future).boxed()));
         self.count += 1;
@@ -540,12 +540,12 @@ impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
 * 异步归并，用于归并多个任务的返回值
 */
 pub struct AsyncReduce<O: Default + 'static, V: Send + 'static> {
-    futures:    Option<Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, V>)>>,   //待派发任务
-    producor:   Box<Sender<(usize, Result<V>)>>,                                //异步返回值生成器
-    consumer:   Box<Receiver<(usize, Result<V>)>>,                              //异步返回值接收器
-    wait:       AsyncRuntime<O>,                                                //等待的异步运行时
-    is_order:   bool,                                                           //是否对返回的值排序
-    count:      Arc<AtomicUsize>,                                               //需要归并的异步任务数量
+    futures:    Option<Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>>,   //待派发任务
+    producor:   Box<Sender<(usize, Result<V>)>>,                                        //异步返回值生成器
+    consumer:   Box<Receiver<(usize, Result<V>)>>,                                      //异步返回值接收器
+    wait:       AsyncRuntime<O>,                                                        //等待的异步运行时
+    is_order:   bool,                                                                   //是否对返回的值排序
+    count:      Arc<AtomicUsize>,                                                       //需要归并的异步任务数量
 }
 
 unsafe impl<O: Default + 'static, V: Send + 'static> Send for AsyncReduce<O, V> {}
@@ -591,7 +591,7 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                     AsyncRuntime::Single(rt) => {
                         if let Err(e) = rt.spawn(rt.alloc(), async move {
                             let value = future.await;
-                            producor_copy.send((index, Ok(value)));
+                            producor_copy.send((index, value));
                             if count_copy.fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match wait_copy {
@@ -617,7 +617,7 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                     AsyncRuntime::Multi(rt) => {
                         if let Err(e) = rt.spawn(rt.alloc(), async move {
                             let value = future.await;
-                            producor_copy.send((index, Ok(value)));
+                            producor_copy.send((index, value));
                             if count_copy.fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match wait_copy {

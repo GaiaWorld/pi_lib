@@ -433,68 +433,68 @@ fn test_async_wait_all() {
     let future = async move {
         let mut map = rt_copy.map();
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            0
+            Ok(0)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            1
+            Ok(1)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            2
+            Ok(2)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            3
+            Ok(3)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            4
+            Ok(4)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            5
+            Ok(5)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            6
+            Ok(6)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            7
+            Ok(7)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            8
+            Ok(8)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            9
+            Ok(9)
         });
 
         println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Single(rt_copy.clone()), false).await);
 
         let mut map = rt_copy.map();
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            0
+            Ok(0)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            1
+            Ok(1)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            2
+            Ok(2)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            3
+            Ok(3)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            4
+            Ok(4)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            5
+            Ok(5)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            6
+            Ok(6)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            7
+            Ok(7)
         });
         map.join(AsyncRuntime::Multi(rt0.clone()), async move {
-            8
+            Ok(8)
         });
         map.join(AsyncRuntime::Multi(rt1.clone()), async move {
-            9
+            Ok(9)
         });
 
         println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Single(rt_copy), true).await);
