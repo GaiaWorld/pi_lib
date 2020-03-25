@@ -12,7 +12,8 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
-use crate::{AsyncTask, TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap};
+use crate::AsyncTask;
+use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap};
 
 /*
 * 多线程任务
@@ -146,6 +147,11 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         if let Some((_, waker)) = (self.0).3.remove(&task_id.0) {
             waker.wake();
         }
+    }
+
+    //移除指定唯一id的异步任务
+    pub(crate) fn remove(&self, task_id: TaskId) {
+        (self.0).3.remove(&task_id.0);
     }
 
     //构建用于派发多个异步任务到指定运行时的映射
