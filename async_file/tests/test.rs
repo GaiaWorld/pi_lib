@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::io::ErrorKind;
 use std::time::Duration;
 
-use r#async::multi_thread::{MultiTaskPool, MultiTaskRuntime};
+use r#async::rt::multi_thread::{MultiTaskPool, MultiTaskRuntime};
 use async_file::file::{create_dir, rename, remove_file, remove_dir, AsyncFileOptions, WriteOptions, AsyncFile};
 
 #[test]
