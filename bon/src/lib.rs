@@ -168,6 +168,31 @@ impl<'a> PartialOrd for ReadBuffer<'a> {
 	fn partial_cmp(&self, other: &ReadBuffer<'a>) -> Option<Ordering> {
 		let mut b1 = ReadBuffer::new(self.bytes, 0);
 		let mut b2 = ReadBuffer::new(other.bytes, 0);
+
+		let b1_type = b1.get_type().unwrap();
+		let b2_type = b2.get_type().unwrap();
+
+		let is_b1_container = b1_type >= 180 && b1_type < 249;
+		let is_b2_container = b2_type >= 180 && b2_type < 249;
+
+		if is_b1_container && is_b2_container {
+			match b1_type {
+				180..246 => b1.head += 1 + 1 + 4, // 1字节类型 + "可变长度"占用的字节 + 4字节哈希
+				246 => b1.head += 1 + 2 + 4,
+				247 => b1.head += 1 + 4 + 4,
+				248 => b1.head += 1 + 6 + 4,
+				_ => panic!("unknown container type {:?}", b1_type)
+			}
+
+			match b2_type {
+				180..246 => b2.head += 1 + 1 + 4,
+				246 => b2.head += 1 + 2 + 4,
+				247 => b2.head += 1 + 4 + 4,
+				248 => b2.head += 1 + 6 + 4,
+				_ => panic!("unknown container type {:?}", b2_type)
+			}
+		}
+
 		loop {
 			match partial_cmp(&mut b1, &mut b2) {
                 None => return None,
@@ -1761,6 +1786,9 @@ pub fn partial_cmp<'a>(b1: &mut ReadBuffer<'a>, b2: &mut ReadBuffer<'a>) -> Opti
 				return compare_bin(b1, b2, t1, t2);
 			}
 		}
+		(_, 0) => {
+			return Some(Ordering::Greater);
+		}
 		_ => { // b1是容器， b2也是二进制，需要读值比二进制数据的大小
 			if t2 < 180{ // b1是容器， b2是非容器，b1的类型值更大， 则b1更大
 				b1.head += base_type_len(b1, t1);
@@ -1852,8 +1880,11 @@ fn compare_str<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t
 
 	rb1.head += len1;
 	rb2.head += len2;
-	//println!("head1:{}, len1:{},head2:{}, len2:{}, t1:{},  byte1_len:{}, byte1:{:?}", head1, len1, head2, len2, t1, rb1.bytes.len(), rb1.bytes);
-	//println!("{:?}, {:?}", &rb1.bytes[rb1.head - len1..rb1.head], &rb2.bytes[rb2.head - len2..rb2.head]);
+	// println!("head1:{}, len1:{},head2:{}, len2:{}, t1:{},  byte1_len:{}, byte1:{:?}", head1, len1, head2, len2, t1, rb1.bytes.len(), rb1.bytes);
+	// println!("{:?}, {:?}", &rb1.bytes[rb1.head - len1..rb1.head], &rb2.bytes[rb2.head - len2..rb2.head]);
+	// println!("rb1 start = {:?}, rb1 end = {:?}, rb1 = {:?}", rb1.head - len1, rb1.head, rb1.bytes);
+	// println!("rb2 start = {:?}, rb2 end = {:?}, rb2 = {:?}", rb2.head - len2, rb2.head, rb2.bytes);
+
 	rb1.bytes[rb1.head - len1..rb1.head].partial_cmp(&rb2.bytes[rb2.head - len2..rb2.head])
 }
 
@@ -1887,7 +1918,7 @@ fn compare_bin<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t
 fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t2: u8) -> Option<Ordering> {
 	rb1.head += 1;
 	rb2.head += 1;
-	let len1 = match t1{
+	match t1 {
 		180..245 => (t1 - 180) as usize,
 		245 => {rb1.head += 1; rb1.bytes.get_u8(rb1.head - 1) as usize},
 		246 => {rb1.head += 2; rb1.bytes.get_lu16(rb1.head - 2) as usize},
@@ -1896,7 +1927,7 @@ fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u
 		_ => {panic!("it is not contain");}
 	};
 
-	let len2 = match t2{
+	match t2 {
 		180..245 => (t2 - 180) as usize,
 		245 => {rb2.head += 1; rb2.bytes.get_u8(rb2.head - 1) as usize},
 		246 => {rb2.head += 2; rb2.bytes.get_lu16(rb2.head - 2) as usize},
@@ -1905,10 +1936,7 @@ fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u
 		_ => {panic!("it is not contain");}
 	};
 
-	rb1.head += len1;
-	rb2.head += len2;
-
-	rb1.bytes[rb1.head - len1..rb1.head].partial_cmp(&rb2.bytes[rb2.head - len2..rb2.head])
+	return Some(Ordering::Equal);
 }
 
 // #[test]
@@ -2233,6 +2261,13 @@ fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u
 // 	//assert_eq!(r1 != r2, false);
 // }
 
+#[test]
+fn test_container_cmp() {
+	let mut b1 = ReadBuffer::new(&[246,14,0,139,231,120,98,1,17,45,52,53,48,45,55,48,55], 0);
+	let mut b2 = ReadBuffer::new(&[246,14,0,139,231,120,98,1,17,45,52,53,48,45,55,48,54], 0);
+
+	println!("compare ---- {:?}", b1.partial_cmp(&b2));
+}
 
 
 
