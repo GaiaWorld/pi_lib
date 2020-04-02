@@ -119,9 +119,9 @@ impl<T> Wheel<T>{
 	// }
 
 	//Panics if index is out of bounds.
-	pub fn delete< F: UintFactory + ClassFactory<usize>>(&mut self, class: usize, index:usize, index_factory: &mut F) -> (Item<T>, usize){
+	pub fn delete< F: UintFactory + ClassFactory<usize>>(&mut self, class: usize, index:usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
 		if class == 245 { //heap的类型为245
-			unsafe { self.heap.delete(index, index_factory) }
+			unsafe { Some(self.heap.delete(index, index_factory)) }
 		} else if class == 244 {
             Wheel::delete_wheel(&mut self.zero_arr, index, index_factory)
         } else {//wheel的类型为1
@@ -157,13 +157,16 @@ impl<T> Wheel<T>{
 		self.arr[i].push(item);
 	}
 
-	fn delete_wheel< F: UintFactory + ClassFactory<usize>>(arr: &mut Vec<(Item<T>, usize)>, index: usize, index_factory: &mut F) -> (Item<T>, usize){
-		let mut r = arr.pop().unwrap();
-		if index < arr.len(){
-            index_factory.store(r.1, index);
-			swap(&mut r, &mut arr[index]);
+	fn delete_wheel< F: UintFactory + ClassFactory<usize>>(arr: &mut Vec<(Item<T>, usize)>, index: usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
+		if let Some(mut r) = arr.pop() {
+			if index < arr.len(){
+				index_factory.store(r.1, index);
+				swap(&mut r, &mut arr[index]);
+			}
+			return Some(r);
 		}
-		r
+
+		None
 	}
 
 	//前进一个单位
