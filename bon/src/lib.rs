@@ -1997,7 +1997,7 @@ mod tests {
 	test_number!(i16, test_i16, read_i16, write_i16);
 	test_number!(i32, test_i32, read_i32, write_i32);
 	test_number!(i64, test_i64, read_i64, write_i64);
-	// test_number!(i128, test_i128, read_i128, write_i128);
+	test_number!(i128, test_i128, read_i128, write_i128);
 	test_number!(f32, test_f32, read_f32, write_f32);
 	test_number!(f64, test_f64, read_f64, write_f64);
 
@@ -2177,16 +2177,19 @@ mod tests {
 				let mut sort = vec![];
 				(0..$size).for_each(|_| {
 					let mut w2 = WriteBuffer::new();
-					let v2: Vec<i32> = (0..8).map(|_| thread_rng().gen::<i32>()).collect();
-					w2.write_container(&v2, |w2, e| {
+					let v2 = thread_rng().gen::<u32>();
+					w2.write_container(&v2, |w2, _| {
 						let hash = 0x12345678u32.to_le_bytes();
 						w2.bytes.extend_from_slice(&hash);
 						w2.tail += 4;
-						for elem in e {
-							w2.write_i32(elem.clone());
-						}
-						let b = thread_rng().gen::<bool>();
-						w2.write_bool(b);
+						w2.write_u32(v2);
+
+						let mut s = String::new();
+						(0..20).for_each(|_| {
+							let ch = thread_rng().gen::<char>();
+							s.push(ch);
+						});
+						w2.write_utf8(&s);
 					}, None);
 					sort.push(w2);
 				});
