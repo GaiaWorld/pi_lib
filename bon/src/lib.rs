@@ -644,7 +644,7 @@ impl<'a> ReadBuffer<'a>{
 					Ok(T::from(-(self.bytes.get_lu64(self.head - 8) as i64)))
 				},
 				14 => {
-					self.head += 8;
+					self.head += 16;
 					Ok(T::from(-(self.bytes.get_lu128(self.head - 16) as i128)))
 				},
 				36 => {
@@ -2226,7 +2226,7 @@ mod tests {
 	bench_number!(i16, bench_i16, read_i16, write_i16);
 	bench_number!(i32, bench_i32, read_i32, write_i32);
 	bench_number!(i64, bench_i64, read_i64, write_i64);
-	// bench_number!(i128, bench_i128, read_i128, write_i128);
+	bench_number!(i128, bench_i128, read_i128, write_i128);
 	bench_number!(f32, bench_f32, read_f32, write_f32);
 	bench_number!(f64, bench_f64, read_f64, write_f64);
 
