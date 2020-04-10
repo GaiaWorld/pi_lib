@@ -1,4 +1,5 @@
 #![feature(exclusive_range_pattern)]
+#![feature(test)]
 #[warn(unconditional_recursion)]
 
 // 二进制对象表示法 模块
@@ -36,6 +37,8 @@
 // TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
 
 extern crate data_view;
+extern crate test;
+extern crate rand;
 
 use std::ops::{Range};
 use std::collections::HashMap;
@@ -44,6 +47,8 @@ use std::sync::Arc;
 use std::marker::Sized;
 use std::cmp::{Ord, Eq, PartialOrd, PartialEq, Ordering};
 use std::ops::{Deref};
+use std::error::Error;
+use std::fmt;
 
 use data_view::{GetView, SetView};
 
@@ -120,6 +125,24 @@ pub enum ReadBonErr{
 	Other(String),
 }
 
+impl fmt::Display for ReadBonErr {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ReadBonErr::Overflow { try_index, len} => {
+				write!(f, "ReadBonError overflow try_index = {:?}, len = {:?}", try_index, len)
+			}
+			ReadBonErr::TypeNoMatch { try_read, act_type, head} => {
+				write!(f, "ReadBonError TypeNoMatch try_read = {:?}, act_type = {:?}, head = {:?}", try_read, act_type, head)
+			}
+			ReadBonErr::Other(s) => {
+				write!(f, "ReadBonError Other other = {:?}", s)
+			}
+		}
+	}
+}
+
+impl Error for ReadBonErr {}
+
 impl ReadBonErr{
 	fn overflow(try_index: usize, len: usize) -> ReadBonErr{
 		ReadBonErr::Overflow{
@@ -158,16 +181,35 @@ impl ReadBonErr{
 	}
 }
 
-impl ToString for ReadBonErr {
-	fn to_string(&self) -> String{
-		format!("{:?}", self)
-	}
-}
-
 impl<'a> PartialOrd for ReadBuffer<'a> {
 	fn partial_cmp(&self, other: &ReadBuffer<'a>) -> Option<Ordering> {
 		let mut b1 = ReadBuffer::new(self.bytes, 0);
 		let mut b2 = ReadBuffer::new(other.bytes, 0);
+
+		let b1_type = b1.get_type().unwrap();
+		let b2_type = b2.get_type().unwrap();
+
+		let is_b1_container = b1_type >= 180 && b1_type < 249;
+		let is_b2_container = b2_type >= 180 && b2_type < 249;
+
+		if is_b1_container && is_b2_container {
+			match b1_type {
+				180..246 => b1.head += 1 + 1 + 4, // 1字节类型 + "可变长度"占用的字节 + 4字节哈希
+				246 => b1.head += 1 + 2 + 4,
+				247 => b1.head += 1 + 4 + 4,
+				248 => b1.head += 1 + 6 + 4,
+				_ => panic!("unknown container type {:?}", b1_type)
+			}
+
+			match b2_type {
+				180..246 => b2.head += 1 + 1 + 4,
+				246 => b2.head += 1 + 2 + 4,
+				247 => b2.head += 1 + 4 + 4,
+				248 => b2.head += 1 + 6 + 4,
+				_ => panic!("unknown container type {:?}", b2_type)
+			}
+		}
+
 		loop {
 			match partial_cmp(&mut b1, &mut b2) {
                 None => return None,
@@ -602,7 +644,7 @@ impl<'a> ReadBuffer<'a>{
 					Ok(T::from(-(self.bytes.get_lu64(self.head - 8) as i64)))
 				},
 				14 => {
-					self.head += 8;
+					self.head += 16;
 					Ok(T::from(-(self.bytes.get_lu128(self.head - 16) as i128)))
 				},
 				36 => {
@@ -854,8 +896,8 @@ impl WriteBuffer{
 	}
 
 	//容器有数组，map，枚举，struct
-	pub fn write_container<T, F>(&mut self, o: &T, write_next: F, estimated_size: Option<usize>) where F: Fn(&mut WriteBuffer, &T) {
-		let mut t = self.bytes.len();
+	pub fn  write_container<T, F>(&mut self, o: &T, write_next: F, estimated_size: Option<usize>) where F: Fn(&mut WriteBuffer, &T) {
+		let t = self.bytes.len();
 		let len_bytes: usize;//描述容器长度的值的字节数
 		let capacity = self.bytes.capacity();
 		// 根据预估大小，预留出足够的空间来写入容器的总大小
@@ -887,9 +929,9 @@ impl WriteBuffer{
 			len_bytes = 9;
 			limit_size = 0xffffffffffffffff;
 		}
-		t = t + 5 + len_bytes;//类型为1字节， 容器类型为4字节, 容器长度字节数位len_bytes
+		let tt = self.tail;
 		write_next(self, o);
-		let len = (self.bytes.len() - t) as u64;
+		let len = (self.tail - tt) as u64;
 		// 判断实际写入的大小超出预期的大小，需要移动数据
 		if limit_size < len && len > 64{
 			let mut len_bytes1: usize = 0;
@@ -926,17 +968,25 @@ impl WriteBuffer{
 				self.bytes.set_u8(len as u8, t + 1);
 			},
 			0xffff =>{
-				self.bytes.set_u8( 246, t);
-				self.bytes.set_lu16(len as u16, t + 1);
+				let mut v: Vec<u8> = Vec::with_capacity(1+2+self.bytes.len());
+				v.set_u8(246, 0);
+				v.set_lu16(len as u16, 1);
+				v.extend_from_slice(&self.bytes);
+				std::mem::replace(&mut self.bytes, v);
 			},
 			0xffffffff => {
-				self.bytes.set_u8(247, t);
-				self.bytes.set_lu32(len as u32, t + 1);
+				let mut v: Vec<u8> = Vec::with_capacity(1 + 4 +self.bytes.len());
+				v.set_u8(247, 0);
+				v.set_lu32(len as u32, 1);
+				v.extend_from_slice(&self.bytes);
+				std::mem::replace(&mut self.bytes, v);
 			},
 			0xffffffffffff => {
-				self.bytes.set_u8(248, t);
-				self.bytes.set_lu16((len & 0xffff) as u16, t + 1);
-				self.bytes.set_lu32((len >> 16) as u32, t + 3);
+				let mut v: Vec<u8> = Vec::with_capacity(1 + 6 + self.bytes.len());
+				v.set_u8(248, 0);
+				v.set_lu16((len & 0xffff) as u16, 1);
+				v.set_lu32((len >> 16) as u32, 3);
+				std::mem::replace(&mut self.bytes, v);
 			},
 
 			_ => {
@@ -1183,7 +1233,7 @@ impl WriteBuffer{
 }
 
 trait AsFrom<T> {
-	fn from(T) -> Self;
+	fn from(t: T) -> Self;
 }
 
 
@@ -1761,6 +1811,9 @@ pub fn partial_cmp<'a>(b1: &mut ReadBuffer<'a>, b2: &mut ReadBuffer<'a>) -> Opti
 				return compare_bin(b1, b2, t1, t2);
 			}
 		}
+		(_, 0) => {
+			return Some(Ordering::Greater);
+		}
 		_ => { // b1是容器， b2也是二进制，需要读值比二进制数据的大小
 			if t2 < 180{ // b1是容器， b2是非容器，b1的类型值更大， 则b1更大
 				b1.head += base_type_len(b1, t1);
@@ -1852,8 +1905,11 @@ fn compare_str<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t
 
 	rb1.head += len1;
 	rb2.head += len2;
-	//println!("head1:{}, len1:{},head2:{}, len2:{}, t1:{},  byte1_len:{}, byte1:{:?}", head1, len1, head2, len2, t1, rb1.bytes.len(), rb1.bytes);
-	//println!("{:?}, {:?}", &rb1.bytes[rb1.head - len1..rb1.head], &rb2.bytes[rb2.head - len2..rb2.head]);
+	// println!("head1:{}, len1:{},head2:{}, len2:{}, t1:{},  byte1_len:{}, byte1:{:?}", head1, len1, head2, len2, t1, rb1.bytes.len(), rb1.bytes);
+	// println!("{:?}, {:?}", &rb1.bytes[rb1.head - len1..rb1.head], &rb2.bytes[rb2.head - len2..rb2.head]);
+	// println!("rb1 start = {:?}, rb1 end = {:?}, rb1 = {:?}", rb1.head - len1, rb1.head, rb1.bytes);
+	// println!("rb2 start = {:?}, rb2 end = {:?}, rb2 = {:?}", rb2.head - len2, rb2.head, rb2.bytes);
+
 	rb1.bytes[rb1.head - len1..rb1.head].partial_cmp(&rb2.bytes[rb2.head - len2..rb2.head])
 }
 
@@ -1887,7 +1943,7 @@ fn compare_bin<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t
 fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u8, t2: u8) -> Option<Ordering> {
 	rb1.head += 1;
 	rb2.head += 1;
-	let len1 = match t1{
+	match t1 {
 		180..245 => (t1 - 180) as usize,
 		245 => {rb1.head += 1; rb1.bytes.get_u8(rb1.head - 1) as usize},
 		246 => {rb1.head += 2; rb1.bytes.get_lu16(rb1.head - 2) as usize},
@@ -1896,7 +1952,7 @@ fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u
 		_ => {panic!("it is not contain");}
 	};
 
-	let len2 = match t2{
+	match t2 {
 		180..245 => (t2 - 180) as usize,
 		245 => {rb2.head += 1; rb2.bytes.get_u8(rb2.head - 1) as usize},
 		246 => {rb2.head += 2; rb2.bytes.get_lu16(rb2.head - 2) as usize},
@@ -1905,354 +1961,295 @@ fn compare_contain<'a>(rb1: &mut ReadBuffer<'a>, rb2: &mut ReadBuffer<'a>, t1: u
 		_ => {panic!("it is not contain");}
 	};
 
-	rb1.head += len1;
-	rb2.head += len2;
-
-	rb1.bytes[rb1.head - len1..rb1.head].partial_cmp(&rb2.bytes[rb2.head - len2..rb2.head])
+	return Some(Ordering::Equal);
 }
 
-// #[test]
-// fn test_u8() {
-// 	let buffer = Vec::new();
-//     let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_u8(5);
-//     buf.write_u8(50);
 
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_u8(), 5);
-//     assert_eq!(read_buf.read_u8(), 50);
-// }
+#[cfg(test)]
+mod tests {
+	use rand::prelude::*;
+	use test::Bencher;
+	use super::*;
 
-// #[test]
-// fn test_u16() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_u16(18);
-// 	buf.write_u16(50);
-//     buf.write_u16(65534);
+	macro_rules! test_number {
+		($x: ty, $func: ident, $r: ident, $w: ident) => {
+			#[test]
+			fn $func() -> Result<(), Box<dyn Error>> {
+				let cases: Vec<$x> = (0..200).map(|_| thread_rng().gen::<$x>()).collect();
+				for case in cases {
+					let mut buf = WriteBuffer::with_bytes(vec![], 0);
+					buf.$w(case);
+					let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
+					assert_eq!(read_buf.$r()?, case);
+				}
+				Ok(())
+			}
+		};
+	}
 
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_u16(), 18);
-//     assert_eq!(read_buf.read_u16(), 50);
-// 	assert_eq!(read_buf.read_u16(), 65534);
-// }
+	test_number!(bool, test_bool, read_bool, write_bool);
+	test_number!(u8, test_u8, read_u8, write_u8);
+	test_number!(u16, test_u16, read_u16, write_u16);
+	test_number!(u32, test_u32, read_u32, write_u32);
+	test_number!(u64, test_u64, read_u64, write_u64);
+	test_number!(u128, test_u128, read_u128, write_u128);
+	test_number!(i8, test_i8, read_i8, write_i8);
+	test_number!(i16, test_i16, read_i16, write_i16);
+	test_number!(i32, test_i32, read_i32, write_i32);
+	test_number!(i64, test_i64, read_i64, write_i64);
+	test_number!(i128, test_i128, read_i128, write_i128);
+	test_number!(f32, test_f32, read_f32, write_f32);
+	test_number!(f64, test_f64, read_f64, write_f64);
 
-// #[test]
-// fn test_u32() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_u32(18);
-// 	buf.write_u32(50);
-//     buf.write_u32(65534);
-// 	buf.write_u32(4294967293);
+	macro_rules! test_utf8 {
+		($func: ident, $size: expr) => {
+			#[test]
+			fn $func() -> Result<(), Box<dyn Error>> {
+				let mut s = String::new();
+				(0..$size).for_each(|_| s.push(thread_rng().gen::<char>()));
+				let mut buf = WriteBuffer::with_bytes(vec![], 0);
+				buf.write_utf8(&s);
+				let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
+				assert_eq!(read_buf.read_utf8()?, s);
 
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_u32(), 18);
-//     assert_eq!(read_buf.read_u32(), 50);
-// 	assert_eq!(read_buf.read_u32(), 65534);
-// 	assert_eq!(read_buf.read_u32(), 4294967293);
-// }
-
-// #[test]
-// fn test_u64() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_u64(18);
-// 	buf.write_u64(50);
-//     buf.write_u64(65534);
-// 	buf.write_u64(4294967293);
-// 	//buf.write_u64(18446744073709551990);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_u64(), 18);
-//     assert_eq!(read_buf.read_u64(), 50);
-// 	assert_eq!(read_buf.read_u64(), 65534);
-// 	assert_eq!(read_buf.read_u64(), 4294967293);
-// 	//assert_eq!(read_buf.read_u64(), 18446744073709551990);
-// }
-
-// #[test]
-// fn test_i8() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_i8(15);
-// 	buf.write_i8(-11);
-// 	buf.write_u64(50);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_i8(), 15);
-//     assert_eq!(read_buf.read_i8(), -11);
-// 	assert_eq!(read_buf.read_i8(), 50);
-// }
-
-// #[test]
-// fn test_i16() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_i16(15);
-// 	buf.write_i16(-11);
-// 	buf.write_i16(50);
-// 	buf.write_i16(32766);
-// 	buf.write_i16(-32765);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_i16(), 15);
-//     assert_eq!(read_buf.read_i16(), -11);
-// 	assert_eq!(read_buf.read_i16(), 50);
-// 	assert_eq!(read_buf.read_i16(), 32766);
-// 	assert_eq!(read_buf.read_i16(), -32765);
-// }
-
-// #[test]
-// fn test_i32() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_i32(15);
-// 	buf.write_i32(-11);
-// 	buf.write_i32(50);
-// 	buf.write_i32(32766);
-// 	buf.write_i32(-32765);
-// 	buf.write_i32(2147483645);
-// 	buf.write_i32(-2147483643);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_i32(), 15);
-//     assert_eq!(read_buf.read_i32(), -11);
-// 	assert_eq!(read_buf.read_i32(), 50);
-// 	assert_eq!(read_buf.read_i32(), 32766);
-// 	assert_eq!(read_buf.read_i32(), -32765);
-// 	assert_eq!(read_buf.read_i32(), 2147483645);
-// 	assert_eq!(read_buf.read_i32(), -2147483643);
-// }
-
-// #[test]
-// fn test_i64() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_i64(15);
-// 	buf.write_i64(-11);
-// 	buf.write_i64(50);
-// 	buf.write_i64(32766);
-// 	buf.write_i64(-32765);
-// 	buf.write_i64(2147483645);
-// 	buf.write_i64(-2147483643);
-// 	buf.write_i64(2147483652);
-// 	buf.write_i64(-2147483653);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_i64(), 15);
-//     assert_eq!(read_buf.read_i64(), -11);
-// 	assert_eq!(read_buf.read_i64(), 50);
-// 	assert_eq!(read_buf.read_i64(), 32766);
-// 	assert_eq!(read_buf.read_i64(), -32765);
-// 	assert_eq!(read_buf.read_i64(), 2147483645);
-// 	assert_eq!(read_buf.read_i64(), -2147483643);
-// 	assert_eq!(read_buf.read_i64(), 2147483652);
-// 	assert_eq!(read_buf.read_i64(), -2147483653);
-// }
-
-// #[test]
-// fn test_f32() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_f32(1.0);
-// 	buf.write_f32(0.0);
-// 	buf.write_f32(5.0);
-// 	buf.write_f32(-6.0);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_f32(), 1.0);
-//     assert_eq!(read_buf.read_f32(), 0.0);
-// 	assert_eq!(read_buf.read_f32(), 5.0);
-// 	assert_eq!(read_buf.read_f32(), -6.0);
-// }
-
-// #[test]
-// fn test_f64() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_f64(1.0);
-// 	buf.write_f64(0.0);
-// 	buf.write_f64(5.0);
-// 	buf.write_f64(-6.0);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_f64(), 1.0f64);
-//     assert_eq!(read_buf.read_f64(), 0.0f64);
-// 	assert_eq!(read_buf.read_f64(), 5.0f64);
-// 	assert_eq!(read_buf.read_f64(), -6.0f64);
-// }
-
-// #[test]
-// fn test_utf8() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-//     buf.write_utf8("123byufgeruy");
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_utf8(), "123byufgeruy");
-// }
-
-// #[test]
-// fn test_bin() {
-//     let buffer = Vec::new();
-// 	let mut buf = WriteBuffer::with_bytes(buffer, 0);
-// 	let arr = [5; 10];
-//     buf.write_bin(&arr,0..10);
-
-// 	let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
-//     assert_eq!(read_buf.read_bin(), arr);
-// }
-
-// //测试大小比较
-// #[test]
-// fn test_ord() {
-// 	let mut buf1 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf2 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf3 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf4 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf5 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf6 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf7 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf8 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf9 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf10 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf11 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf12 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf13 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf14 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf15 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf16 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf17 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf18 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf19 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	let mut buf20 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	buf1.write_nil();
-//     buf2.write_bool(false);
-// 	buf3.write_bool(true);
-// 	buf4.write_f32(0.0);
-// 	buf5.write_f32(1.0);
-// 	buf6.write_f32(5.1);
-// 	buf7.write_f32(5.6);
-// 	buf8.write_f64(7.5);
-// 	buf9.write_f64(3.4);
-// 	buf10.write_i8(-1);
-// 	buf11.write_i8(-1);
-// 	buf12.write_i8(120);
-// 	buf13.write_u32(10);
-// 	buf14.write_i32(5);
-// 	buf15.write_utf8("abcdefg");
-// 	buf16.write_utf8("abcdefgh");
-// 	buf17.write_utf8("abcddfgh");
-// 	buf18.write_bin(&[5;10], 0..10);
-// 	buf19.write_bin(&[6;5], 0..5);
-// 	buf20.write_bin(&[6;5], 0..5);
-
-// 	let read_buf1 = ReadBuffer::new(buf1.get_byte(), 0);
-// 	let read_buf2 = ReadBuffer::new(buf2.get_byte(), 0);
-// 	let read_buf3 = ReadBuffer::new(buf3.get_byte(), 0);
-// 	let read_buf4 = ReadBuffer::new(buf4.get_byte(), 0);
-// 	let read_buf5 = ReadBuffer::new(buf5.get_byte(), 0);
-// 	let read_buf6 = ReadBuffer::new(buf6.get_byte(), 0);
-// 	let read_buf7 = ReadBuffer::new(buf7.get_byte(), 0);
-// 	let read_buf8 = ReadBuffer::new(buf8.get_byte(), 0);
-// 	let read_buf9 = ReadBuffer::new(buf9.get_byte(), 0);
-// 	let read_buf10 = ReadBuffer::new(buf10.get_byte(), 0);
-// 	let read_buf11 = ReadBuffer::new(buf11.get_byte(), 0);
-// 	let read_buf12 = ReadBuffer::new(buf12.get_byte(), 0);
-// 	let read_buf13 = ReadBuffer::new(buf13.get_byte(), 0);
-// 	let read_buf14 = ReadBuffer::new(buf14.get_byte(), 0);
-// 	let read_buf15 = ReadBuffer::new(buf15.get_byte(), 0);
-// 	let read_buf16 = ReadBuffer::new(buf16.get_byte(), 0);
-// 	let read_buf17 = ReadBuffer::new(buf17.get_byte(), 0);
-// 	let read_buf18 = ReadBuffer::new(buf18.get_byte(), 0);
-// 	let read_buf19 = ReadBuffer::new(buf19.get_byte(), 0);
-// 	let read_buf20 = ReadBuffer::new(buf20.get_byte(), 0);
-//     assert_eq!(read_buf1 < read_buf2, true);//测试null, false
-// 	assert_eq!(read_buf2 < read_buf3, true);//测试false, true
-// 	assert_eq!(read_buf2 < read_buf4, true);//测试false, 0.0
-// 	assert_eq!(read_buf4 < read_buf5, true);//测试0.0, 1.0
-// 	assert_eq!(read_buf9 < read_buf7, true);//测试3.4, 5.6
-// 	assert_eq!(read_buf6 < read_buf7, true);//测试5.1, 5.6
-// 	assert_eq!(read_buf7 < read_buf8, true);//测试5.6, 7.5
-// 	assert_eq!(read_buf10 < read_buf6, true);//测试-1, 5.6
-// 	assert_eq!(read_buf10 == read_buf11, true);//测试-1, -1
-// 	assert_eq!(read_buf11 < read_buf12, true);//测试-1, 200
-// 	assert_eq!(read_buf12 > read_buf13, true);//测试 120, 10
-// 	assert_eq!(read_buf13 > read_buf14, true);//测试 10, 5
-// 	assert_eq!(read_buf1 < read_buf15, true);//测试 null, "abcdefg"
-// 	assert_eq!(read_buf4 < read_buf15, true);//测试 0.0, "abcdefg"
-// 	assert_eq!(read_buf6 < read_buf15, true);//测试 5.1, "abcdefg"
-// 	assert_eq!(read_buf12 < read_buf15, true);//测试 200, "abcdefg"
-// 	assert_eq!(read_buf13 < read_buf15, true);//测试 10, "abcdefg"
-// 	assert_eq!(read_buf15 < read_buf16, true);//测试 "abcdefg", "abcdefgh"
-// 	assert_eq!(read_buf15 > read_buf17, true);//测试 "abcdefg", "abcddfgh"
-// 	assert_eq!(read_buf13 < read_buf18, true);//测试 10, &[5;10]
-// 	assert_eq!(read_buf6 < read_buf18, true);//测试 5.1, &[5;10]
-// 	assert_eq!(read_buf3 < read_buf18, true);//测试 true, &[5;10]
-// 	assert_eq!(read_buf15 < read_buf18, true);//测试 "abcdefg", &[5;10]
-// 	assert_eq!(read_buf18 < read_buf19, true);//测试 &[5;10], &[6;5]
-// 	assert_eq!(read_buf19 == read_buf20, true);//测试 &[6;5], &[6;5]
-
-// 	// let mut buf1 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	// buf1.write_nil(); //null
-// 	// buf1.write_bool(false); //false
-// 	// buf1.write_bool(true); //true
-// 	// buf1.write_f32(0.0); //0.0
-// 	// buf1.write_f32(1.0); //1.0
-// 	// buf1.write_f32(5.0); //1.0
-// 	// buf1.write_u8(5);
-// 	// buf1.write_utf8("abc");
+				Ok(())
+			}
+		};
+	}
 	
-// 	// let mut buf2 = WriteBuffer::with_bytes(Vec::new(), 0);
-// 	// buf2.write_utf8("acc");
-// 	// buf2.write_u8(5);
-// 	// assert_eq!(ReadBuffer::new(buf1.get_byte(), 0) < ReadBuffer::new(buf2.get_byte(), 0), true);//测试 abc,5 < acc,5
-// }
+	test_utf8!(test_utf8_10, 10);
+	test_utf8!(test_utf8_100, 100);
+	test_utf8!(test_utf8_1000, 1000);
+	test_utf8!(test_utf8_10000, 10000);
 
-// #[cfg(test)]
-// use sinfo;
+	#[test]
+	fn test_bin() -> Result<(), Box<dyn Error>> {
+		let mut buf = WriteBuffer::with_bytes(vec![], 0);
+		let arr: Vec<u8> = (0..1000).map(|_| thread_rng().gen::<u8>()).collect();
+	    buf.write_bin(&arr,0..1000);
 
-// #[test]
-// fn test__ (){
-// 	let mut r1 = ReadBuffer::new(&[19, 36, 22, 70, 115, 101, 114, 118, 101, 114, 47, 100, 97, 116, 97, 47, 100, 98, 47, 117, 115, 101, 114, 46, 85, 115, 101, 114, 73, 110, 102, 111, 38, 153, 232, 221, 37, 20, 44, 100, 98, 46, 102, 105, 108, 101, 48, 104, 97, 115, 109, 103, 114, 47, 102, 97, 108, 115, 101, 51, 100, 98, 77, 111, 110, 105, 116, 111, 114, 46, 116, 114, 117, 101, 49, 112, 114, 105, 109, 97, 114, 121, 45, 117, 105, 100, 22, 45, 117, 105, 100, 19, 0, 46, 110, 97, 109, 101, 34, 0, 48, 97, 118, 97, 116, 111, 114, 34, 0, 45, 115, 101, 120, 17, 0, 45, 116, 101, 108, 34, 0, 46, 110, 111, 116, 101, 34, 0], 0);
+		let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
+		assert_eq!(read_buf.read_bin()?, arr);
 
-// 	let mut r2 = ReadBuffer::new(&[19, 36, 22, 70, 115, 101, 114, 118, 101, 114, 47, 100, 97, 116, 97, 47, 100, 98, 47, 117, 115, 101, 114, 46, 85, 115, 101, 114, 73, 110, 102, 111, 38, 153, 232, 221, 37, 20, 51, 100, 98, 77, 111, 110, 105, 116, 111, 114, 46, 116, 114, 117, 101, 49, 112, 114, 105, 109, 97, 114, 121, 45, 117, 105, 100, 48, 104, 97, 115, 109, 103, 114, 47, 102, 97, 108, 115, 101, 44, 100, 98, 46, 102, 105, 108, 101, 22, 45, 117, 105, 100, 19, 0, 46, 110, 97, 109, 101, 34, 0, 48, 97, 118, 97, 116, 111, 114, 34, 0, 45, 115, 101, 120, 17, 0, 45, 116, 101, 108, 34, 0, 46, 110, 111, 116, 101, 34, 0], 0);
+		Ok(())
+	}
 
+	//测试大小比较
+	#[test]
+	fn test_ord() {
+		let mut buf1 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf2 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf3 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf4 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf5 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf6 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf7 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf8 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf9 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf10 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf11 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf12 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf13 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf14 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf15 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf16 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf17 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf18 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf19 = WriteBuffer::with_bytes(Vec::new(), 0);
+		let mut buf20 = WriteBuffer::with_bytes(Vec::new(), 0);
+		buf1.write_nil();
+	    buf2.write_bool(false);
+		buf3.write_bool(true);
+		buf4.write_f32(0.0);
+		buf5.write_f32(1.0);
+		buf6.write_f32(5.1);
+		buf7.write_f32(5.6);
+		buf8.write_f64(7.5);
+		buf9.write_f64(3.4);
+		buf10.write_i8(-1);
+		buf11.write_i8(-1);
+		buf12.write_i8(120);
+		buf13.write_u32(10);
+		buf14.write_i32(5);
+		buf15.write_utf8("abcdefg");
+		buf16.write_utf8("abcdefgh");
+		buf17.write_utf8("abcddfgh");
+		buf18.write_bin(&[5;10], 0..10);
+		buf19.write_bin(&[6;5], 0..5);
+		buf20.write_bin(&[6;5], 0..5);
 
-// 	println!("{:?}",sinfo::EnumType::decode(&mut r2) );
-// 	println!("{:?}",sinfo::EnumType::decode(&mut r2) );
+		let read_buf1 = ReadBuffer::new(buf1.get_byte(), 0);
+		let read_buf2 = ReadBuffer::new(buf2.get_byte(), 0);
+		let read_buf3 = ReadBuffer::new(buf3.get_byte(), 0);
+		let read_buf4 = ReadBuffer::new(buf4.get_byte(), 0);
+		let read_buf5 = ReadBuffer::new(buf5.get_byte(), 0);
+		let read_buf6 = ReadBuffer::new(buf6.get_byte(), 0);
+		let read_buf7 = ReadBuffer::new(buf7.get_byte(), 0);
+		let read_buf8 = ReadBuffer::new(buf8.get_byte(), 0);
+		let read_buf9 = ReadBuffer::new(buf9.get_byte(), 0);
+		let read_buf10 = ReadBuffer::new(buf10.get_byte(), 0);
+		let read_buf11 = ReadBuffer::new(buf11.get_byte(), 0);
+		let read_buf12 = ReadBuffer::new(buf12.get_byte(), 0);
+		let read_buf13 = ReadBuffer::new(buf13.get_byte(), 0);
+		let read_buf14 = ReadBuffer::new(buf14.get_byte(), 0);
+		let read_buf15 = ReadBuffer::new(buf15.get_byte(), 0);
+		let read_buf16 = ReadBuffer::new(buf16.get_byte(), 0);
+		let read_buf17 = ReadBuffer::new(buf17.get_byte(), 0);
+		let read_buf18 = ReadBuffer::new(buf18.get_byte(), 0);
+		let read_buf19 = ReadBuffer::new(buf19.get_byte(), 0);
+		let read_buf20 = ReadBuffer::new(buf20.get_byte(), 0);
+	    assert_eq!(read_buf1 < read_buf2, true);//测试null, false
+		assert_eq!(read_buf2 < read_buf3, true);//测试false, true
+		assert_eq!(read_buf2 < read_buf4, true);//测试false, 0.0
+		assert_eq!(read_buf4 < read_buf5, true);//测试0.0, 1.0
+		assert_eq!(read_buf9 < read_buf7, true);//测试3.4, 5.6
+		assert_eq!(read_buf6 < read_buf7, true);//测试5.1, 5.6
+		assert_eq!(read_buf7 < read_buf8, true);//测试5.6, 7.5
+		assert_eq!(read_buf10 < read_buf6, true);//测试-1, 5.6
+		assert_eq!(read_buf10 == read_buf11, true);//测试-1, -1
+		assert_eq!(read_buf11 < read_buf12, true);//测试-1, 200
+		assert_eq!(read_buf12 > read_buf13, true);//测试 120, 10
+		assert_eq!(read_buf13 > read_buf14, true);//测试 10, 5
+		assert_eq!(read_buf1 < read_buf15, true);//测试 null, "abcdefg"
+		assert_eq!(read_buf4 < read_buf15, true);//测试 0.0, "abcdefg"
+		assert_eq!(read_buf6 < read_buf15, true);//测试 5.1, "abcdefg"
+		assert_eq!(read_buf12 < read_buf15, true);//测试 200, "abcdefg"
+		assert_eq!(read_buf13 < read_buf15, true);//测试 10, "abcdefg"
+		assert_eq!(read_buf15 < read_buf16, true);//测试 "abcdefg", "abcdefgh"
+		assert_eq!(read_buf15 > read_buf17, true);//测试 "abcdefg", "abcddfgh"
+		assert_eq!(read_buf13 < read_buf18, true);//测试 10, &[5;10]
+		assert_eq!(read_buf6 < read_buf18, true);//测试 5.1, &[5;10]
+		assert_eq!(read_buf3 < read_buf18, true);//测试 true, &[5;10]
+		assert_eq!(read_buf15 < read_buf18, true);//测试 "abcdefg", &[5;10]
+		assert_eq!(read_buf18 < read_buf19, true);//测试 &[5;10], &[6;5]
+		assert_eq!(read_buf19 == read_buf20, true);//测试 &[6;5], &[6;5]
 
-// 	println!("{:?}",sinfo::EnumType::decode(&mut r1) );
-// 	println!("{:?}",sinfo::EnumType::decode(&mut r1) );
+		let mut buf1 = WriteBuffer::with_bytes(Vec::new(), 0);
+		buf1.write_nil(); //null
+		buf1.write_bool(false); //false
+		buf1.write_bool(true); //true
+		buf1.write_f32(0.0); //0.0
+		buf1.write_f32(1.0); //1.0
+		buf1.write_f32(5.0); //1.0
+		buf1.write_u8(5);
+		buf1.write_utf8("abc");
+		
+		let mut buf2 = WriteBuffer::with_bytes(Vec::new(), 0);
+		buf2.write_utf8("acc");
+		buf2.write_u8(5);
+		assert_eq!(ReadBuffer::new(buf1.get_byte(), 0) < ReadBuffer::new(buf2.get_byte(), 0), true);//测试 abc,5 < acc,5
+	}
 
+	#[test]
+	fn test_container_cmp() {
+		// struct xxx { x: bool, y: [&i32]}
+		let mut w1 = WriteBuffer::new();
+		let v = vec![1,2,3,4,100];
+		w1.write_container(&v, |w1, e| {
+			let hash = 0x12345678u32.to_le_bytes();
+			w1.bytes.extend_from_slice(&hash);
+			w1.tail += 4;
+			w1.write_bool(true);
+			for elem in e {
+				w1.write_i32(elem.clone());
+			}
+		}, None);
 
-// 	let mut w = WriteBuffer::new();
-// 	w.write_lengthen(158);
-// 	println!("{:?}",w);
-// 	//assert_eq!(r1 != r2, false);
-// }
+		let mut w2 = WriteBuffer::new();
+		let v2 = vec![1,2,3,4,99];
+		w2.write_container(&v2, |w2, e| {
+			let hash = 0x12345678u32.to_le_bytes();
+			w2.bytes.extend_from_slice(&hash);
+			w2.tail += 4;
+			w2.write_bool(false);
+			for elem in e {
+				w2.write_i32(elem.clone());
+			}
+		}, None);
 
+		assert!(w1 > w2);
+	}
 
+	macro_rules! bench_container_cmp {
+		($size: expr, $func: ident) => {
+			#[bench]
+			fn $func(b: &mut Bencher) {
+				let mut sort = vec![];
+				(0..$size).for_each(|_| {
+					let mut w2 = WriteBuffer::new();
+					let v2 = thread_rng().gen::<u32>();
+					w2.write_container(&v2, |w2, _| {
+						let hash = 0x12345678u32.to_le_bytes();
+						w2.bytes.extend_from_slice(&hash);
+						w2.tail += 4;
+						w2.write_u32(v2);
 
+						let mut s = String::new();
+						(0..20).for_each(|_| {
+							let ch = thread_rng().gen::<char>();
+							s.push(ch);
+						});
+						w2.write_utf8(&s);
+					}, None);
+					sort.push(w2);
+				});
+				b.iter(|| {
+					sort.sort();
+				})
+			}
+		}
+	}
 
+	bench_container_cmp!(1000, bench_container_cmp_1000);
+	bench_container_cmp!(10000, bench_container_cmp_10000);
+	bench_container_cmp!(100000, bench_container_cmp_100000);
 
-// 0=null
-// 1=false
-// 2=true
-// 3=浮点数0.0，4=浮点数1.0，5=16位浮点数，6=32位浮点数，7=64位浮点数，8=128位浮点数;
-// 9=8位负整数，10=16位负整数，11=32位负整数，12=48位负整数，13=64位负整数，14=128位负整数
-// 15~35= -1~19
-// 36=8位正整数，37=16位正整数，38=32位正整数，39=48位正整数，40=64位正整数，41=128位正整数
+	macro_rules! bench_number {
+		($x:ty, $func:ident, $r: ident, $w: ident) => {
+			#[bench]
+			fn $func(b: &mut Bencher) {
+				let v: $x = random();
+				b.iter(|| {
+					let mut buf = WriteBuffer::with_bytes(vec![], 0);
+					buf.$w(v);
+					let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
+					read_buf.$r().unwrap();
+				});
+			}
+		};
+	}
 
-// 42-106=0-64长度的UTF8字符串，
-// 107=8位长度的UTF8字符串，108=16位长度的UTF8字符串，109=32位长度的UTF8字符串，110=48位长度的UTF8字符串
+	bench_number!(bool, bench_bool, read_bool, write_bool);
+	bench_number!(u8, bench_u8, read_u8, write_u8);
+	bench_number!(u16, bench_u16, read_u16, write_u16);
+	bench_number!(u32, bench_u32, read_u32, write_u32);
+	bench_number!(u64, bench_u64, read_u64, write_u64);
+	bench_number!(u128, bench_u128, read_u128, write_u128);
+	bench_number!(i8, bench_i8, read_i8, write_i8);
+	bench_number!(i16, bench_i16, read_i16, write_i16);
+	bench_number!(i32, bench_i32, read_i32, write_i32);
+	bench_number!(i64, bench_i64, read_i64, write_i64);
+	bench_number!(i128, bench_i128, read_i128, write_i128);
+	bench_number!(f32, bench_f32, read_f32, write_f32);
+	bench_number!(f64, bench_f64, read_f64, write_f64);
 
-// 111-175=0-64长度的二进制数据，
-// 176=8位长度的二进制数据，177=16位长度的二进制数据，178=32位长度的二进制数据，179=48位长度的二进制数据
+	macro_rules! bench_utf8 {
+		($size: expr, $func: ident) => {
+			#[bench]
+			fn $func(b: &mut Bencher) {
+				let mut s = String::new();
+				(0..$size).for_each(|_| s.push(thread_rng().gen::<char>()));
+				b.iter(|| {
+					let mut buf = WriteBuffer::with_bytes(vec![], 0);
+					buf.write_utf8(&s);
+					let mut read_buf = ReadBuffer::new(buf.get_byte(), 0);
+					read_buf.read_utf8().unwrap();
+				});
+			}
+		}
+	}
 
-// 180-244=0-64长度的容器，包括对象、数组和map、枚举
-// 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器
-// 之后的一个4字节的整数表示类型。
-
-
+	bench_utf8!(200, bench_utf8_small);
+	bench_utf8!(2000, bench_utf8_median);
+	bench_utf8!(20000, bench_utf8_large);
+}
