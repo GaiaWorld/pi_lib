@@ -1,7 +1,12 @@
 use std::alloc::{System, GlobalAlloc, Layout};
-use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::time::Instant;
 use std::f32::MAX;
+
+/*
+* 是否允许分配内存
+*/
+pub static ENABLE_ALLOC: AtomicBool = AtomicBool::new(true);
 
 /*
 * 当前虚拟机已分配内存

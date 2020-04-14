@@ -8,7 +8,7 @@ use std::os::unix::fs::FileExt;
 use std::os::windows::fs::FileExt;
 
 use std::fmt::{Debug, Formatter, Result as FmtResult};
-use std::fs::{File, OpenOptions, Metadata, rename, remove_file, remove_dir, remove_dir_all};
+use std::fs::{File, OpenOptions, Metadata, rename, remove_file, remove_dir};
 use std::io::{Seek, Read, Write, Result, SeekFrom, Error, ErrorKind};
 
 use atom::Atom;
