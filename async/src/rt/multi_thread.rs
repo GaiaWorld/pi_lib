@@ -1,8 +1,7 @@
-use std::thread;
 use std::future::Future;
 use std::time::Duration;
+use std::thread::Builder;
 use std::cell::UnsafeCell;
-use std::thread::{Builder, Thread};
 use std::sync::{Arc, Mutex, Condvar};
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
@@ -14,12 +13,7 @@ use twox_hash::RandomXxHashBuilder64;
 use dashmap::DashMap;
 
 use crate::AsyncTask;
-
-/*
-* 多线程任务唯一id
-*/
-#[derive(Debug, Clone, Copy)]
-pub struct TaskId(usize);
+use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap};
 
 /*
 * 多线程任务
@@ -121,13 +115,16 @@ impl<O: Default + 'static> Clone for MultiTaskRuntime<O> {
     }
 }
 
+/*
+* 异步多线程任务运行时同步方法
+*/
 impl<O: Default + 'static> MultiTaskRuntime<O> {
     //分配异步任务的唯一id
     pub fn alloc(&self) -> TaskId {
         TaskId((self.0).0.fetch_add(1, Ordering::Relaxed))
     }
 
-    //派发一个指定的异步任务到异步多线程任务池，返回异步任务的唯一id
+    //派发一个指定的异步任务到异步多线程运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         let queue = (self.0).2.clone();
@@ -150,6 +147,43 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         if let Some((_, waker)) = (self.0).3.remove(&task_id.0) {
             waker.wake();
         }
+    }
+
+    //移除指定唯一id的异步任务
+    pub(crate) fn remove(&self, task_id: TaskId) {
+        (self.0).3.remove(&task_id.0);
+    }
+
+    //构建用于派发多个异步任务到指定运行时的映射
+    pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
+        let (producor, consumer) = unbounded();
+
+        AsyncMap {
+            count: 0,
+            futures: Vec::new(),
+            producor,
+            consumer,
+        }
+    }
+}
+
+/*
+* 异步多线程任务运行时异步方法
+*/
+impl<O: Default + 'static> MultiTaskRuntime<O> {
+    //挂起当前多线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
+    pub async fn wait<R, V, F>(&self, rt: AsyncRuntime<R>, future: F) -> Result<V>
+        where R: Default + 'static,
+              V: Send + 'static,
+              F: Future<Output = Result<V>> + Send + 'static {
+        AsyncWait::new(AsyncRuntime::Multi(self.clone()), rt, Some(Box::new(future).boxed())).await
+    }
+
+    //挂起当前多线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
+        where R: Default + 'static,
+              V: Send + 'static  {
+        AsyncWaitAny::new(AsyncRuntime::Multi(self.clone()), futures).await
     }
 }
 
@@ -206,7 +240,7 @@ impl<O: Default + 'static> MultiTaskPool<O> {
 
     //启动异步多线程任务池
     pub fn startup(mut self) -> MultiTaskRuntime<O> {
-        for idx in 0..self.builders.len() {
+        for _ in 0..self.builders.len() {
             let builder = self.builders.remove(0);
             let runtime = self.runtime.clone();
             let worker_waker = self.worker_waker.clone();

@@ -1,17 +1,19 @@
 extern crate futures;
+extern crate crossbeam_queue;
 extern crate crossbeam_channel;
 extern crate twox_hash;
 extern crate dashmap;
 
+pub mod lock;
+pub mod rt;
 pub mod task;
 pub mod local_queue;
-pub mod multi_thread;
 
 use std::thread;
 use std::io::Result;
 use std::time::Duration;
 
-use futures::{future::BoxFuture, task::ArcWake};
+use futures::{future::BoxFuture, task::ArcWake, FutureExt};
 
 /*
 * 异步任务

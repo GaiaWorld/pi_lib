@@ -5,3 +5,4 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 data_view = {path="../data_view"}
+rand = "0.7"

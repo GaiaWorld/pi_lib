@@ -8,7 +8,7 @@ use std::os::unix::fs::FileExt;
 use std::os::windows::fs::FileExt;
 
 use std::fmt::{Debug, Formatter, Result as FmtResult};
-use std::fs::{File, OpenOptions, Metadata, rename, remove_file};
+use std::fs::{File, OpenOptions, Metadata, rename, remove_file, remove_dir};
 use std::io::{Seek, Read, Write, Result, SeekFrom, Error, ErrorKind};
 
 use atom::Atom;
@@ -66,6 +66,11 @@ const RENAME_ASYNC_FILE_INFO: &str = "rename async file";
 * 移除文件信息
 */
 const REMOVE_ASYNC_FILE_INFO: &str = "remove async file";
+
+/*
+* 移除空文件夹
+*/
+const REMOVE_ASYNC_DIR_INFO: &str = "remove async dir";
 
 lazy_static! {
     //打开只读异步文件数量
@@ -287,6 +292,15 @@ impl AsyncFile {
             callback(result);
         };
         cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(REMOVE_ASYNC_FILE_INFO));
+    }
+
+    // 移除空文件夹
+    pub fn remove_dir<P: AsRef<Path> + Send + 'static>(path: P, callback: Box<dyn FnOnce(Result<()>)>) {
+        let func = move |_lock| {
+            let result = remove_dir(path);
+            callback(result);
+        };
+        cast_store_task(ASYNC_FILE_TASK_TYPE, ASYNC_FILE_PRIORITY, None, Box::new(func), Atom::from(REMOVE_ASYNC_DIR_INFO));
     }
 
     //检查是否是符号链接

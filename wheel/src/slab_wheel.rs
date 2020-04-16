@@ -60,19 +60,25 @@ impl<T> Wheel<T>{
 	pub fn try_remove(&mut self, index: usize) -> Option<Item<T>>{
 		match self.index_factory.try_load(index) {
             Some(i) => {
-                let (elem, _) = self.wheel.delete(self.index_factory.get_class(index).clone(), i, &mut self.index_factory);
-                self.index_factory.destroy(index);
-                Some(elem)
+                if let Some((elem, _)) = self.wheel.delete(self.index_factory.get_class(index).clone(), i, &mut self.index_factory) {
+					self.index_factory.destroy(index);
+					return Some(elem);
+				}
+
+				None
             },
             None => None,
         }
 	}
 
 	//Panics if index is out of bounds.
-	pub fn remove(&mut self, index: usize) -> Item<T> {
-		let (elem, _) = self.wheel.delete(self.index_factory.get_class(index).clone(), self.index_factory.load(index), &mut self.index_factory);
-        self.index_factory.destroy(index);
-        elem
+	pub fn remove(&mut self, index: usize) -> Option<Item<T>> {
+		if let Some((elem, _)) = self.wheel.delete(self.index_factory.get_class(index).clone(), self.index_factory.load(index), &mut self.index_factory) {
+			self.index_factory.destroy(index);
+			return Some(elem);
+		}
+
+		None
 	}
 }
 
