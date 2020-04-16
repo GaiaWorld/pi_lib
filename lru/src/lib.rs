@@ -1,14 +1,14 @@
 extern crate deque;
 extern crate slab;
 
-use deque::deque::{Node, Deque};
+use deque::deque::{Deque, Node};
 use slab::Slab;
 
-pub static MIN: usize = 64*1024;
-pub static MAX: usize = 1024*1024;
-pub static TIMEOUT: usize = 3*60*1000;
+pub static MIN: usize = 64 * 1024;
+pub static MAX: usize = 1024 * 1024;
+pub static TIMEOUT: usize = 3 * 60 * 1000;
 
-pub struct Entry<T>{
+pub struct Entry<T> {
     value: T,
     pub cost: usize,
     timeout: usize,
@@ -25,7 +25,6 @@ pub struct LruCache<T> {
     size: usize,
 }
 
-
 impl<T> Default for LruCache<T> {
     fn default() -> Self {
         LruCache::with_config(MIN, MAX, TIMEOUT)
@@ -33,27 +32,34 @@ impl<T> Default for LruCache<T> {
 }
 
 impl<T> LruCache<T> {
-
-    /** 
+    /**
      * 根据配置新建LRU缓冲
      */
     pub fn with_config(min_capacity: usize, max_capacity: usize, timeout: usize) -> Self {
         Self {
             deque: Deque::new(),
             min_capacity,
-            max_capacity: if max_capacity > min_capacity {max_capacity}else{min_capacity},
+            max_capacity: if max_capacity > min_capacity {
+                max_capacity
+            } else {
+                min_capacity
+            },
             timeout,
             size: 0,
         }
     }
-	/**
+    /**
      * 更改配置
      */
-	pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize){
-		self.min_capacity = min_capacity;
-		self.timeout = timeout;
-		self.max_capacity = if max_capacity > min_capacity {max_capacity}else{min_capacity};
-	}
+    pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) {
+        self.min_capacity = min_capacity;
+        self.timeout = timeout;
+        self.max_capacity = if max_capacity > min_capacity {
+            max_capacity
+        } else {
+            min_capacity
+        };
+    }
     /**
      * 获得配置
      */
@@ -83,29 +89,50 @@ impl<T> LruCache<T> {
      */
     pub fn set_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) {
         self.min_capacity = min_capacity;
-        self.max_capacity = if max_capacity > self.min_capacity {max_capacity}else{self.min_capacity};
+        self.max_capacity = if max_capacity > self.min_capacity {
+            max_capacity
+        } else {
+            self.min_capacity
+        };
         self.timeout = timeout;
     }
     /**
      * 设置最大容量
      */
     pub fn set_max_capacity(&mut self, max_capacity: usize) {
-        self.max_capacity = if max_capacity > self.min_capacity {max_capacity}else{self.min_capacity};
+        self.max_capacity = if max_capacity > self.min_capacity {
+            max_capacity
+        } else {
+            self.min_capacity
+        };
     }
     /**
      * 添加一个新元素，返回该元素的id
      * 注：如果缓冲满，根据LRU原则，移除旧元素并返回
      */
-    pub fn add(&mut self, value: T, cost: usize, now: usize, slab: &mut Slab<Node<Entry<T>>>) -> usize {
+    pub fn add(
+        &mut self,
+        value: T,
+        cost: usize,
+        now: usize,
+        slab: &mut Slab<Node<Entry<T>>>,
+    ) -> usize {
         self.size += cost;
-        self.deque.push_back(Entry{value, cost, timeout: now + self.timeout}, slab)
+        self.deque.push_back(
+            Entry {
+                value,
+                cost,
+                timeout: now + self.timeout,
+            },
+            slab,
+        )
     }
     /**
      * 移除元素并返回
      */
     pub fn remove(&mut self, id: usize, slab: &mut Slab<Node<Entry<T>>>) -> Option<(T, usize)> {
         match self.deque.try_remove(id, slab) {
-            Some(r) =>{
+            Some(r) => {
                 self.size -= r.cost;
                 Some((r.value, r.cost))
             }
@@ -124,29 +151,32 @@ impl<T> LruCache<T> {
      */
     pub fn capacity_collect(&mut self, slab: &mut Slab<Node<Entry<T>>>) -> Option<(T, usize)> {
         if self.size <= self.max_capacity {
-            return None
+            return None;
         }
-        let r = unsafe{ self.deque.pop_front_unchecked(slab)};
+        let r = unsafe { self.deque.pop_front_unchecked(slab) };
         self.size -= r.cost;
         Some((r.value, r.cost))
     }
     /**
      * 根据超时进行整理
      */
-    pub fn timeout_collect(&mut self, now: usize, slab: &mut Slab<Node<Entry<T>>>) -> Option<(T, usize)> {
+    pub fn timeout_collect(
+        &mut self,
+        now: usize,
+        slab: &mut Slab<Node<Entry<T>>>,
+    ) -> Option<(T, usize)> {
         if self.size <= self.min_capacity {
-            return None
+            return None;
         }
         let id = self.deque.get_first();
         if id == 0 {
-            return None
+            return None;
         }
-        if unsafe{slab.get_unchecked(id)}.elem.timeout < now {
-            return None
+        if unsafe { slab.get_unchecked(id) }.elem.timeout > now {
+            return None;
         }
-        let r = unsafe{ self.deque.pop_front_unchecked(slab)};
+        let r = unsafe { self.deque.pop_front_unchecked(slab) };
         self.size -= r.cost;
         Some((r.value, r.cost))
     }
-
 }

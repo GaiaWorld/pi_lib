@@ -17,8 +17,13 @@ paste = "0.1"
 lazy_static = "*"
 # im = "*"
 
+[features]
+runtime = []
+
 [[example]]
 name = "expanded"
 
 [[example]]
 name = "basic"
+
+

@@ -1,4 +1,6 @@
 use listener::{Listener as LibListener, FnListeners};
+use share::Share;
+use std::ops::{Deref};
 pub use listener::FnListener;
 
 pub struct CreateEvent{
@@ -23,12 +25,46 @@ pub type DeleteFn = FnListener<DeleteEvent>;
 pub type ModifyFn = FnListener<ModifyEvent>;
 
 #[derive(Default, Clone)]
-pub struct NotifyImpl {
+pub struct NotifyImpl(pub Share<NotifyImpl1>);
+
+impl NotifyImpl {
+	pub fn add_create(&self, listener: CreateFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.create.push_back(listener)
+    }
+    pub fn add_delete(&self, listener: DeleteFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.delete.push_back(listener)
+    }
+    pub fn add_modify(&self, listener: ModifyFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.modify.push_back(listener)
+    }
+
+	pub fn remove_create(&self, listener: &CreateFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.create.delete(listener);
+    }
+    pub fn remove_delete(&self, listener: &DeleteFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.delete.delete(listener);
+    }
+    pub fn remove_modify(&self, listener: &ModifyFn) {
+        unsafe {&mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1)}.modify.delete(listener);
+    }
+}
+
+impl Deref for NotifyImpl {
+	type Target = Share<NotifyImpl1>;
+
+	fn deref(&self) -> &Self::Target{
+		&self.0
+	}
+}
+
+
+#[derive(Default, Clone)]
+pub struct NotifyImpl1 {
     pub create: CreateListeners,
     pub delete: DeleteListeners,
     pub modify: ModifyListeners,
 }
-impl NotifyImpl {
+impl NotifyImpl1 {
     pub fn mem_size(&self) -> usize {
         self.create.mem_size() + self.delete.mem_size() + self.modify.mem_size()
     }

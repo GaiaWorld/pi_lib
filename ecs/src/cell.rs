@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
+use std::default::Default;
 
 pub struct StdCell<T>(RefCell<T>);
 
@@ -19,6 +20,12 @@ impl<T> Deref for StdCell<T> {
 impl<T> DerefMut for StdCell<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<T: Default> Default for StdCell<T> {
+    fn default() -> Self {
+        StdCell::new(T::default())
     }
 }
 

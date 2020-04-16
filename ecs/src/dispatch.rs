@@ -1,4 +1,5 @@
 use atom::Atom;
+use cell::StdCell;
 use listener::{FnListeners, Listener};
 
 use world::World;
@@ -11,11 +12,11 @@ pub trait Dispatcher {
 
 #[derive(Default)]
 pub struct SeqDispatcher {
-    vec: FnListeners<()>,
+    vec: StdCell<FnListeners<()>>,
 }
 /// TODO 先实现一个简单的顺序执行的派发器
 impl Dispatcher for SeqDispatcher {
-    fn build(&mut self, names: String, world: &World){
+    fn build(&mut self, names: String, world: &World) {
         let mut v = Vec::new();
         for s in names.split(',') {
             v.push(Atom::from(s.trim_start().trim_end()))
@@ -30,12 +31,11 @@ impl Dispatcher for SeqDispatcher {
                 None => panic!("system is not exist:{}", **k),
             };
             match sys.fetch_run() {
-                Some(run) => self.vec.push_back(run),
-                None => ()
+                Some(run) => self.vec.borrow_mut().push_back(run),
+                None => (),
             }
         }
-        
-        
+
         // 根据系统的读写数据，计算依赖关系。 如果一个数据被读写，则读会依赖写。写会先执行，读后执行
         // let mut system_map = FxHashMap32::default();
         // let mut component_map = FxHashMap32::default();
@@ -64,8 +64,8 @@ impl Dispatcher for SeqDispatcher {
         // }
     }
     fn run(&self) {
-        // println!("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-        self.vec.listen(&());
+        // println!("dispatch===========================");
+        self.vec.borrow().listen(&());
     }
 }
 

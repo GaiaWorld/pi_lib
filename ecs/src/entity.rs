@@ -29,13 +29,13 @@ impl_downcast_arc!(Entity);
 pub type CellEntity<T> = StdCell<EntityImpl<T>>;
 impl<T: 'static> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
-        self.borrow_mut().notify.create.push_back(listener)
+        self.borrow_mut().notify.add_create(listener);
     }
     fn add_delete(&self, listener: DeleteFn) {
-        self.borrow_mut().notify.delete.push_back(listener)
+        self.borrow_mut().notify.add_delete(listener)
     }
     fn add_modify(&self, listener: ModifyFn) {
-        self.borrow_mut().notify.modify.push_back(listener)
+        self.borrow_mut().notify.add_modify(listener)
     }
     fn create_event(&self, id: usize) {
         self.borrow().notify.create_event(id);
@@ -47,13 +47,13 @@ impl<T: 'static> Notify for CellEntity<T> {
         self.borrow().notify.modify_event(id, field, index);
     }
     fn remove_create(&self, listener: &CreateFn) {
-        self.borrow_mut().notify.create.delete(listener);
+        self.borrow_mut().notify.remove_create(listener);
     }
     fn remove_delete(&self, listener: &DeleteFn) {
-        self.borrow_mut().notify.delete.delete(listener);
+        self.borrow_mut().notify.remove_delete(listener);
     }
     fn remove_modify(&self, listener: &ModifyFn) {
-        self.borrow_mut().notify.modify.delete(listener);
+        self.borrow_mut().notify.remove_modify(listener);
     }
 }
 impl<T: 'static> Entity for CellEntity<T> {
