@@ -1,8 +1,7 @@
 extern crate futures;
-extern crate crossbeam_queue;
 extern crate crossbeam_channel;
-extern crate twox_hash;
-extern crate dashmap;
+extern crate parking_lot;
+extern crate log;
 
 pub mod lock;
 pub mod rt;

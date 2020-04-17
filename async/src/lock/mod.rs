@@ -1,9 +1,15 @@
 use std::sync::atomic::spin_loop_hint;
 
+pub mod mpmc_deque;
+pub mod mpsc_deque;
+pub mod steal_deque;
+pub mod spin_lock;
 pub mod mutex_lock;
 pub mod rw_lock;
 
-//根据指定值进行自旋，返回下次自旋的值
+/*
+* 根据指定值进行自旋，返回下次自旋的值
+*/
 #[inline]
 pub(crate) fn spin(mut len: u32) -> u32 {
     if len < 1 {

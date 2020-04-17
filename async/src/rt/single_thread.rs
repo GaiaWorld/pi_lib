@@ -7,11 +7,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crossbeam_channel::{Sender, Receiver, unbounded};
 use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
-use twox_hash::RandomXxHashBuilder64;
-use dashmap::DashMap;
 
 use crate::AsyncTask;
-use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap};
+use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
 
 /*
 * 单线程任务
@@ -27,8 +25,7 @@ unsafe impl<O: Default + 'static> Sync for SingleTask<O> {}
 
 impl<O: Default + 'static> ArcWake for SingleTask<O> {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        let task = arc_self.clone();
-        arc_self.queue.producer.send(task);
+        let _ = arc_self.queue.push_back(arc_self.clone());
     }
 }
 
@@ -53,12 +50,18 @@ impl<O: Default + 'static> SingleTask<O> {
             queue,
         }
     }
+
+    //检查是否允许唤醒
+    pub fn is_enable_wakeup(&self) -> bool {
+        self.uid.0.load(Ordering::Relaxed) > 0
+    }
 }
 
 /*
 * 单线程任务队列
 */
 pub struct SingleTasks<O: Default + 'static> {
+    id:             usize,                          //绑定的线程唯一id
     consumer:       Receiver<Arc<SingleTask<O>>>,   //任务消费者
     producer:       Sender<Arc<SingleTask<O>>>,     //任务生产者
 }
@@ -69,6 +72,7 @@ unsafe impl<O: Default + 'static> Sync for SingleTasks<O> {}
 impl<O: Default + 'static> Clone for SingleTasks<O> {
     fn clone(&self) -> Self {
         SingleTasks {
+            id: self.id,
             consumer: self.consumer.clone(),
             producer: self.producer.clone(),
         }
@@ -76,6 +80,12 @@ impl<O: Default + 'static> Clone for SingleTasks<O> {
 }
 
 impl<O: Default + 'static> SingleTasks<O> {
+    //获取任务数量
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.consumer.len()
+    }
+
     //向单线程任务队列推入指定的任务
     pub fn push_back(&self, task: Arc<SingleTask<O>>) -> Result<()> {
         if let Err(e) = self.producer.send(task) {
@@ -90,10 +100,8 @@ impl<O: Default + 'static> SingleTasks<O> {
 * 异步单线程任务运行时
 */
 pub struct SingleTaskRuntime<O: Default + 'static>(Arc<(
-    AtomicUsize,                                    //异步任务id生成器
-    AtomicUsize,                                    //异步服务id生成器
+    usize,                                          //运行时唯一id
     Arc<SingleTasks<O>>,                            //异步任务队列
-    DashMap<usize, Waker, RandomXxHashBuilder64>,   //异步任务等待表
 )>);
 
 unsafe impl<O: Default + 'static> Send for SingleTaskRuntime<O> {}
@@ -109,17 +117,32 @@ impl<O: Default + 'static> Clone for SingleTaskRuntime<O> {
 * 异步单线程任务运行时同步方法
 */
 impl<O: Default + 'static> SingleTaskRuntime<O> {
+    //获取当前运行时的唯一id
+    pub fn get_id(&self) -> usize {
+        (self.0).0
+    }
+
+    //获取当前运行时待处理任务数量
+    pub fn wait_len(&self) -> usize {
+        (self.0).1.consumer.len()
+    }
+
+    //获取当前运行时任务数量
+    pub fn len(&self) -> usize {
+        (self.0).1.len()
+    }
+
     //分配异步任务的唯一id
     pub fn alloc(&self) -> TaskId {
-        TaskId((self.0).0.fetch_add(1, Ordering::Relaxed))
+        TaskId(Arc::new(AtomicUsize::new(0)))
     }
 
     //派发一个指定的异步任务到异步单线程运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
-        let queue = (self.0).2.clone();
+        let queue = (self.0).1.clone();
         let boxed = Box::new(future).boxed();
-        if let Err(e) = (self.0).2.producer.send(Arc::new(SingleTask::new(task_id, queue, Some(boxed)))) {
+        if let Err(e) = (self.0).1.push_back(Arc::new(SingleTask::new(task_id, queue, Some(boxed)))) {
             return Err(Error::new(ErrorKind::Other, e));
         }
 
@@ -127,21 +150,22 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
     }
 
     //挂起指定唯一id的异步任务
-    pub fn pending<Output>(&self, task_id: TaskId, waker: Waker) -> Poll<Output> {
-        (self.0).3.insert(task_id.0, waker);
+    pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
+        task_id.0.store(Box::into_raw(Box::new(waker)) as usize, Ordering::Relaxed);
         Poll::Pending
     }
 
     //唤醒指定唯一id的异步任务
-    pub fn wakeup(&self, task_id: TaskId) {
-        if let Some((_, waker)) = (self.0).3.remove(&task_id.0) {
-            waker.wake();
+    pub fn wakeup(&self, task_id: &TaskId) {
+        match task_id.0.load(Ordering::Relaxed) {
+            0 => panic!("Single runtime wakeup task failed, reason: task id not exist"),
+            ptr => {
+                unsafe {
+                    let waker = Box::from_raw(ptr as *mut Waker);
+                    waker.wake();
+                }
+            },
         }
-    }
-
-    //移除指定唯一id的异步任务
-    pub(crate) fn remove(&self, task_id: TaskId) {
-        (self.0).3.remove(&task_id.0);
     }
 
     //构建用于派发多个异步任务到指定运行时的映射
@@ -192,18 +216,18 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
     //构建单线程异步任务执行器
     pub fn new() -> Self {
         //构建单线程任务队列
+        let rt_uid = alloc_rt_uid();
         let (producer, consumer) = unbounded();
         let queue = Arc::new(SingleTasks {
+            id: (rt_uid << 8) & 0xffff | 1,
             consumer,
             producer,
         });
 
         //构建单线程任务运行时
         let runtime = SingleTaskRuntime(Arc::new((
-            AtomicUsize::new(0),
-            AtomicUsize::new(0),
+            rt_uid,
             queue,
-            DashMap::with_hasher(Default::default()),
         )));
 
         SingleTaskRunner {
@@ -229,11 +253,11 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             return Err(Error::new(ErrorKind::Other, "single thread runtime not running"));
         }
 
-        for task in (self.runtime.0).2.consumer.try_iter() {
+        for task in (self.runtime.0).1.consumer.try_iter() {
             run_task(task);
         }
 
-        Ok((self.runtime.0).2.consumer.len())
+        Ok((self.runtime.0).1.consumer.len())
     }
 }
 
