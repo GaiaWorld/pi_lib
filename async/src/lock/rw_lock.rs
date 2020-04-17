@@ -261,12 +261,8 @@ impl<T> InnerRwLock<T> {
 
     //解锁异步共享锁，返回是否成功
     #[inline(always)]
-    pub fn unlock_shared(&self) -> bool {
-        self.lock_status.compare_exchange_weak(UNLOCK_SHARED,
-                                               UNLOCKED,
-                                               Ordering::Acquire,
-                                               Ordering::Relaxed)
-            .is_ok()
+    pub fn unlock_shared(&self) {
+        self.lock_status.store(UNLOCKED, Ordering::Relaxed);
     }
 
     //尝试获取异步独占锁，返回是否成功
