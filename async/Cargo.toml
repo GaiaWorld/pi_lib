@@ -9,6 +9,7 @@ futures = "0.3"
 crossbeam-channel = "0.4"
 parking_lot = "0.10"
 log = "0.4"
+local_timer = { path = "../local_timer" }
 
 [dev-dependencies]
 rand = "0.7"

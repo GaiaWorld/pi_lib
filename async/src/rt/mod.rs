@@ -11,7 +11,9 @@ pub mod single_thread;
 pub mod multi_thread;
 
 use futures::{future::BoxFuture, FutureExt};
-use crossbeam_channel::{Sender, Receiver};
+use crossbeam_channel::{Sender, Receiver, unbounded};
+
+use local_timer::LocalTimer;
 
 use single_thread::SingleTaskRuntime;
 use multi_thread::MultiTaskRuntime;
@@ -181,6 +183,125 @@ unsafe impl<V: Send + 'static> Sync for AsyncWaitResult<V> {}
 impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
     fn clone(&self) -> Self {
         AsyncWaitResult(self.0.clone())
+    }
+}
+
+/*
+* 异步任务本地定时器
+*/
+pub struct AsyncTaskTimer {
+    producor:   Sender<(usize, TaskId)>,            //定时任务生产者
+    consumer:   Receiver<(usize, TaskId)>,          //定时任务消费者
+    timer:      Arc<RefCell<LocalTimer<TaskId>>>,   //定时器
+}
+
+unsafe impl Send for AsyncTaskTimer {}
+unsafe impl Sync for AsyncTaskTimer {}
+
+impl AsyncTaskTimer {
+    //构建异步任务本地定时器
+    pub fn new() -> Self {
+        let (producor, consumer) = unbounded();
+        AsyncTaskTimer {
+            producor,
+            consumer,
+            timer: Arc::new(RefCell::new(LocalTimer::new())),
+        }
+    }
+
+    //获取定时任务生产者
+    pub fn get_producor(&self) -> Sender<(usize, TaskId)> {
+        self.producor.clone()
+    }
+
+    //设置定时器
+    pub fn set_timer(&self, task_id: TaskId, timeout: usize) -> usize {
+        self.timer.borrow_mut().set_timeout(task_id, timeout)
+    }
+
+    //取消定时器
+    pub fn cancel_timer(&self, timer_ref: usize) -> Option<TaskId> {
+        self.timer.borrow_mut().cancel(timer_ref)
+    }
+
+    //消费所有定时任务，返回定时任务数量
+    pub fn consume(&self) -> usize {
+        let mut len = 0;
+        let timer_tasks = self.consumer.try_iter().collect::<Vec<(usize, TaskId)>>();
+        for (timeout, task_id) in timer_tasks {
+            self.set_timer(task_id, timeout);
+            len += 1;
+        }
+
+        len
+    }
+
+    //轮询定时器，返回过期任务
+    pub fn poll(&self) -> Vec<TaskId> {
+        self.timer.borrow_mut().poll()
+    }
+
+    //清空定时器
+    pub fn clear(&self) {
+        self.timer.borrow_mut().clear();
+    }
+}
+
+/*
+* 等待指定超时
+*/
+pub struct AsyncWaitTimeout<O: Default + 'static> {
+    rt:         AsyncRuntime<O>,            //当前运行时
+    producor:   Sender<(usize, TaskId)>,    //超时请求生产者
+    timeout:    usize,                      //超时时长，单位ms
+    expired:    bool,                       //是否已过期
+}
+
+unsafe impl<O: Default + 'static> Send for AsyncWaitTimeout<O> {}
+unsafe impl<O: Default + 'static> Sync for AsyncWaitTimeout<O> {}
+
+impl<O: Default + 'static> Future for AsyncWaitTimeout<O> {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if (&self).expired {
+            //已到期，则返回
+            return Poll::Ready(());
+        } else {
+            //未到期，则设置为已到期
+            (&mut self).expired = true;
+        }
+
+        let (task_id, reply) = match &(&self).rt {
+            AsyncRuntime::Single(wait_rt) => {
+                let task_id = wait_rt.alloc();
+                let r = wait_rt.pending(&task_id, cx.waker().clone());
+                (task_id, r)
+            },
+            AsyncRuntime::Multi(wait_rt) => {
+                let task_id = wait_rt.alloc();
+                let r = wait_rt.pending(&task_id, cx.waker().clone());
+                (task_id, r)
+            },
+        };
+
+        //发送超时请求，并返回
+        (&self).producor.send(((&self).timeout, task_id));
+        reply
+    }
+}
+
+impl<O: Default + 'static> AsyncWaitTimeout<O> {
+    //构建等待指定超时任务的方法
+    pub fn new(rt: AsyncRuntime<O>,
+               producor: Sender<(usize, TaskId)>,
+               timeout: usize) -> Self {
+        AsyncWaitTimeout {
+            rt,
+            producor,
+            timeout,
+            expired: false, //设置初始值
+        }
     }
 }
 

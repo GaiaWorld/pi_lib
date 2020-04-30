@@ -9,7 +9,8 @@ use crossbeam_channel::{Sender, Receiver, unbounded};
 use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 
 use crate::AsyncTask;
-use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
+use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
+use crate::rt::AsyncWaitResult;
 
 /*
 * 单线程任务
@@ -100,8 +101,9 @@ impl<O: Default + 'static> SingleTasks<O> {
 * 异步单线程任务运行时
 */
 pub struct SingleTaskRuntime<O: Default + 'static>(Arc<(
-    usize,                                          //运行时唯一id
-    Arc<SingleTasks<O>>,                            //异步任务队列
+    usize,                                              //运行时唯一id
+    Arc<SingleTasks<O>>,                                //异步任务队列
+    AsyncTaskTimer,                                     //本地定时器
 )>);
 
 unsafe impl<O: Default + 'static> Send for SingleTaskRuntime<O> {}
@@ -185,6 +187,11 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 * 异步单线程任务运行时异步方法
 */
 impl<O: Default + 'static> SingleTaskRuntime<O> {
+    //挂起当前单线程运行时的当前任务，等待指定的时间后唤醒当前任务
+    pub async fn wait_timeout(&self, timeout: usize) {
+        AsyncWaitTimeout::new(AsyncRuntime::Single(self.clone()), (self.0).2.get_producor(), timeout).await
+    }
+
     //挂起当前单线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
     pub async fn wait<R, V, F>(&self, rt: AsyncRuntime<R>, future: F) -> Result<V>
         where R: Default + 'static,
@@ -224,10 +231,14 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             producer,
         });
 
+        //构建本地定时器
+        let timer = AsyncTaskTimer::new();
+
         //构建单线程任务运行时
         let runtime = SingleTaskRuntime(Arc::new((
             rt_uid,
             queue,
+            timer,
         )));
 
         SingleTaskRunner {
@@ -253,6 +264,13 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             return Err(Error::new(ErrorKind::Other, "single thread runtime not running"));
         }
 
+        //设置新的定时任务，并唤醒已过期的定时任务
+        (self.runtime.0).2.consume();
+        for expired in &(self.runtime.0).2.poll() {
+            self.runtime.wakeup(expired);
+        }
+
+        //执行异步任务
         for task in (self.runtime.0).1.consumer.try_iter() {
             run_task(task);
         }

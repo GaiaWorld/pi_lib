@@ -1,3 +1,4 @@
+use std::thread;
 use std::sync::Arc;
 use std::io::Result;
 use std::future::Future;
@@ -13,7 +14,7 @@ use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}, TryFut
 
 use crate::{AsyncTask,
             lock::steal_deque::{Sender as StealSent, Receiver as StealRecv, steal_deque}};
-use super::{TaskId, AsyncRuntime, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
+use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
 
 /*
 * 线程唯一id
@@ -188,6 +189,7 @@ pub struct MultiTaskRuntime<O: Default + 'static>(Arc<(
     AtomicUsize,                                    //异步任务计数器
     Arc<Vec<Arc<MultiTasks<O>>>>,                   //异步任务队列
     Arc<AtomicUsize>,                               //所有待处理任务数量，只包括所有接收队列的任务数量
+    Option<AsyncTaskTimer>,                         //本地定时器
 )>);
 
 unsafe impl<O: Default + 'static> Send for MultiTaskRuntime<O> {}
@@ -312,6 +314,11 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
 * 异步多线程任务运行时异步方法
 */
 impl<O: Default + 'static> MultiTaskRuntime<O> {
+    //挂起当前多线程运行时的当前任务，等待指定的时间后唤醒当前任务
+    pub async fn wait_timeout(&self, timeout: usize) {
+        AsyncWaitTimeout::new(AsyncRuntime::Multi(self.clone()), (self.0).4.as_ref().unwrap().get_producor(), timeout).await
+    }
+
     //挂起当前多线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
     pub async fn wait<R, V, F>(&self, rt: AsyncRuntime<R>, future: F) -> Result<V>
         where R: Default + 'static,
@@ -332,17 +339,19 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
 * 异步多线程任务池
 */
 pub struct MultiTaskPool<O: Default + 'static> {
-    runtime:        MultiTaskRuntime<O>,            //异步多线程任务运行时
-    timeout:        u64,                            //工作者空闲时最长休眠时间
-    builders:       Vec<Builder>,                   //线程构建器列表
+    runtime:    MultiTaskRuntime<O>,            //异步多线程任务运行时
+    timeout:    u64,                            //工作者空闲时最长休眠时间
+    builders:   Vec<Builder>,                   //工作者构建器列表
+    interval:   Option<u64>,                    //定时器运行间隔时间
+    builer:     Option<Builder>,                //定时器构建器
 }
 
 unsafe impl<O: Default + 'static> Send for MultiTaskPool<O> {}
 unsafe impl<O: Default + 'static> Sync for MultiTaskPool<O> {}
 
 impl<O: Default + 'static> MultiTaskPool<O> {
-    //构建指定线程名前缀、线程数量、线程栈大小和线程空闲时最长休眠时间的多线程任务池
-    pub fn new(prefix: String, mut size: usize, stack_size: usize, timeout: u64) -> Self {
+    //构建指定线程名前缀、线程数量、线程栈大小、线程空闲时最长休眠时间和是否使用本地定时器的多线程任务池
+    pub fn new(prefix: String, mut size: usize, stack_size: usize, timeout: u64, interval: Option<u64>) -> Self {
         if size == 0 {
             //如果线程太少，则设置至少1个线程
             size = 1;
@@ -373,18 +382,31 @@ impl<O: Default + 'static> MultiTaskPool<O> {
             queues.push(queue);
         }
 
+        //构建本地定时器
+        let (timer, builer) = if let Some(interval) = interval {
+            let builder = Builder::new()
+                .name(prefix.to_string() + "-Timer")
+                .stack_size(stack_size);
+            (Some(AsyncTaskTimer::new()), Some(builder))
+        } else {
+            (None, None)
+        };
+
         //构建多线程任务运行时
         let runtime = MultiTaskRuntime(Arc::new((
             rt_uid,
             AtomicUsize::new(0),
             Arc::new(queues),
             counter,
+            timer,
         )));
 
         MultiTaskPool {
             runtime,
             timeout,
             builders,
+            interval,
+            builer,
         }
     }
 
@@ -395,6 +417,15 @@ impl<O: Default + 'static> MultiTaskPool<O> {
 
     //启动异步多线程任务池，如果任务有大量或长时间的阻塞则建议允许窃取，否则建议不允许窃取
     pub fn startup(mut self, enable_steal: bool) -> MultiTaskRuntime<O> {
+        if let Some(builer) = self.builer.take() {
+            //启动本地定时器
+            let runtime = self.runtime.clone();
+            let interval = self.interval.unwrap();
+            builer.spawn(move || {
+                timer_loop(runtime, interval);
+            });
+        }
+
         //启动工作线程
         for index in 0..self.builders.len() {
             let builder = self.builders.remove(0);
@@ -406,6 +437,20 @@ impl<O: Default + 'static> MultiTaskPool<O> {
         }
 
         self.runtime
+    }
+}
+
+//定时器循环
+fn timer_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>, interval: u64) {
+    loop {
+        //设置新的定时任务，并唤醒已过期的定时任务
+        (runtime.0).4.as_ref().unwrap().consume();
+        for expired in &(runtime.0).4.as_ref().unwrap().poll() {
+            runtime.wakeup(expired);
+        }
+
+        //间隔指定时间后继续
+        thread::sleep(Duration::from_millis(interval));
     }
 }
 

@@ -991,10 +991,10 @@ fn test_future_mutex() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     let rt_ = rt.clone();
@@ -1083,10 +1083,10 @@ fn test_future_rwlock() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(true);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(true);
 
     let start = Instant::now();
@@ -1157,10 +1157,10 @@ fn test_futures_mutex() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     let rt_ = rt.clone();
@@ -1298,10 +1298,10 @@ fn test_futures_mutex() {
 
 #[test]
 fn test_spin_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
@@ -1452,10 +1452,10 @@ fn test_spin_lock_bench() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     println!("!!!!!!Start lock test for single thread");
@@ -1522,10 +1522,10 @@ fn test_spin_lock_bench() {
 
 #[test]
 fn test_mutex_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
@@ -1755,10 +1755,10 @@ fn test_mutex_lock_bench() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     println!("!!!!!!Start lock test for single thread");
@@ -2365,10 +2365,10 @@ fn test_mutex_lock_bench() {
 
 #[test]
 fn test_rw_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10, None);
     let rt0 = pool.startup(true);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     let rt0_ = rt0.clone();
@@ -2701,7 +2701,7 @@ impl TestFuture1 {
 
 #[test]
 fn test_multi_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, None);
     let rt = pool.startup(true);
 
     let mut ids = Vec::with_capacity(50);
@@ -2763,7 +2763,7 @@ fn test_async_value() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
@@ -2831,6 +2831,53 @@ fn test_async_value() {
     thread::sleep(Duration::from_millis(100000000));
 }
 
+#[test]
+fn test_async_wait_timeout() {
+    let runner = SingleTaskRunner::new();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run_once() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(10));
+    let rt0 = pool.startup(false);
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    for index in 0..1000 {
+        let rt_copy = rt.clone();
+        let counter_copy = counter.clone();
+        rt.spawn(rt.alloc(), async move {
+            rt_copy.wait_timeout(3000).await;
+            counter_copy.fetch_add(1, Ordering::Relaxed);
+            println!("!!!!!!index: {:?}", index);
+        });
+    }
+
+    thread::sleep(Duration::from_millis(5000));
+    println!("!!!!!!count: {:?}", counter.load(Ordering::Relaxed));
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    for index in 0..1000 {
+        let rt0_copy = rt0.clone();
+        let counter_copy = counter.clone();
+        rt0.spawn(rt0.alloc(), async move {
+            rt0_copy.wait_timeout(3000).await;
+            counter_copy.fetch_add(1, Ordering::Relaxed);
+            println!("!!!!!!index: {:?}", index);
+        });
+    }
+
+    thread::sleep(Duration::from_millis(5000));
+    println!("!!!!!!count: {:?}", counter.load(Ordering::Relaxed));
+}
+
 //一个AsyncWait任务由3个异步任务组成，不包括创建AsyncWait的异步任务
 #[test]
 fn test_async_wait() {
@@ -2847,10 +2894,10 @@ fn test_async_wait() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
@@ -2941,10 +2988,10 @@ fn test_async_wait_any() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
@@ -3044,10 +3091,10 @@ fn test_async_wait_all() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
     let rt1 = pool.startup(false);
 
     {
