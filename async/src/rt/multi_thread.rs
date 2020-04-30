@@ -316,7 +316,13 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
 impl<O: Default + 'static> MultiTaskRuntime<O> {
     //挂起当前多线程运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
-        AsyncWaitTimeout::new(AsyncRuntime::Multi(self.clone()), (self.0).4.as_ref().unwrap().get_producor(), timeout).await
+        if let Some(timer) = (self.0).4.as_ref() {
+            //有本地定时器，则异步等待指定时间
+            AsyncWaitTimeout::new(AsyncRuntime::Multi(self.clone()), timer.get_producor(), timeout).await
+        } else {
+            //没有本地定时器，则同步休眠指定时间
+            thread::sleep(Duration::from_millis(timeout as u64));
+        }
     }
 
     //挂起当前多线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
