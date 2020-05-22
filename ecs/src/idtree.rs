@@ -244,7 +244,7 @@ impl IdTree {
         }
     }
 
-    // 插入节点
+    // 插入节点, 如果id就在parent内则为调整位置
     fn insert_node(
         &mut self,
         id: usize,
@@ -254,19 +254,28 @@ impl IdTree {
         next: usize,
         notify: Option<&NotifyImpl>,
     ) {
-        let (head, count) = match self.map.get_mut(id) {
+        let (count, fix_prev, fix_next) = match self.map.get_mut(id) {
             Some(n) => {
-                if n.parent > 0 {
-                    panic!("has a parent node, id: {}", id)
+                if n.parent != parent {
+                    if n.parent > 0 {
+                        panic!("has a parent node, id: {}", id)
+                    }
+                    if n.layer > 0 {
+                        panic!("already on the tree, id: {}", id)
+                    }
+                    n.parent = parent;
+                    n.layer = layer;
+                    n.prev = prev;
+                    n.next = next;
+                    (n.count + 1, n.children.head, 0)
+                }else{
+                    // 调整
+                    let fix_prev = n.prev;
+                    let fix_next = n.next;
+                    n.prev = prev;
+                    n.next = next;
+                    (0, fix_prev, fix_next)
                 }
-                if n.layer > 0 {
-                    panic!("already on the tree, id: {}", id)
-                }
-                n.parent = parent;
-                n.layer = layer;
-                n.prev = prev;
-                n.next = next;
-                (n.children.head, n.count + 1)
             }
             _ => panic!("invalid id: {}", id),
         };
@@ -278,6 +287,34 @@ impl IdTree {
         if next > 0 {
             let node = unsafe { self.map.get_unchecked_mut(next) };
             node.prev = id;
+        }
+        if count == 0 { // 同层调整
+            if fix_prev > 0 {
+                let node = unsafe { self.map.get_unchecked_mut(fix_prev) };
+                node.next = fix_next;
+            }
+            if fix_next > 0 {
+                let node = unsafe { self.map.get_unchecked_mut(fix_next) };
+                node.prev = fix_prev;
+            }
+            if prev == 0 || next == 0 || fix_prev == 0 || fix_next == 0 {
+                let node = unsafe { self.map.get_unchecked_mut(parent) };
+                if prev == 0 {
+                    node.children.head = id;
+                }else if fix_prev == 0 {
+                    node.children.head = fix_next;
+                }
+                if next == 0 {
+                    node.children.tail = id;
+                }else if fix_next == 0 {
+                    node.children.tail = fix_prev;
+                }
+            }
+            match notify {
+                Some(n) => n.modify_event(id, "adjust", parent),
+                _ => (),
+            };
+            return
         }
         let p = {
             // 修改parent的children, count
@@ -295,7 +332,7 @@ impl IdTree {
         // 递归向上修改count
         self.modify_count(p, count as isize);
         if layer > 0 {
-            self.insert_tree(head, layer + 1);
+            self.insert_tree(fix_prev, layer + 1);
             match notify {
                 Some(n) => n.create_event(id),
                 _ => (),
