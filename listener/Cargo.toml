@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
-im = "*"
+im = "13.0.0"
 share = { path = "../share" }
