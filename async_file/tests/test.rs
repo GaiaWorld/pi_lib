@@ -9,8 +9,8 @@ use async_file::file::{create_dir, rename, remove_file, remove_dir, AsyncFileOpt
 #[test]
 fn test_async_file() {
     //初始化异步运行时
-    let pool = MultiTaskPool::new("TestAsyncRuntime".to_string(), 8, 1024 * 1024, 30000);
-    let rt = pool.startup();
+    let pool = MultiTaskPool::new("TestAsyncRuntime".to_string(), 8, 1024 * 1024, 10);
+    let rt = pool.startup(true);
 
     let rt_copy = rt.clone();
     let future = async move {

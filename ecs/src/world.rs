@@ -18,14 +18,17 @@ use single::{SingleCase, CellSingleCase, SingleCaseImpl};
 use dispatch::Dispatcher;
 use { LendMut};
 use cell::StdCell;
+use share::Share;
+use RunTime;
 
 #[derive(Default, Clone)]
 pub struct World {
-    entity: XHashMap<TypeId, Arc<dyn Entity>>,
-    single: XHashMap<TypeId, Arc<dyn SingleCase>>,
-    multi: XHashMap<(TypeId, TypeId), Arc<dyn MultiCase>>,
-    system: XHashMap<Atom, Arc<dyn System>>,
-    runner: XHashMap<Atom, Arc<dyn Dispatcher>>,
+	entity: XHashMap<TypeId, Arc<dyn Entity>>,
+	single: XHashMap<TypeId, Arc<dyn SingleCase>>,
+	multi: XHashMap<(TypeId, TypeId), Arc<dyn MultiCase>>,
+	system: XHashMap<Atom, Arc<dyn System>>,
+	runner: XHashMap<Atom, Arc<dyn Dispatcher>>,
+	pub runtime: Share<Vec<RunTime>>,
 }
 
 impl World {
@@ -73,7 +76,7 @@ impl World {
         let t = Arc::new(sys);
         let tc = t.clone();
         let ptr = Arc::into_raw(t) as usize as *mut T;
-        System::setup(unsafe{&mut *ptr}, tc, self);
+        System::setup(unsafe{&mut *ptr}, tc, self, &name);
         self.system.insert(name, unsafe{ Arc::from_raw(ptr)});
     }
     pub fn get_system(&self, name: &Atom) -> Option<&Arc<dyn System>> {
@@ -119,6 +122,9 @@ impl World {
     pub fn get_dispatcher(&self, name: &Atom) -> Option<&Arc<dyn Dispatcher>> {
         self.runner.get(name)
     }
+	pub fn get_dispatcher_mut(&mut self, name: &Atom) -> Option<&mut Arc<dyn Dispatcher>> {
+        self.runner.get_mut(name)
+    }
     pub fn remove_dispatcher(&mut self, name: &Atom) -> Option<Arc<dyn Dispatcher>> {
         self.runner.remove(name)
     }
@@ -157,7 +163,22 @@ impl World {
         }
     }
 
+	pub fn fetch_sys<E: 'static, S: System>(&self, name: &Atom) -> Option<Arc<S>> {
+        let r = match self.system.get(&name) {
+            Some(v) => v.clone(),
+            _ => return None
+        };
+        match r.downcast() {
+            Ok(r) => Some(r),
+            Err(_) => panic!("downcast err"),
+        }
+    }
+
     pub fn run(&self, name: &Atom) {
+		#[cfg(feature="runtime")]
+		for r in unsafe{&mut *(self.runtime.as_ref() as *const Vec<RunTime> as *mut Vec<RunTime>) }.iter_mut(){
+			r.cost_time = std::time::Duration::from_millis(0);
+		}
         match self.runner.get(name) {
             Some(v) => v.run(),
             _ => ()

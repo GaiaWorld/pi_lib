@@ -6,11 +6,15 @@ edition = "2018"
 
 [dependencies]
 futures = "0.3"
-crossbeam-queue = "0.2"
 crossbeam-channel = "0.4"
-twox-hash = "1.5"
-dashmap = "3.7"
+parking_lot = "0.10"
+log = "0.4"
+local_timer = { path = "../local_timer" }
 
 [dev-dependencies]
 rand = "0.7"
 future-parking_lot = "0.3"
+tokio = { version = "0.2", features = ["full"] }
+twox-hash = "1.5"
+dashmap = "3.11"
+env_logger = "0.7"

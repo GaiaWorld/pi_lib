@@ -1,10 +1,10 @@
 #![feature(weak_counts)]
 
-extern crate slab;
 extern crate deque;
+extern crate hash;
 extern crate lru;
 extern crate share;
-extern crate hash;
+extern crate slab;
 #[macro_use]
 extern crate any;
 

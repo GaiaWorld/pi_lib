@@ -9,6 +9,7 @@ extern crate pointer;
 #[macro_use]
 extern crate any;
 extern crate hash;
+extern crate share;
 
 // extern crate im;
 pub extern crate paste;
@@ -37,6 +38,12 @@ pub use dispatch::{SeqDispatcher, Dispatcher};
 
 use std::any::TypeId;
 
+// pub static mut PRINT_TIME: bool = false;
+
+// pub fn set_print(v: bool){
+// 	unsafe {PRINT_TIME = v};
+// }
+
 pub trait Fetch: Sized + 'static {
     fn fetch(world: &World) -> Self;
 }
@@ -59,6 +66,11 @@ pub trait LendMut<'a> {
 
 pub trait TypeIds {
     fn type_ids() -> Vec<(TypeId, TypeId)>;
+}
+
+pub struct RunTime {
+	pub sys_name: atom::Atom,
+	pub cost_time: std::time::Duration, // 单位ms
 }
 
 macro_rules! impl_trait {

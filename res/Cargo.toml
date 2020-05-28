@@ -10,3 +10,4 @@ lru = {path = "../lru"}
 any = {path="../any"}
 share = { path = "../share", features=["rc"]}
 hash = {path="../hash"}
+atom = {path="../atom"}

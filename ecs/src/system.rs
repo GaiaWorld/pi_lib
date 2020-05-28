@@ -1,25 +1,28 @@
-
-use std::{
-    any::{TypeId},
-    sync::Arc,
-};
-use { World, Fetch, TypeIds};
+use atom::Atom;
 pub use listener::FnListener;
+use std::{any::TypeId, sync::Arc};
+use {Fetch, TypeIds, World};
 
 pub trait Runner<'a> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn setup(&mut self, _read: Self::ReadData, _write: Self::WriteData){}
+    fn setup(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
     fn run(&mut self, read: Self::ReadData, write: Self::WriteData);
-    fn dispose(&mut self, _read: Self::ReadData, _write: Self::WriteData){}
+    fn dispose(&mut self, _read: Self::ReadData, _write: Self::WriteData) {}
 }
 
-pub trait SystemData<'a> where Self: std::marker::Sized{
+pub trait SystemData<'a>
+where
+    Self: std::marker::Sized,
+{
     type FetchTarget: Fetch + TypeIds;
 }
 
-pub trait SystemMutData<'a> where Self: std::marker::Sized{
+pub trait SystemMutData<'a>
+where
+    Self: std::marker::Sized,
+{
     type FetchTarget: Fetch + TypeIds;
 }
 
@@ -49,8 +52,8 @@ pub trait SingleCaseListener<'a, C, EV> {
 pub type RunnerFn = FnListener<()>;
 pub type DisposeFn = FnListener<World>;
 
-pub trait System: any::ArcAny { 
-    fn setup(&mut self, me: Arc<dyn System>, world: &World);
+pub trait System: any::ArcAny {
+    fn setup(&mut self, me: Arc<dyn System>, world: &World, name: &Atom);
     fn dispose(&self, world: &World);
     fn fetch_run(&self) -> Option<RunnerFn>;
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
@@ -108,7 +111,7 @@ macro_rules! impl_system {
         let $setup_target = $w.fetch_entity::<$e>().unwrap();
     };
 
-    // 
+    //
     (@call_listen $system:tt<$($sg:ty),*>, $e1:ident, $me1: ident, $read_data:ident, $write_data:ident, SingleCaseListener, $c:ty, $ev:ty) => {
         <$system<$($sg),*> as ecs::SingleCaseListener<'_, $c, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
         // $me1.borrow_mut1().slisten($e1, $read_data, $write_data);
@@ -121,7 +124,7 @@ macro_rules! impl_system {
         <$system<$($sg),*> as ecs::EntityListener<'_, $e, $ev>>::listen($me1.borrow_mut1(), $e1, $read_data, $write_data);
         // $me1.borrow_mut1().elisten($e1, $read_data, $write_data);
     };
-    
+
     //每一个listenner setup
     (@listener_setup $arr:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt <$($gen:tt $(<$($g:ty),*>)*),*> $($t:tt)* ) => {
         let me1 = $me.clone();
@@ -147,7 +150,7 @@ macro_rules! impl_system {
     //每一个listenner dispose
     (@listener_dispose $i:expr; $f:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, $sign:tt <$($gen:tt $(<$($g:ty),*>)*),*> $($t:tt)* ) => {
         impl_system!(@setup_target_ty setup_target, $world, $sign, $($gen$(<$($g),*>)*),* );
-        impl_system!(@remove_monitor setup_target, &$f[$i], $($gen$(<$($g),*>)*),* ); 
+        impl_system!(@remove_monitor setup_target, &$f[$i], $($gen$(<$($g),*>)*),* );
         impl_system!(@listener_dispose $i+1; $f $world $me $system <$($sg),*>, $($t)*);
     };
     (@listener_dispose $i:expr; $f:ident $world:ident $me:ident $system: tt <$($sg:ty),*>,) => {};
@@ -161,7 +164,7 @@ macro_rules! impl_system {
         impl_system!(@listener_get_depends $read_ids $write_ids $system <$($sg),*>, $($t)*);
     };
     (@listener_get_depends $read_ids:ident $write_ids:ident $system: tt <$($sg:ty),*>,) => {};
-    
+
     //每一个runner get_depends
     (@runner_get_depends $read_ids:ident $write_ids:ident $system: tt <$($sg:ty),*>, true) => {
         let r_ids = <<<$system <$($sg),*> as Runner>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::TypeIds>::type_ids();
@@ -172,7 +175,7 @@ macro_rules! impl_system {
     (@runner_get_depends $read_ids:ident $write_ids:ident $system: tt <$($sg:ty),*>, false) => {}; // 如果没有实现runner，不需要取type_ids
 
     //runner setup
-    (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, true) => {
+    (@runner_setup $s:ident $world:ident $sys_name:ident $me:ident $system: tt <$($sg:ty),*>, true) => {
         let read = <<<$system <$($sg),*> as $crate::system::Runner>::ReadData as $crate::system::SystemData>::FetchTarget as $crate::Fetch>::fetch($world);
         let write = <<<$system <$($sg),*> as $crate::system::Runner>::WriteData as $crate::system::SystemMutData>::FetchTarget as $crate::Fetch>::fetch($world);
         let read_data = $crate::Lend::lend1(&read);
@@ -184,17 +187,42 @@ macro_rules! impl_system {
             // let write_data = $crate::LendMut::lend_mut(&write);
             $s.borrow_mut1().setup(read_data, write_data);
         }
+		let runtime = $world.runtime.clone();
+		let runtime_ref = unsafe { &mut *(runtime.as_ref() as *const Vec<$crate::RunTime> as *mut Vec<$crate::RunTime>) };
+		let runtime_index = runtime_ref.len();
+		runtime_ref.push($crate::RunTime{sys_name: $sys_name.clone(), cost_time: std::time::Duration::from_millis(0)});
+
         $s.run_fn = Some($crate::monitor::FnListener(share::Share::new( move |e: &()| {
+			let runtime_ref = unsafe { &mut *(runtime.as_ref() as *const Vec<$crate::RunTime> as *mut Vec<$crate::RunTime>) };
             // let time = std::time::Instant::now();
+
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             // let read_data = $crate::Lend::lend(&read);
             // let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
-            // std::println!("run------{:?}", std::time::Instant::now() - time);
+			// match std::time::Instant::now().checked_duration_since(time) {
+			// 	Some(r) => runtime_ref[runtime_index].cost_time = r,
+			// 	None => {
+			// 		runtime_ref[runtime_index].cost_time = std::time::Duration::from_millis(0);
+			// 		std::panic!("std::time::Instant later--------------------------");
+			// 	},
+			// };
+			// let n = std::time::Instant::now();
+			// std::println!("time---------------------{},{}", n.as_secs_f32(), time.as_secs_f32());
+			// runtime_ref[runtime_index].cost_time = std::time::Instant::now() - time;
+			// unsafe {
+			// 	#[cfg(feature="runtime")]
+
+			// 	setup
+			// 	if ecs::PRINT_TIME {
+			// 		std::println!("run------{:?}", std::time::Instant::now() - time);
+			// 	}
+			// }
+			// std::println!("time---------------------{:?}", std::time::Instant::now() - time);
         })))
     };
-    (@runner_setup $s:ident $world:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
+    (@runner_setup $s:ident $world:ident $sys_name:ident $me:ident $system: tt <$($sg:ty),*>, false) => {};
 
     //runner dispose
     (@runner_dispose $s:ident $world:ident $system: tt <$($sg:ty),*>, true) => {
@@ -213,7 +241,7 @@ macro_rules! impl_system {
     (@impls $system:tt<$($sg:ty),*> where [$($sg_impl:tt)*], $has_runner: tt, {$($t: tt)*}) => {
         $crate::paste::item! {
             pub struct [<Cell $system>] <$($sg_impl)*> {
-                owner: $crate::cell::StdCell<$system<$($sg),*>>,
+                pub owner: $crate::cell::StdCell<$system<$($sg),*>>,
                 run_fn: Option<$crate::system::RunnerFn>,
                 dispose_listener_fn: Option<$crate::system::DisposeFn>,
             }
@@ -230,7 +258,7 @@ macro_rules! impl_system {
                     unsafe {&mut * (&mut * self.owner.borrow_mut() as *mut $system<$($sg),*>)}
                 }
             }
-        
+
             impl<$($sg_impl)*> $crate::system::System for [<Cell $system>]<$($sg),*> {
                 fn get_depends(&self) -> (Vec<(std::any::TypeId, std::any::TypeId)>, Vec<(std::any::TypeId, std::any::TypeId)>) {
                     let mut read_ids = Vec::new();
@@ -245,7 +273,7 @@ macro_rules! impl_system {
                     (read_ids, write_ids)
                 }
 
-                fn setup(&mut self, me: std::sync::Arc<$crate::system::System>, world: &$crate::world::World){
+                fn setup(&mut self, me: std::sync::Arc<$crate::system::System>, world: &$crate::world::World, name: &atom::Atom){
                     let me: std::sync::Arc<Self> = match $crate::system::System::downcast(me) {
                         Ok(r) => r,
                         Err(_) => std::panic!("downcast err".to_string()),
@@ -254,7 +282,7 @@ macro_rules! impl_system {
                     //listen setup
                     impl_system!(@listener_setup listen_arr world me $system <$($sg),*>, $($t)*);
                     //runner setup
-                    impl_system!(@runner_setup self world me $system <$($sg),*>, $has_runner);
+                    impl_system!(@runner_setup self world name me $system <$($sg),*>, $has_runner);
                     //dispose
                     self.dispose_listener_fn = Some($crate::monitor::FnListener(share::Share::new(move |world: &$crate::world::World| {
                         impl_system!(@listener_dispose 0; listen_arr world me $system <$($sg),*>, $($t)*);
@@ -288,7 +316,7 @@ macro_rules! impl_data {
 
         impl<'a, $($ty),*> SystemMutData<'a> for ( $( $ty , )* ) where $( $ty : SystemMutData<'a> ),*{
             type FetchTarget = ($($ty::FetchTarget,)*);
-        } 
+        }
     };
 }
 

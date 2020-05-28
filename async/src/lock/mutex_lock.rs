@@ -6,9 +6,7 @@ use std::ops::{Deref, DerefMut};
 use std::task::{Waker, Context, Poll};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crossbeam_queue::SegQueue;
-
-use super::spin;
+use super::{spin, mpsc_deque::{Sender, Receiver, mpsc_deque}};
 
 /*
 * 异步互斥锁守护者
@@ -37,17 +35,26 @@ impl<T> DerefMut for MutexGuard<T> {
 
 impl<T> Drop for MutexGuard<T> {
     fn drop(&mut self) {
-        self.guarder.unlock();
-        self.guarder.lock_waits();
-        if let Ok(waker) = self.guarder.waits.pop() {
-            waker.wake();
+        unsafe {
+            let consumer = &mut *self.guarder.consumer;
+            //因为互斥锁保证了，同一时间只有一个线程可以获取到锁，所以可以使用不精确的检查接收队列是否为空的检查
+            if consumer.try_is_empty() {
+                self.guarder.unlock();
+            } else {
+                if let Some(waker) = consumer.try_recv() {
+                    //有异步任务等待异步互斥锁释放，则解锁并唤醒此任务
+                    self.guarder.unlock();
+                    waker.wake();
+                } else {
+                    self.guarder.unlock();
+                }
+            }
         }
-        self.guarder.unlock_waits();
     }
 }
 
 /*
-* 异步互斥锁
+* 异步互斥锁，支持临界区内执行异步任务等待，不支持重入
 */
 pub struct Mutex<T> {
     inner:  Arc<InnerMutex<T>>,  //内部锁
@@ -62,9 +69,10 @@ unsafe impl<T> Sync for Mutex<T> {}
 impl<T> Mutex<T> {
     //构建异步互斥锁
     pub fn new(v: T) -> Self {
+        let (producor, consumer) = mpsc_deque();
         let inner = Arc::new(InnerMutex {
-            waits_status: AtomicBool::new(false),
-            waits: SegQueue::new(),
+            producor,
+            consumer: Box::into_raw(Box::new(consumer)),
             lock_status: AtomicBool::new(false),
             inner: UnsafeCell::new(v),
         });
@@ -91,10 +99,10 @@ impl<T> Mutex<T> {
 * 内部异步互斥锁
 */
 struct InnerMutex<T> {
-    waits_status: AtomicBool,   //锁等待队列状态
-    waits:  SegQueue<Waker>,    //锁等待队列
-    lock_status: AtomicBool,    //异步互斥锁状态
-    inner:  UnsafeCell<T>,      //异步互斥锁内容
+    producor:       Sender<Waker>,          //锁等待队列生产者
+    consumer:       *mut Receiver<Waker>,   //锁等待队列消费者
+    lock_status:    AtomicBool,             //异步互斥锁状态
+    inner:          UnsafeCell<T>,          //异步互斥锁内容
 }
 
 unsafe impl<T> Send for InnerMutex<T> {}
@@ -102,46 +110,23 @@ unsafe impl<T> Sync for InnerMutex<T> {}
 
 impl<T> InnerMutex<T> {
     //加入等待队列
-    #[inline]
+    #[inline(always)]
     pub fn push(&self, waker: Waker) {
-        self.waits.push(waker);
-    }
-
-    //锁住等待队列
-    pub fn lock_waits(&self) {
-        let mut spin_len = 1;
-        loop {
-            match self.waits_status.compare_exchange(false,
-                                                     true,
-                                                     Ordering::Relaxed,
-                                                     Ordering::Relaxed) {
-                Ok(_) => return, //锁成功
-                Err(_) => {
-                    //锁失败，则自旋后，继续锁
-                    spin_len = spin(spin_len);
-                    continue;
-                },
-            }
-        }
-    }
-
-    //解锁等待队列
-    pub fn unlock_waits(&self) {
-        self.waits_status.store(false, Ordering::Relaxed);
+        self.producor.send(waker);
     }
 
     //尝试获取异步互斥锁，返回是否成功
+    #[inline(always)]
     pub fn try_lock(&self) -> bool {
-        match self.lock_status.compare_exchange(false,
-                                                true,
-                                                Ordering::Acquire,
-                                                Ordering::Relaxed) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        self.lock_status.compare_exchange_weak(false,
+                                               true,
+                                               Ordering::Acquire,
+                                               Ordering::Relaxed)
+            .is_ok()
     }
 
-    //解锁异步互斥锁，并唤醒锁等待队列头
+    //解锁异步互斥锁
+    #[inline(always)]
     pub fn unlock(&self) {
         self.lock_status.store(false, Ordering::Relaxed);
     }
@@ -157,29 +142,24 @@ struct FutureMutex<T> {
 impl<T> Future for FutureMutex<T> {
     type Output = MutexGuard<T>;
 
+    //抢占式的获取互斥锁
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        //阻塞获取等待队列的锁
-        (&self).inner.lock_waits();
-
         //尝试获取异步互斥锁
-        for spin_len in 1..5 {
+        for spin_len in 1..10 {
             if (&self).inner.try_lock() {
-                //获取锁成功，则立即解锁等待队列，并返回异步互斥锁守护者
-                (&self).inner.unlock_waits();
+                //获取异步互斥锁成功，则返回异步互斥锁守护者
                 return Poll::Ready(MutexGuard {
                     guarder: (&self).inner.clone()
                 });
             } else {
-                //获取锁失败，则自旋后，再次尝试
+                //获取异步互斥锁失败，则自旋后，再次尝试
                 spin(spin_len);
                 continue;
             }
         }
 
-        //尝试获取异步互斥锁失败，则加入锁等待队列，并立即解锁等待队列
+        //尝试获取异步互斥锁失败，则加入锁等待队列
         (&self).inner.push(cx.waker().clone());
-        (&self).inner.unlock_waits();
         Poll::Pending
     }
 }
-
