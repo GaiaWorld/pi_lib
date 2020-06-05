@@ -12,6 +12,7 @@ members = [
   "hash",
   "heap",
   "lru",
+  "idtree",
   "res",
   "ordmap",
   "rsync",
