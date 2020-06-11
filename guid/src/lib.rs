@@ -84,7 +84,7 @@ impl GuidGen {
 		loop {
 			let t = self.time.load(Ordering::Relaxed);
 			if t < now {
-				match self.time.compare_exchange(t, now, Ordering::SeqCst, Ordering::SeqCst) {
+				match self.time.compare_exchange(t, now, Ordering::SeqCst, Ordering::Relaxed) {
 					Ok(_) => return now,
 					Err(_) => ()
 				}

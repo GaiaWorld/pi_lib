@@ -1,7 +1,7 @@
 #![feature(integer_atomics)]
 /**
  * 全局唯一ID, 64位
- * {1970年的时间（ms）（6字节-49.7天），节点编号（2字节）}
+ * {1970年的时间（ms）（6字节），节点编号（2字节）}
  * 同一个GuidGen分配的guid，保证time不重复
  *
  * 分布式系统可以利用控制编号来管理hash，进行一致hash命中
@@ -72,7 +72,7 @@ impl GuidGen {
 		loop {
 			let t = self.time.load(Ordering::Relaxed);
 			if t < now {
-				match self.time.compare_exchange(t, now, Ordering::SeqCst, Ordering::SeqCst) {
+				match self.time.compare_exchange(t, now, Ordering::SeqCst, Ordering::Relaxed) {
 					Ok(_) => return now,
 					Err(_) => ()
 				}
