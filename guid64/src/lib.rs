@@ -14,9 +14,9 @@ use time::{run_millis, now_millisecond};
 
 // 全局唯一ID
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Guid(pub u64);
+pub struct Guid64(pub u64);
 
-impl Guid {
+impl Guid64 {
 	// 获取从1970年起的毫秒
 	#[inline]
 	pub fn time(&self) -> u64 {
@@ -33,13 +33,13 @@ impl Guid {
 * 全局唯一id生成器
 */
 #[derive(Default, Debug)]
-pub struct GuidGen {
+pub struct GuidGen64 {
 	time: AtomicU64, // 启动后的运行时间， 单位毫秒
 	node_start_ms: u64,
 	node_id: u16,
 }
 
-impl GuidGen {
+impl GuidGen64 {
 	/**
 	* 构建全局唯一id生成器
 	* @param node_start_ms 本地节点的启动时间，单位豪秒
@@ -47,12 +47,14 @@ impl GuidGen {
 	* @returns 返回全局唯一id生成器
 	*/
 	pub fn new(node_start_ms: u64, node_id: u16) -> Self {
+		println!("node_start_ms : {:?}", node_start_ms);
 		let sec = if node_start_ms == 0 {
 			now_millisecond()
 		} else {
 			node_start_ms
 		};
-		GuidGen {
+		println!("sec ---- {:?}",sec);
+		GuidGen64 {
 			time: AtomicU64::new(run_millis()),
 			node_start_ms: sec,
 			node_id: node_id,
@@ -83,16 +85,16 @@ impl GuidGen {
 	}
 	// 分配全局唯一Guid
 	#[inline]
-	pub fn gen(&self) -> Guid {
+	pub fn gen(&self) -> Guid64 {
 		let t = self.time() + self.node_start_ms;
-		Guid(t << 16 | self.node_id as u64)
+		Guid64(t << 16 | self.node_id as u64)
 	}
 }
 
 #[test]
 	fn test_guid() {
 		use std::collections::HashMap;
-		let guid = GuidGen::new(0, 0);
+		let guid = GuidGen64::new(0, 0);
 		
 		let mut map = HashMap::new();
 		let mut i = 1000000;
