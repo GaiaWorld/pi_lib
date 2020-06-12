@@ -67,7 +67,10 @@ pub fn run_micros() -> u64 {
 // 启动后运行的毫秒数
 #[inline]
 pub fn run_millis() -> u64 {
-    let d = START.elapsed();
+    let d = match Instant::now().checked_sub(START.elapsed()) {
+        Some(now) => now.elapsed(),
+        None => return 0,
+    };
     d.as_secs() * 1000 + d.subsec_millis() as u64
 }
 // 启动后运行的秒数
