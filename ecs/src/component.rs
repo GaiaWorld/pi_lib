@@ -1,24 +1,18 @@
-
-use std::{
-    sync::Arc,
-    marker::PhantomData,
-    any::TypeId,
-    ops::Deref,
-};
+use std::{any::TypeId, marker::PhantomData, ops::Deref, sync::Arc};
 
 use any::ArcAny;
 // use pointer::cell::{TrustCell};
-use map::{Map};
 use listener::Listener;
+use map::Map;
 
-use system::{SystemData, SystemMutData};
-use monitor::{Notify, NotifyImpl, CreateFn, DeleteFn, ModifyFn, Write, DeleteEvent};
-use entity::CellEntity;
-use {Fetch, Lend, LendMut, TypeIds, World};
 use cell::StdCell;
+use entity::CellEntity;
+use monitor::{CreateFn, DeleteEvent, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
+use system::{SystemData, SystemMutData};
+use {Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait Component: Sized + 'static {
-    type Storage: Map<Key=usize, Val=Self> + Default;
+    type Storage: Map<Key = usize, Val = Self> + Default;
 }
 
 pub trait MultiCase: Notify + ArcAny {
@@ -31,9 +25,7 @@ pub type CellMultiCase<E, C> = StdCell<MultiCaseImpl<E, C>>;
 impl<E: 'static, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
         let notify = self.borrow_mut().notify.delete.clone();
-        let e = DeleteEvent{
-            id: id,
-        };
+        let e = DeleteEvent { id: id };
         notify.listen(&e);
         self.borrow_mut().map.remove(&id);
     }
@@ -77,8 +69,8 @@ pub struct MultiCaseImpl<E, C: Component> {
 }
 
 impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
-    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> StdCell<Self>{
-        StdCell::new(MultiCaseImpl{
+    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> StdCell<Self> {
+        StdCell::new(MultiCaseImpl {
             map: C::Storage::default(),
             notify: NotifyImpl::default(),
             entity: entity,
@@ -117,7 +109,7 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
             _ => {
                 self.entity.borrow_mut().mark(id, self.bit_index);
                 self.notify.create_event(id);
-            },
+            }
         }
         None
     }
@@ -129,18 +121,18 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
         }
         r
     }
-    
+
     pub fn delete(&mut self, id: usize) -> Option<C> {
         self.entity.borrow_mut().un_mark(id, self.bit_index);
         self.notify.delete_event(id);
         self.map.remove(&id)
     }
 
-    pub fn get_notify(&self) -> NotifyImpl{
+    pub fn get_notify(&self) -> NotifyImpl {
         self.notify.clone()
     }
 
-    pub fn get_notify_ref(&self) -> &NotifyImpl{
+    pub fn get_notify_ref(&self) -> &NotifyImpl {
         &self.notify
     }
 
@@ -180,11 +172,11 @@ impl<'a, E: 'static, C: Component> Lend<'a> for ShareMultiCase<E, C> {
     }
 
     fn lend2(&'a self, ptr: &Self::Target1) -> Self::Target {
-        unsafe { &* (*ptr as  *const MultiCaseImpl<E, C>) }
+        unsafe { &*(*ptr as *const MultiCaseImpl<E, C>) }
     }
 
     fn lend(&'a self) -> Self::Target {
-        unsafe {&* (&* self.deref().borrow() as *const MultiCaseImpl<E, C>)}
+        unsafe { &*(&*self.deref().borrow() as *const MultiCaseImpl<E, C>) }
     }
 }
 
@@ -197,10 +189,10 @@ impl<'a, E: 'static, C: Component> LendMut<'a> for ShareMultiCase<E, C> {
     }
 
     fn lend_mut2(&'a self, ptr: &Self::Target1) -> Self::Target {
-        unsafe { &mut * (*ptr as  *mut MultiCaseImpl<E, C>) }
+        unsafe { &mut *(*ptr as *mut MultiCaseImpl<E, C>) }
     }
 
     fn lend_mut(&'a self) -> Self::Target {
-        unsafe {&mut * (&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>)}
+        unsafe { &mut *(&mut *self.deref().borrow_mut() as *mut MultiCaseImpl<E, C>) }
     }
 }

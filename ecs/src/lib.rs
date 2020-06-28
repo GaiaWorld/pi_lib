@@ -1,11 +1,11 @@
 #![feature(core_intrinsics)]
 #![feature(proc_macro_hygiene)]
 
-extern crate slab;
 extern crate atom;
-extern crate map;
 extern crate listener;
+extern crate map;
 extern crate pointer;
+extern crate slab;
 #[macro_use]
 extern crate any;
 extern crate hash;
@@ -20,21 +20,21 @@ pub mod cell;
 pub mod world;
 #[macro_use]
 pub mod system;
-pub mod entity;
 pub mod component;
 pub mod dispatch;
-pub mod single;
+pub mod entity;
 pub mod monitor;
+pub mod single;
 
 pub mod idtree;
 
+pub use component::{CellMultiCase, Component, MultiCaseImpl};
+pub use dispatch::{Dispatcher, SeqDispatcher};
+pub use entity::{CellEntity, EntityImpl};
+pub use monitor::{CreateEvent, DeleteEvent, ModifyEvent, Write};
+pub use single::{CellSingleCase, SingleCaseImpl};
+pub use system::{EntityListener, MultiCaseListener, Runner, SingleCaseListener, System};
 pub use world::World;
-pub use system::{Runner, SingleCaseListener, MultiCaseListener, EntityListener, System};
-pub use component::{Component, MultiCaseImpl, CellMultiCase};
-pub use single::{SingleCaseImpl, CellSingleCase};
-pub use entity::{EntityImpl, CellEntity};
-pub use monitor::{CreateEvent, ModifyEvent, DeleteEvent, Write};
-pub use dispatch::{SeqDispatcher, Dispatcher};
 
 use std::any::TypeId;
 
@@ -69,8 +69,8 @@ pub trait TypeIds {
 }
 
 pub struct RunTime {
-	pub sys_name: atom::Atom,
-	pub cost_time: std::time::Duration, // 单位ms
+    pub sys_name: atom::Atom,
+    pub cost_time: std::time::Duration, // 单位ms
 }
 
 macro_rules! impl_trait {
@@ -166,13 +166,13 @@ impl<'a> Lend<'a> for () {
     }
 }
 
-impl TypeIds for (){
+impl TypeIds for () {
     fn type_ids() -> Vec<(TypeId, TypeId)> {
         vec![]
     }
 }
 
-impl Fetch for (){
+impl Fetch for () {
     fn fetch(_world: &World) -> Self {
         ()
     }
@@ -187,20 +187,71 @@ impl_trait!((A, B, C, D, E, F), (a, b, c, d, e, f));
 impl_trait!((A, B, C, D, E, F, G), (a, b, c, d, e, f, g));
 impl_trait!((A, B, C, D, E, F, G, H), (a, b, c, d, e, f, g, h));
 impl_trait!((A, B, C, D, E, F, G, H, I), (a, b, c, d, e, f, g, h, i));
-impl_trait!((A, B, C, D, E, F, G, H, I, J), (a, b, c, d, e, f, g, h, i, j));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K), (a, b, c, d, e, f, g, h, i, j, k));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L), (a, b, c, d, e, f, g, h, i, j, k, l));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M), (a, b, c, d, e, f, g, h, i, j, k, l, m));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N), (a, b, c, d, e, f, g, h, i, j, k, l, m, n));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y));
-impl_trait!((A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z), (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z));
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J),
+    (a, b, c, d, e, f, g, h, i, j)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K),
+    (a, b, c, d, e, f, g, h, i, j, k)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L),
+    (a, b, c, d, e, f, g, h, i, j, k, l)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)
+);

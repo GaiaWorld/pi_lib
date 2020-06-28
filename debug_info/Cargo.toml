@@ -2,3 +2,7 @@
 name = "debug_info"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[features]
+default = []
+print=[]

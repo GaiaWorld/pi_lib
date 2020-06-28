@@ -18,6 +18,7 @@ lazy_static = "*"
 # im = "*"
 
 [features]
+defualt = ["runtime"]
 runtime = []
 
 [[example]]
@@ -25,5 +26,6 @@ name = "expanded"
 
 [[example]]
 name = "basic"
+
 
 

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
 use std::default::Default;
+use std::ops::{Deref, DerefMut};
 
 pub struct StdCell<T>(RefCell<T>);
 
@@ -29,5 +29,5 @@ impl<T: Default> Default for StdCell<T> {
     }
 }
 
-unsafe impl<T> Send for StdCell<T>{}
-unsafe impl<T> Sync for StdCell<T>{}
+unsafe impl<T> Send for StdCell<T> {}
+unsafe impl<T> Sync for StdCell<T> {}

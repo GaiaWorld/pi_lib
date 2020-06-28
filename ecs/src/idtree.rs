@@ -194,7 +194,8 @@ impl IdTree {
         if parent > 0 {
             self.remove_node(parent, count + 1, prev, next)
         }
-    }
+	}
+	
     /// 迭代指定节点的所有子元素
     pub fn iter(&self, node_children_head: usize) -> ChildrenIterator {
         ChildrenIterator {
@@ -268,7 +269,7 @@ impl IdTree {
                     n.prev = prev;
                     n.next = next;
                     (n.count + 1, n.children.head, 0)
-                }else{
+                } else {
                     // 调整
                     let fix_prev = n.prev;
                     let fix_next = n.next;
@@ -288,7 +289,8 @@ impl IdTree {
             let node = unsafe { self.map.get_unchecked_mut(next) };
             node.prev = id;
         }
-        if count == 0 { // 同层调整
+        if count == 0 {
+            // 同层调整
             if fix_prev > 0 {
                 let node = unsafe { self.map.get_unchecked_mut(fix_prev) };
                 node.next = fix_next;
@@ -301,12 +303,12 @@ impl IdTree {
                 let node = unsafe { self.map.get_unchecked_mut(parent) };
                 if prev == 0 {
                     node.children.head = id;
-                }else if fix_prev == 0 {
+                } else if fix_prev == 0 {
                     node.children.head = fix_next;
                 }
                 if next == 0 {
                     node.children.tail = id;
-                }else if fix_next == 0 {
+                } else if fix_next == 0 {
                     node.children.tail = fix_prev;
                 }
             }
@@ -314,7 +316,7 @@ impl IdTree {
                 Some(n) => n.modify_event(id, "adjust", parent),
                 _ => (),
             };
-            return
+            return;
         }
         let p = {
             // 修改parent的children, count

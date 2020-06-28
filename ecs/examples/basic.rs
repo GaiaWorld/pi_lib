@@ -4,38 +4,41 @@
 
 #[macro_use]
 extern crate ecs;
+extern crate atom;
 extern crate map;
 extern crate pointer;
-extern crate atom;
 extern crate share;
 
 use atom::Atom;
 
-use ecs::{Component, MultiCaseImpl, SingleCaseImpl, Runner, MultiCaseListener, SingleCaseListener, EntityListener, CreateEvent, ModifyEvent, DeleteEvent, LendMut, World, SeqDispatcher, Dispatcher};
+use ecs::{
+    Component, CreateEvent, DeleteEvent, Dispatcher, EntityListener, LendMut, ModifyEvent,
+    MultiCaseImpl, MultiCaseListener, Runner, SeqDispatcher, SingleCaseImpl, SingleCaseListener,
+    World,
+};
 use map::vecmap::VecMap;
 
 #[derive(Debug)]
-pub struct Position{
+pub struct Position {
     pub x: f32,
     pub y: f32,
 }
 
-impl Component for Position{
+impl Component for Position {
     type Storage = VecMap<Self>;
 }
 
 #[derive(Debug)]
-pub struct View{
+pub struct View {
     pub value: usize,
 }
 
 // Entry
 pub struct Node;
 
-
 pub struct SystemDemo;
 
-impl<'a> Runner<'a> for SystemDemo{
+impl<'a> Runner<'a> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = ();
 
@@ -51,7 +54,11 @@ impl<'a> MultiCaseListener<'a, Node, Position, CreateEvent> for SystemDemo {
     type WriteData = ();
 
     fn listen(&mut self, event: &CreateEvent, read: Self::ReadData, _write: Self::WriteData) {
-        println!("listen Position create. id:{}, position: {:?}", event.id, read.get(event.id));
+        println!(
+            "listen Position create. id:{}, position: {:?}",
+            event.id,
+            read.get(event.id)
+        );
     }
 }
 
@@ -60,7 +67,11 @@ impl<'a> MultiCaseListener<'a, Node, Position, ModifyEvent> for SystemDemo {
     type WriteData = ();
 
     fn listen(&mut self, event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
-        println!("listen Position modity. id:{}, position: {:?}", event.id, read.get(event.id));
+        println!(
+            "listen Position modity. id:{}, position: {:?}",
+            event.id,
+            read.get(event.id)
+        );
     }
 }
 
@@ -69,7 +80,11 @@ impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
     type WriteData = ();
 
     fn listen(&mut self, event: &DeleteEvent, read: Self::ReadData, _write: Self::WriteData) {
-        println!("listen Position delete. id:{}, position: {:?}", event.id, read.get(event.id));
+        println!(
+            "listen Position delete. id:{}, position: {:?}",
+            event.id,
+            read.get(event.id)
+        );
     }
 }
 
@@ -102,8 +117,7 @@ impl<'a> EntityListener<'a, Node, DeleteEvent> for SystemDemo {
     }
 }
 
-
-impl_system!{
+impl_system! {
     SystemDemo,
     true,
     {
@@ -116,19 +130,19 @@ impl_system!{
     }
 }
 
-fn main() { 
+fn main() {
     let mut world = World::default();
     let system_demo = CellSystemDemo::new(SystemDemo);
 
     world.register_entity::<Node>();
     world.register_multi::<Node, Position>();
-    world.register_single::<View>(View{value: 6});
+    world.register_single::<View>(View { value: 6 });
 
     world.register_system(Atom::from("system_demo"), system_demo);
 
     // create entity, component
     let e = world.create_entity::<Node>();
-    let position = Position {x: 5.0, y: 5.0};
+    let position = Position { x: 5.0, y: 5.0 };
     let positions = world.fetch_multi::<Node, Position>().unwrap();
     let positions = LendMut::lend_mut(&positions);
     positions.insert(e, position);
@@ -144,7 +158,6 @@ fn main() {
     let write = view.get_write();
     write.value.value = 10;
     write.notify.modify_event(write.id, "value", 0);
-
 
     let mut dispatch = SeqDispatcher::default();
     dispatch.build("system_demo".to_string(), &world);
