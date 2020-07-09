@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData, ops::Deref, sync::Arc};
+use std::{any::TypeId, marker::PhantomData, ops::Deref, ops::Index, ops::IndexMut, sync::Arc};
 
 use any::ArcAny;
 // use pointer::cell::{TrustCell};
@@ -12,7 +12,7 @@ use system::{SystemData, SystemMutData};
 use {Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait Component: Sized + 'static {
-    type Storage: Map<Key = usize, Val = Self> + Default;
+    type Storage: Map<Key = usize, Val = Self> + Default + Index<usize, Output=Self> + IndexMut<usize, Output=Self>;
 }
 
 pub trait MultiCase: Notify + ArcAny {
@@ -66,6 +66,20 @@ pub struct MultiCaseImpl<E, C: Component> {
     entity: Arc<CellEntity<E>>,
     bit_index: usize,
     marker: PhantomData<E>,
+}
+
+impl<E: 'static, C: Component> Index<usize> for MultiCaseImpl<E, C> {
+    type Output = C;
+
+    fn index(&self, index: usize) -> &C {
+        &self.map[index]
+    }
+}
+
+impl<E: 'static, C: Component> IndexMut<usize> for MultiCaseImpl<E, C> {
+    fn index_mut(&mut self, index: usize) -> &mut C {
+        &mut self.map[index]
+    }
 }
 
 impl<E: 'static, C: Component> MultiCaseImpl<E, C> {

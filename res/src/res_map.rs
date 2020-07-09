@@ -9,6 +9,7 @@ use lru::{Entry, LruCache};
 use share::{Share, ShareWeak};
 use slab::Slab;
 
+/// 资源，放入资源表的资源必须实现该trait
 pub trait Res {
     type Key: Hash + Eq + Clone + std::fmt::Debug;
 }
@@ -16,9 +17,9 @@ pub trait Res {
 pub trait ResCollect: RcAny {
     fn mem_size(&self) -> usize;
 
-    fn set_max_capacity(&mut self, index: usize, max_capacity: usize);
+    fn set_max_capacity(&mut self, max_capacity: usize);
     // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
-    fn collect(&mut self, now: usize) -> [StateInfo; 3];
+    fn collect(&mut self, now: usize) -> StateInfo;
 
     // 整理容量，删除超出最大容量的资源
     fn capacity_collect(&mut self);
@@ -38,7 +39,7 @@ pub struct ResMap<T: Res + 'static> {
     map: XHashMap<<T as Res>::Key, ResEntry<T>>,
     array: Vec<(KeyRes<T>, usize, usize)>,
     slab: Slab<Node<Entry<KeyRes<T>>>>,
-    pub caches: [LruCache<KeyRes<T>>; 3],
+    pub cache: LruCache<KeyRes<T>>,
     // 调试使用，稳定后去除
     _name: String,
 }
@@ -48,11 +49,7 @@ impl<T: Res + 'static> Default for ResMap<T> {
             map: XHashMap::default(),
             array: Vec::new(),
             slab: Slab::default(),
-            caches: [
-                LruCache::default(),
-                LruCache::default(),
-                LruCache::default(),
-            ],
+            cache: LruCache::default(),
             _name: "".to_string(),
         }
     }
@@ -68,28 +65,18 @@ impl<T: Res + 'static> ResMap<T> {
         (&self.array, &self.slab)
     }
 
-    pub fn with_config(configs: &[usize; 9], name: String) -> Self {
+    pub fn with_config(name: String, min_capacity: usize, max_capacity: usize, timeout: usize) -> Self {
         ResMap {
             map: XHashMap::default(),
             array: Vec::new(),
             slab: Slab::default(),
-            caches: [
-                LruCache::with_config(configs[0], configs[1], configs[2]),
-                LruCache::with_config(configs[3], configs[4], configs[5]),
-                LruCache::with_config(configs[6], configs[7], configs[8]),
-            ],
+            cache: LruCache::with_config(min_capacity, max_capacity, timeout),
             _name: name,
         }
     }
-    pub fn modify_config(&mut self, configs: &[usize; 9]) -> [(usize, usize, usize); 3] {
-        let old = [
-            self.caches[0].get_config(),
-            self.caches[1].get_config(),
-            self.caches[2].get_config(),
-        ];
-        self.caches[0].modify_config(configs[0], configs[1], configs[2]);
-        self.caches[0].modify_config(configs[3], configs[4], configs[5]);
-        self.caches[0].modify_config(configs[6], configs[7], configs[8]);
+    pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) -> (usize, usize, usize) {
+        let old = self.cache.get_config();
+        self.cache.modify_config(min_capacity, max_capacity, timeout);
         old
     }
     // 获得指定键的资源
@@ -99,8 +86,8 @@ impl<T: Res + 'static> ResMap<T> {
             Some(r) => {
                 if r.id > 0 {
                     // 将lru中缓存的数据放回到array中
-                    let e = self.caches[r.rtype].remove(r.id, &mut self.slab).unwrap();
-                    self.array.push((e.0, e.1, r.rtype));
+                    let e = self.cache.remove(r.id, &mut self.slab).unwrap();
+                    self.array.push((e.0, e.1, r.group_i));
                     r.id = 0;
                 }
                 Some(r.res.clone())
@@ -110,20 +97,17 @@ impl<T: Res + 'static> ResMap<T> {
     }
     // 创建资源
     #[inline]
-    pub fn create(&mut self, key: T::Key, res: T, cost: usize, rtype: usize) -> Share<T> {
-        if rtype >= self.caches.len() {
-            panic!("invalid rtype: {}", rtype)
-        }
+    pub fn create(&mut self, key: T::Key, res: T, cost: usize, group_i: usize) -> Share<T> {
         // println!(
-        //     "create res================, cost:{}, resName:{}, rtype: {}, key:{:?}",
-        //     cost, &self.name, rtype, key
+        //     "create res================, cost:{}, resName:{}, group_i: {}, key:{:?}",
+        //     cost, &self.name, group_i, key
         // );
         let res = Share::new(res);
         self.map.insert(
             key.clone(),
             ResEntry {
                 res: res.clone(),
-                rtype,
+                group_i,
                 id: 0,
             },
         );
@@ -133,7 +117,7 @@ impl<T: Res + 'static> ResMap<T> {
                 res: Share::downgrade(&res),
             },
             cost,
-            rtype,
+            group_i,
         ));
         res
     }
@@ -161,12 +145,12 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
 
     // 设置指定lru的最大容量
     #[inline]
-    fn set_max_capacity(&mut self, index: usize, max_capacity: usize) {
-        self.caches[index].set_max_capacity(max_capacity);
+    fn set_max_capacity(&mut self, max_capacity: usize) {
+        self.cache.set_max_capacity(max_capacity);
     }
 
     // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
-    fn collect(&mut self, now: usize) -> [StateInfo; 3] {
+    fn collect(&mut self, now: usize) -> StateInfo {
         // 将无人使用的资源放入到LruCache
         let mut i = 0;
         while i < self.array.len() {
@@ -182,20 +166,7 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
             //     continue;
             // }
             let k = el.0.key.clone();
-            let id = {
-                let c = &mut self.caches[el.2];
-                let id = c.add(el.0, el.1, now, &mut self.slab);
-                // if (self._name == "TextureRes") {
-                //     println!("add_texture=============={}", c.len());
-                // }
-                // loop {
-                //     match c.capacity_collect(&mut self.slab) {
-                //         Some((r, _)) => self.map.remove(&r.key),
-                //         _ => break,
-                //     };
-                // }
-                id
-            };
+            let id = self.cache.add(el.0, el.1, now, &mut self.slab);
             match self.map.get_mut(&k) {
                 Some(r) => {
                     r.id = id;
@@ -204,50 +175,44 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
             }
         }
 
-        let mut carr = [StateInfo::None, StateInfo::None, StateInfo::None];
+        let mut state_info = StateInfo::None;
         // let mut sizeqq = Vec::<[usize; 5]>::new();
-        i = 0;
+        let c = &mut self.cache;
         // 清理过时的资源
-        for c in self.caches.iter_mut() {
-            loop {
-                match c.timeout_collect(now, &mut self.slab) {
-                    Some((r, _)) => self.map.remove(&r.key),
-                    _ => break,
-                };
-            }
-            let len = c.len();
-            if len == 0 {
-                continue;
-            }
+        loop {
+            match c.timeout_collect(now, &mut self.slab) {
+                Some((r, _)) => self.map.remove(&r.key),
+                _ => break,
+            };
+        }
+        let len = c.len();
+        if len != 0 {
             let (min, max, _) = c.get_config();
             let size2 = c.size() + c.size() / len;
             // sizeqq.push([min, max, c.size(), len, size2]);
             if c.size() + size2 >= max {
-                carr[i] = StateInfo::Full(min, max);
+                state_info = StateInfo::Full(min, max);
             } else if c.size() + size2 + size2 >= max {
-                carr[i] = StateInfo::Ok(min, max);
+                state_info = StateInfo::Ok(min, max);
             } else if c.size() + size2 + size2 > min {
-                carr[i] = StateInfo::Free(min, max, c.size() + size2 + size2);
+                state_info = StateInfo::Free(min, max, c.size() + size2 + size2);
             } else {
-                carr[i] = StateInfo::Free(min, max, min);
+                state_info = StateInfo::Free(min, max, min);
             }
-            i += 1;
         }
+        state_info
         // println!(
         //     "map collect==========name: {}, carr:{:?}, sizeqq: {:?}",
         //     self._name, carr, sizeqq
         // );
-        carr
     }
 
     fn capacity_collect(&mut self) {
-        for c in self.caches.iter_mut() {
-            loop {
-                match c.capacity_collect(&mut self.slab) {
-                    Some((r, _)) => self.map.remove(&r.key),
-                    _ => break,
-                };
-            }
+        loop {
+            match self.cache.capacity_collect(&mut self.slab) {
+                Some((r, _)) => self.map.remove(&r.key),
+                _ => break,
+            };
         }
     }
 }
@@ -258,6 +223,6 @@ pub struct KeyRes<T: Res + 'static> {
 }
 pub struct ResEntry<T: Res + 'static> {
     res: Share<T>,
-    rtype: usize,
+    group_i: usize,
     id: usize,
 }

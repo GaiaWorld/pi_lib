@@ -237,13 +237,13 @@ impl<T> Index<usize> for VecMap<T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &T {
-        unsafe{ self.get_unchecked(index) }
+        self.entries[index - 1].as_ref().unwrap()
     }
 }
 
 impl<T> IndexMut<usize> for VecMap<T> {
     fn index_mut(&mut self, index: usize) -> &mut T {
-        unsafe{ self.get_unchecked_mut(index) }
+        self.entries[index - 1].as_mut().unwrap()
     }
 }
 

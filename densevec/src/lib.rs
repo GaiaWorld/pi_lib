@@ -1,6 +1,7 @@
 
 extern crate map;
 
+use std::ops::{Index, IndexMut};
 use std::mem::replace;
 
 use map::Map;
@@ -144,6 +145,22 @@ impl<T> Map for DenseVecMap<T> {
     #[inline]
     fn mem_size(&self) -> usize {
         self.data_id.mem_size() + self.data.capacity() * std::mem::size_of::<T>() + self.indexs.capacity() * std::mem::size_of::<usize>()
+    }
+}
+
+impl<T> Index<usize> for DenseVecMap<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &T {
+        let did = self.data_id[index];
+        &self.data[did]
+    }
+}
+
+impl<T> IndexMut<usize> for DenseVecMap<T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        let did = self.data_id[index];
+        &mut self.data[did]
     }
 }
 

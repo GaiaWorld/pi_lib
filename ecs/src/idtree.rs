@@ -1,3 +1,5 @@
+use std::ops::{Index, IndexMut};
+
 use map::vecmap::VecMap;
 use monitor::NotifyImpl;
 
@@ -9,6 +11,20 @@ pub enum InsertType {
 #[derive(Default)]
 pub struct IdTree {
     map: VecMap<Node>,
+}
+
+impl Index<usize> for IdTree {
+    type Output = Node;
+
+    fn index(&self, index: usize) -> &Node {
+        &self.map[index]
+    }
+}
+
+impl IndexMut<usize> for IdTree {
+    fn index_mut(&mut self, index: usize) -> &mut Node {
+        &mut self.map[index]
+    }
 }
 
 impl IdTree {

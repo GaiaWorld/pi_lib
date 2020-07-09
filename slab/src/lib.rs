@@ -6,7 +6,7 @@ use std::iter::IntoIterator;
 use std::ops::Drop;
 use std::ptr::write;
 
-pub trait IndexMap<T>{
+pub trait IndexMap<T>: Index<usize> + IndexMut<usize>{
     fn len(&self) -> usize;
     fn get(&self, key: usize) -> Option<&T>;
     fn get_mut(&mut self, key: usize) -> Option<&mut T>;
@@ -369,13 +369,13 @@ impl<T> Index<usize> for Slab<T> {
     type Output = T;
 
     fn index(&self, key: usize) -> &T {
-        unsafe{ self.get_unchecked(key) }
+        &self.entries[key - 1]
     }
 }
 
 impl<T> IndexMut<usize> for Slab<T> {
     fn index_mut(&mut self, key: usize) -> &mut T {
-        unsafe{ self.get_unchecked_mut(key) }
+        &mut self.entries[key - 1]
     }
 }
 

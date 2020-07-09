@@ -13,10 +13,15 @@ pub static CAPACITY: usize = 16 * 1024 * 1024;
 
 /// 资源管理器
 pub struct ResMgr {
-    tables: XHashMap<TypeId, (Share<dyn ResCollect>, [usize; 3])>,
+    tables: XHashMap<(TypeId, usize/*group_i*/), ResTable>,
     pub total_capacity: usize,
     weight: usize,
     min_capacity: usize,
+}
+
+struct ResTable{
+    res_map: Share<dyn ResCollect>,
+    weight: usize,
 }
 
 impl Default for ResMgr {
@@ -36,54 +41,48 @@ impl ResMgr {
     }
 
     pub fn mem_size(&self) -> usize {
-        let mut r = 0;
-        for (_, v) in self.tables.iter() {
-            r += v.0.mem_size();
-        }
-        r
+        0
+        // let mut r = 0;
+        // for (_, v) in self.tables.iter() {
+        //     r += v.0.mem_size();
+        // }
+        // r
     }
 
     pub fn info(&self) -> usize {
         let mut r = 0;
         for (_, v) in self.tables.iter() {
-            r += v.0.mem_size();
+            r += v.res_map.mem_size();
         }
         r
     }
 
     /// 注册指定类型的资源表。 参数为资源表的3种lru的配置。 [min_capacity1, max_capacity1, timeout1, min_capacity2, max_capacity2, timeout2, min_capacity3, max_capacity3, timeout3]。 如果不使用后2种，直接将min_capacity, max_capacity都设成0。
     #[inline]
-    pub fn register<T: Res + 'static>(&mut self, configs: [usize; 9], name: String) {
-        let arr = [
-            configs[1] - configs[0],
-            configs[4] - configs[3],
-            configs[7] - configs[6],
-        ]; // 权重数组
-        let total: usize = arr.iter().sum();
-        self.weight += total;
-        self.min_capacity += configs[0] + configs[3] + configs[6];
-        let weight = &mut self.weight;
-        let min_capacity = &mut self.min_capacity;
+    pub fn register<T: Res + 'static>(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize, group_i: usize, name: String) {
+        let weight = max_capacity - min_capacity; // 权重
+        self.weight += weight;
+        self.min_capacity += min_capacity;
+        let new_weight = &mut self.weight;
+        let new_min_capacity = &mut self.min_capacity;
         self.tables
-            .entry(TypeId::of::<T>())
+            .entry((TypeId::of::<T>(), group_i))
             .and_modify(|e| {
-                let r = match e.0.clone().downcast::<ResMap<T>>() {
+                let r = match e.res_map.clone().downcast::<ResMap<T>>() {
                     Ok(r) => r,
                     Err(_) => return,
                 };
-                let old = get_mut(&*(r)).modify_config(&configs);
-                let old_arr = e.1;
-                let old_total: usize = old_arr.iter().sum();
-                e.1 = arr;
-                *weight -= old_total;
-                *min_capacity -= old[0].0 + old[1].0 + old[2].0;
+                let old = get_mut(&*(r)).modify_config(min_capacity, max_capacity, timeout);
+                *new_weight -= e.weight;
+                e.weight = weight;
+                *new_min_capacity -= old.0;
             })
-            .or_insert((Share::new(ResMap::<T>::with_config(&configs, name)), arr));
+            .or_insert(ResTable{res_map: Share::new(ResMap::<T>::with_config(name, min_capacity, max_capacity, timeout)), weight});
     }
 
-    pub fn fetch_map<T: Res>(&self) -> Option<Share<ResMap<T>>> {
-        match self.tables.get(&TypeId::of::<T>()) {
-            Some(i) => match i.0.clone().downcast::<ResMap<T>>() {
+    pub fn fetch_map<T: Res>(&self, group_i: usize) -> Option<Share<ResMap<T>>> {
+        match self.tables.get(&(TypeId::of::<T>(), group_i)) {
+            Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
                 Ok(r) => Some(r),
                 Err(_) => None,
             },
@@ -91,9 +90,9 @@ impl ResMgr {
         }
     }
 
-    pub fn get<T: Res + 'static>(&self, name: &<T as Res>::Key) -> Option<Share<T>> {
-        match self.tables.get(&TypeId::of::<T>()) {
-            Some(i) => match i.0.clone().downcast::<ResMap<T>>() {
+    pub fn get<T: Res + 'static>(&self, name: &<T as Res>::Key, group_i: usize) -> Option<Share<T>> {
+        match self.tables.get(&(TypeId::of::<T>(), group_i)) {
+            Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
                 Ok(r) => match get_mut(&*r).get(name) {
                     Some(r) => Some(r),
                     None => None,
@@ -107,14 +106,14 @@ impl ResMgr {
     #[inline]
     pub fn create<T: Res + 'static>(
         &mut self,
-        name: T::Key,
+		name: T::Key,
+		group_i: usize,
         value: T,
         cost: usize,
-        rtype: usize,
     ) -> Share<T> {
-        match self.tables.get(&TypeId::of::<T>()) {
-            Some(i) => match i.0.clone().downcast::<ResMap<T>>() {
-                Ok(r) => get_mut(&*r).create(name, value, cost, rtype),
+        match self.tables.get(&(TypeId::of::<T>(), group_i)) {
+            Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
+                Ok(r) => get_mut(&*r).create(name, value, cost, group_i),
                 Err(_) => panic!("downcast error!"),
             },
             None => panic!("TypeId not found!"),
@@ -122,9 +121,9 @@ impl ResMgr {
     }
 
     #[inline]
-    pub fn remove<T: Res + 'static>(&mut self, name: &<T as Res>::Key) -> Option<Share<T>> {
-        match self.tables.get(&TypeId::of::<T>()) {
-            Some(i) => match i.0.clone().downcast::<ResMap<T>>() {
+    pub fn remove<T: Res + 'static>(&mut self, name: &<T as Res>::Key, group_i: usize) -> Option<Share<T>> {
+        match self.tables.get(&(TypeId::of::<T>(), group_i)) {
+            Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
                 Ok(r) => get_mut(&*r).remove(name),
                 Err(_) => None,
             },
@@ -147,48 +146,48 @@ impl ResMgr {
         let mut up_ok = Vec::new(); // 超过权重并Ok的map_index
 
         for v in self.tables.values() {
-            let vm = &*(v.0);
+            let vm = &*(v.res_map);
             let map = unsafe { &mut *(vm as *const dyn ResCollect as *mut dyn ResCollect) };
-            let arr = map.collect(now);
-            let mut i = 0;
-            for ss in arr.iter() {
-                let calc_max = if self.weight == 0 {
-                    0
-                } else {
-                    (capacity as f32 * v.1[i] as f32 / self.weight as f32) as usize
-                };
-                // let calc_max = (capacity as f32 * v.1[i] as f32 / self.weight as f32) as usize; // 该lru根据权重算出来的可增加的内存总量，如果加上min_capacity则是最大容量max_capacity
-                match ss {
-                    &StateInfo::Full(min, size) => {
-                        // 如果当前大小小于权重大小，则扩大容量到权重大小
-                        if size < min + calc_max {
-                            map.set_max_capacity(i, min + calc_max);
-                        } else if size > min + calc_max {
-                            up_size += size - (min + calc_max);
-                            up_full.push((vec.len(), i, size));
-                        }
+            let state_info = map.collect(now);
+            let calc_max = if self.weight == 0 {
+                0
+            } else {
+                (capacity as f32 * v.weight as f32 / self.weight as f32) as usize
+            };
+            // let calc_max = (capacity as f32 * v.1[i] as f32 / self.weight as f32) as usize; // 该lru根据权重算出来的可增加的内存总量，如果加上min_capacity则是最大容量max_capacity
+            match state_info {
+                StateInfo::Full(min, size) => {
+                    // 如果当前大小小于权重大小，则扩大容量到权重大小
+                    if size < min + calc_max {
+                        map.set_max_capacity(min + calc_max);
+                    } else if size > min + calc_max {
+                        up_size += size - (min + calc_max);
+                        up_full.push((vec.len(), size));
                     }
-                    &StateInfo::Ok(min, size) => {
-                        if size < min + calc_max {
-                            down_size += min + calc_max - size;
-                        } else if size > min + calc_max {
-                            up_size += size - (min + calc_max);
-                            up_ok.push((vec.len(), i, size));
-                        }
-                    }
-                    &StateInfo::Free(min, _size, right_size) => {
-                        map.set_max_capacity(i, right_size);
-                        if right_size < min + calc_max {
-                            down_size += min + calc_max - right_size;
-                        } else {
-                            up_size += right_size - (min + calc_max);
-                            up_ok.push((vec.len(), i, right_size));
-                        }
-                    }
-                    _ => (),
                 }
-                i += 1;
+                StateInfo::Ok(min, size) => {
+                    if size < min + calc_max {
+                        down_size += min + calc_max - size;
+                    } else if size > min + calc_max {
+                        up_size += size - (min + calc_max);
+                        up_ok.push((vec.len(), size));
+                    }
+                }
+                StateInfo::Free(min, _size, right_size) => {
+                    map.set_max_capacity(right_size);
+                    if right_size < min + calc_max {
+                        down_size += min + calc_max - right_size;
+                    } else {
+                        up_size += right_size - (min + calc_max);
+                        up_ok.push((vec.len(), right_size));
+                    }
+                }
+                _ => (),
             }
+            // for ss in arr.iter() {
+                
+            //     i += 1;
+            // }
             vec.push(map);
         }
         // println!(
@@ -200,18 +199,18 @@ impl ResMgr {
             let del = (up_size - down_size) / (up_full.len() + up_ok.len());
             for v in up_full {
                 let map = unsafe { vec.get_unchecked_mut(v.0) };
-                map.set_max_capacity(v.1, if v.2 > del { v.2 - del } else { 0 });
+                map.set_max_capacity( if v.1 > del { v.1 - del } else { 0 });
             }
             for v in up_ok {
                 let map = unsafe { vec.get_unchecked_mut(v.0) };
-                map.set_max_capacity(v.1, if v.2 > del { v.2 - del } else { 0 });
+                map.set_max_capacity( if v.1 > del { v.1 - del } else { 0 });
             }
         } else if up_size < down_size && up_full.len() > 0 {
             // 表示有空闲大小， 将up_full的lru的容量扩大
             let add = (down_size - up_size) / up_full.len();
             for v in up_full {
                 let map = unsafe { vec.get_unchecked_mut(v.0) };
-                map.set_max_capacity(v.1, v.2 + add);
+                map.set_max_capacity( v.1 + add);
             }
         }
 
@@ -331,180 +330,171 @@ pub fn create_res_mgr(total_capacity: usize) -> ResMgr {
     };
 
     res_mgr.register::<R1>(
-        [
-            10 * 1024 * 1024,
-            50 * 1024 * 1024,
-            5 * 60000,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        ],
+        10 * 1024 * 1024,
+        50 * 1024 * 1024,
+        5 * 60000,
+        0,
         "TextureRes".to_string(),
     );
     res_mgr.register::<R2>(
-        [20 * 1024, 100 * 1024, 5 * 60000, 0, 0, 0, 0, 0, 0],
+        20 * 1024, 100 * 1024, 5 * 60000, 0,
         "GeometryRes".to_string(),
     );
     res_mgr.register::<R3>(
-        [20 * 1024, 100 * 1024, 5 * 60000, 0, 0, 0, 0, 0, 0],
+        20 * 1024, 100 * 1024, 5 * 60000, 0,
         "BufferRes".to_string(),
     );
 
     res_mgr.register::<R4>(
-        [512, 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        512, 1024, 60 * 60000, 0,
         "SamplerRes".to_string(),
     );
     res_mgr.register::<R5>(
-        [512, 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        512, 1024, 60 * 60000, 0,
         "RasterStateRes".to_string(),
     );
     res_mgr.register::<R6>(
-        [512, 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        512, 1024, 60 * 60000, 0,
         "BlendStateRes".to_string(),
     );
     res_mgr.register::<R7>(
-        [512, 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        512, 1024, 60 * 60000, 0,
         "StencilStateRes".to_string(),
     );
     res_mgr.register::<R8>(
-        [512, 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        512, 1024, 60 * 60000, 0,
         "DepthStateRes".to_string(),
     );
 
     res_mgr.register::<R9>(
-        [4 * 1024, 8 * 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        4 * 1024, 8 * 1024, 60 * 60000, 0,
         "UColorUbo".to_string(),
     );
     res_mgr.register::<R10>(
-        [1 * 1024, 2 * 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        1 * 1024, 2 * 1024, 60 * 60000, 0,
         "HsvUbo".to_string(),
     );
     res_mgr.register::<R11>(
-        [1 * 1024, 2 * 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        1 * 1024, 2 * 1024, 60 * 60000, 0,
         "MsdfStrokeUbo".to_string(),
     );
     res_mgr.register::<R12>(
-        [1 * 1024, 2 * 1024, 60 * 60000, 0, 0, 0, 0, 0, 0],
+        1 * 1024, 2 * 1024, 60 * 60000, 0,
         "CanvasTextStrokeColorUbo".to_string(),
     );
     res_mgr
 }
 
-// use std::convert::AsMut;
-// use std::rc::Rc;
-// #[test]
-// pub fn test() {
-//     let total_capacity: usize = 67108864;
-//     let mut res_mgr = create_res_mgr(total_capacity);
-//     let mut texture = res_mgr.fetch_map::<R1>().unwrap();
-//     let mut buffer = res_mgr.fetch_map::<R3>().unwrap();
-//     let mut blend_state = res_mgr.fetch_map::<R6>().unwrap();
-//     let mut sampler_res = res_mgr.fetch_map::<R4>().unwrap();
-//     let mut u_color_ubo = res_mgr.fetch_map::<R9>().unwrap();
-//     let mut MsdfStrokeUbo = res_mgr.fetch_map::<R11>().unwrap();
-//     let mut CanvasTextStrokeColorUbo = res_mgr.fetch_map::<R12>().unwrap();
-//     let mut GeometryRes = res_mgr.fetch_map::<R2>().unwrap();
+#[test]
+pub fn test() {
+    let total_capacity: usize = 67108864;
+    let mut res_mgr = create_res_mgr(total_capacity);
+    let texture = res_mgr.fetch_map::<R1>(0).unwrap();
+    let buffer = res_mgr.fetch_map::<R3>(0).unwrap();
+    let blend_state = res_mgr.fetch_map::<R6>(0).unwrap();
+    let sampler_res = res_mgr.fetch_map::<R4>(0).unwrap();
+    let u_color_ubo = res_mgr.fetch_map::<R9>(0).unwrap();
+    let MsdfStrokeUbo = res_mgr.fetch_map::<R11>(0).unwrap();
+    let CanvasTextStrokeColorUbo = res_mgr.fetch_map::<R12>(0).unwrap();
+    let GeometryRes = res_mgr.fetch_map::<R2>(0).unwrap();
 
-//     let texture = unsafe { &mut *(&*texture as *const ResMap<R1> as *mut ResMap<R1>) };
-//     let buffer = unsafe { &mut *(&*buffer as *const ResMap<R3> as *mut ResMap<R3>) };
-//     let blend_state = unsafe { &mut *(&*blend_state as *const ResMap<R6> as *mut ResMap<R6>) };
-//     let sampler_res = unsafe { &mut *(&*sampler_res as *const ResMap<R4> as *mut ResMap<R4>) };
-//     let u_color_ubo = unsafe { &mut *(&*u_color_ubo as *const ResMap<R9> as *mut ResMap<R9>) };
-//     let MsdfStrokeUbo =
-//         unsafe { &mut *(&*MsdfStrokeUbo as *const ResMap<R11> as *mut ResMap<R11>) };
-//     let CanvasTextStrokeColorUbo =
-//         unsafe { &mut *(&*CanvasTextStrokeColorUbo as *const ResMap<R12> as *mut ResMap<R12>) };
-//     let GeometryRes = unsafe { &mut *(&*GeometryRes as *const ResMap<R2> as *mut ResMap<R2>) };
+    let texture = unsafe { &mut *(&*texture as *const ResMap<R1> as *mut ResMap<R1>) };
+    let buffer = unsafe { &mut *(&*buffer as *const ResMap<R3> as *mut ResMap<R3>) };
+    let blend_state = unsafe { &mut *(&*blend_state as *const ResMap<R6> as *mut ResMap<R6>) };
+    let sampler_res = unsafe { &mut *(&*sampler_res as *const ResMap<R4> as *mut ResMap<R4>) };
+    let u_color_ubo = unsafe { &mut *(&*u_color_ubo as *const ResMap<R9> as *mut ResMap<R9>) };
+    let MsdfStrokeUbo =
+        unsafe { &mut *(&*MsdfStrokeUbo as *const ResMap<R11> as *mut ResMap<R11>) };
+    let CanvasTextStrokeColorUbo =
+        unsafe { &mut *(&*CanvasTextStrokeColorUbo as *const ResMap<R12> as *mut ResMap<R12>) };
+    let GeometryRes = unsafe { &mut *(&*GeometryRes as *const ResMap<R2> as *mut ResMap<R2>) };
 
-//     texture.create(Atom::from("__$text"), R1 {}, 262144, 0);
-//     buffer.create(3902250154, R3 {}, 32, 0);
-//     buffer.create(1519695964, R3 {}, 12, 0);
-//     blend_state.create(2905594028, R6 {}, 0, 0);
-//     blend_state.create(3006512311, R6 {}, 0, 0);
-//     sampler_res.create(308248423, R4 {}, 0, 0);
-//     sampler_res.create(2591543091, R4 {}, 0, 0);
-//     u_color_ubo.create(2106312588, R9 {}, 0, 0);
-//     MsdfStrokeUbo.create(3879787636, R11 {}, 0, 0);
-//     CanvasTextStrokeColorUbo.create(1145791972, R12 {}, 0, 0);
-//     u_color_ubo.create(796366362, R9 {}, 0, 0);
+    texture.create(Atom::from("__$text"), R1 {}, 262144, 0);
+    buffer.create(3902250154, R3 {}, 32, 0);
+    buffer.create(1519695964, R3 {}, 12, 0);
+    blend_state.create(2905594028, R6 {}, 0, 0);
+    blend_state.create(3006512311, R6 {}, 0, 0);
+    sampler_res.create(308248423, R4 {}, 0, 0);
+    sampler_res.create(2591543091, R4 {}, 0, 0);
+    u_color_ubo.create(2106312588, R9 {}, 0, 0);
+    MsdfStrokeUbo.create(3879787636, R11 {}, 0, 0);
+    CanvasTextStrokeColorUbo.create(1145791972, R12 {}, 0, 0);
+    u_color_ubo.create(796366362, R9 {}, 0, 0);
 
-//     res_mgr.collect(0);
+    res_mgr.collect(0);
 
-//     u_color_ubo.create(2492188942, R9 {}, 0, 0);
-//     u_color_ubo.create(4246038113, R9 {}, 0, 0);
-//     u_color_ubo.create(2564464371, R9 {}, 0, 0);
-//     u_color_ubo.create(1601737751, R9 {}, 0, 0);
+    u_color_ubo.create(2492188942, R9 {}, 0, 0);
+    u_color_ubo.create(4246038113, R9 {}, 0, 0);
+    u_color_ubo.create(2564464371, R9 {}, 0, 0);
+    u_color_ubo.create(1601737751, R9 {}, 0, 0);
 
-//     texture.create(Atom::from("1"), R1 {}, 131072, 0);
-//     texture.create(Atom::from("2"), R1 {}, 65536, 0);
-//     texture.create(Atom::from("3"), R1 {}, 1572864, 0);
+    texture.create(Atom::from("1"), R1 {}, 131072, 0);
+    texture.create(Atom::from("2"), R1 {}, 65536, 0);
+    texture.create(Atom::from("3"), R1 {}, 1572864, 0);
 
-//     buffer.create(1156469915, R3 {}, 32, 0);
-//     GeometryRes.create(940515885, R2 {}, 0, 0);
-//     buffer.create(2294013149, R3 {}, 32, 0);
-//     GeometryRes.create(1197965350, R2 {}, 0, 0);
-//     buffer.create(2418548769, R3 {}, 32, 0);
-//     GeometryRes.create(203047359, R2 {}, 0, 0);
+    buffer.create(1156469915, R3 {}, 32, 0);
+    GeometryRes.create(940515885, R2 {}, 0, 0);
+    buffer.create(2294013149, R3 {}, 32, 0);
+    GeometryRes.create(1197965350, R2 {}, 0, 0);
+    buffer.create(2418548769, R3 {}, 32, 0);
+    GeometryRes.create(203047359, R2 {}, 0, 0);
 
-//     texture.create(Atom::from("4"), R1 {}, 4194304, 0);
+    texture.create(Atom::from("4"), R1 {}, 4194304, 0);
 
-//     buffer.create(2402797892, R3 {}, 32, 0);
-//     GeometryRes.create(1733445847, R2 {}, 0, 0);
-//     texture.create(Atom::from("4"), R1 {}, 4194304, 0);
-//     texture.create(Atom::from("5"), R1 {}, 4194304, 0);
+    buffer.create(2402797892, R3 {}, 32, 0);
+    GeometryRes.create(1733445847, R2 {}, 0, 0);
+    texture.create(Atom::from("4"), R1 {}, 4194304, 0);
+    texture.create(Atom::from("5"), R1 {}, 4194304, 0);
 
-//     buffer.create(1, R3 {}, 32, 0);
-//     GeometryRes.create(1, R2 {}, 0, 0);
-//     buffer.create(2, R3 {}, 32, 0);
-//     GeometryRes.create(2, R2 {}, 0, 0);
-//     res_mgr.collect(2000);
+    buffer.create(1, R3 {}, 32, 0);
+    GeometryRes.create(1, R2 {}, 0, 0);
+    buffer.create(2, R3 {}, 32, 0);
+    GeometryRes.create(2, R2 {}, 0, 0);
+    res_mgr.collect(2000);
 
-//     texture.create(Atom::from("6"), R1 {}, 1048576, 0);
+    texture.create(Atom::from("6"), R1 {}, 1048576, 0);
 
-//     buffer.create(3, R3 {}, 32, 0);
-//     GeometryRes.create(3, R2 {}, 0, 0);
-//     buffer.create(4, R3 {}, 32, 0);
-//     GeometryRes.create(4, R2 {}, 0, 0);
-//     u_color_ubo.create(1009613414, R9 {}, 0, 0);
-//     buffer.create(5, R3 {}, 32, 0);
-//     GeometryRes.create(5, R2 {}, 0, 0);
-//     buffer.create(6, R3 {}, 32, 0);
-//     GeometryRes.create(6, R2 {}, 0, 0);
-//     buffer.create(7, R3 {}, 32, 0);
-//     GeometryRes.create(7, R2 {}, 0, 0);
-//     buffer.create(8, R3 {}, 32, 0);
-//     GeometryRes.create(8, R2 {}, 0, 0);
-//     buffer.create(9, R3 {}, 32, 0);
-//     GeometryRes.create(9, R2 {}, 0, 0);
-//     u_color_ubo.create(4173812235, R9 {}, 0, 0);
-//     texture.create(Atom::from("7"), R1 {}, 1572864, 0);
-//     texture.create(Atom::from("8"), R1 {}, 65536, 0);
-//     buffer.create(10, R3 {}, 32, 0);
-//     GeometryRes.create(10, R2 {}, 0, 0);
-//     texture.create(Atom::from("16"), R1 {}, 1048576, 0);
-//     texture.create(Atom::from("9"), R1 {}, 2097152, 0);
-//     texture.create(Atom::from("10"), R1 {}, 1048576, 0);
-//     texture.create(Atom::from("11"), R1 {}, 2097152, 0);
-//     texture.create(Atom::from("12"), R1 {}, 2097152, 0);
-//     buffer.create(11, R3 {}, 32, 0);
-//     GeometryRes.create(11, R2 {}, 0, 0);
-//     buffer.create(12, R3 {}, 32, 0);
-//     GeometryRes.create(12, R2 {}, 0, 0);
-//     buffer.create(13, R3 {}, 32, 0);
-//     GeometryRes.create(13, R2 {}, 0, 0);
-//     buffer.create(14, R3 {}, 32, 0);
-//     GeometryRes.create(14, R2 {}, 0, 0);
+    buffer.create(3, R3 {}, 32, 0);
+    GeometryRes.create(3, R2 {}, 0, 0);
+    buffer.create(4, R3 {}, 32, 0);
+    GeometryRes.create(4, R2 {}, 0, 0);
+    u_color_ubo.create(1009613414, R9 {}, 0, 0);
+    buffer.create(5, R3 {}, 32, 0);
+    GeometryRes.create(5, R2 {}, 0, 0);
+    buffer.create(6, R3 {}, 32, 0);
+    GeometryRes.create(6, R2 {}, 0, 0);
+    buffer.create(7, R3 {}, 32, 0);
+    GeometryRes.create(7, R2 {}, 0, 0);
+    buffer.create(8, R3 {}, 32, 0);
+    GeometryRes.create(8, R2 {}, 0, 0);
+    buffer.create(9, R3 {}, 32, 0);
+    GeometryRes.create(9, R2 {}, 0, 0);
+    u_color_ubo.create(4173812235, R9 {}, 0, 0);
+    texture.create(Atom::from("7"), R1 {}, 1572864, 0);
+    texture.create(Atom::from("8"), R1 {}, 65536, 0);
+    buffer.create(10, R3 {}, 32, 0);
+    GeometryRes.create(10, R2 {}, 0, 0);
+    texture.create(Atom::from("16"), R1 {}, 1048576, 0);
+    texture.create(Atom::from("9"), R1 {}, 2097152, 0);
+    texture.create(Atom::from("10"), R1 {}, 1048576, 0);
+    texture.create(Atom::from("11"), R1 {}, 2097152, 0);
+    texture.create(Atom::from("12"), R1 {}, 2097152, 0);
+    buffer.create(11, R3 {}, 32, 0);
+    GeometryRes.create(11, R2 {}, 0, 0);
+    buffer.create(12, R3 {}, 32, 0);
+    GeometryRes.create(12, R2 {}, 0, 0);
+    buffer.create(13, R3 {}, 32, 0);
+    GeometryRes.create(13, R2 {}, 0, 0);
+    buffer.create(14, R3 {}, 32, 0);
+    GeometryRes.create(14, R2 {}, 0, 0);
 
-//     texture.create(Atom::from("13"), R1 {}, 2097152, 0);
+    texture.create(Atom::from("13"), R1 {}, 2097152, 0);
 
-//     res_mgr.collect(3000);
-//     println!(
-//         "xxxxxxxxxxxxxxxxxxxxxxxxxx4: {:?}",
-//         texture.caches[0].get_max_capacity()
-//     );
+    res_mgr.collect(3000);
+    println!(
+        "xxxxxxxxxxxxxxxxxxxxxxxxxx4: {:?}",
+        texture.cache.get_max_capacity()
+    );
 
-//     // let r1 = res_mgr.fetch_map().unwrap();
-// }
+    // let r1 = res_mgr.fetch_map().unwrap();
+}
