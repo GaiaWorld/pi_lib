@@ -148,14 +148,14 @@ fn test(){
 	assert_eq!(r[0].0.time_point, 3000);
 
 	let r = wheel.remove(8);
-	assert_eq!(r.time_point, 61000);
+	assert_eq!(r.unwrap().time_point, 61000);
 
 	
 	let r = wheel.remove(7);
-	assert_eq!(r.time_point, 60000);
+	assert_eq!(r.unwrap().time_point, 60000);
 
 	let r = wheel.remove(11);
-	assert_eq!(r.time_point, 86400000);
+	assert_eq!(r.unwrap().time_point, 86400000);
 
     println!("{:?}", wheel);
 }

@@ -641,43 +641,43 @@ fn test_alloc(){
 
 #[test]
 fn test_eff(){
-    use time::now_millis;
+    use time::now_millisecond;
     let mut slab: Slab<u64> = Slab::new();
-    let time = now_millis();
+    let time = now_millisecond();
     for i in 0..1000000{
         let r = slab.alloc();
         *r.1 = i;
     }
-    println!("alloc time-----------------------------------------------{}", now_millis() - time);
+    println!("alloc time-----------------------------------------------{}", now_millisecond() - time);
     let mut slab: Slab<u64> = Slab::new();
-    let time = now_millis();
+    let time = now_millisecond();
     for i in 0..1000000{
         slab.insert(i);
     }
-    let time1 = now_millis();
+    let time1 = now_millisecond();
     println!("insert time-----------------------------------------------{}", time1 - time);
 
     for i in 1..1000001{
         slab.remove(i);
     }
-    let time2 = now_millis();
+    let time2 = now_millisecond();
     println!("remove time-----------------------------------------------{}", time2 - time1);
 
-    let time = now_millis();
+    let time = now_millisecond();
     for i in 0..1000000{
         slab.insert(i);
     }
-    let time1 = now_millis();
+    let time1 = now_millisecond();
     println!("insert1 time-----------------------------------------------{}", time1 - time);
 
     let mut v = Vec::new();
 
-    let time3 = now_millis();
+    let time3 = now_millisecond();
     for i in 1..1000001{
         v.push(i);
     }
 
-    let time4 = now_millis();
+    let time4 = now_millisecond();
     println!("insert vec time-----------------------------------------------{}", time4 - time3);
 }
 

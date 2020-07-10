@@ -102,7 +102,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
 
 
 #[cfg(test)]
-use time::now_millis;
+use time::now_millisecond;
 
 #[cfg(test)]
 use std::collections::{VecDeque, HashMap};
@@ -123,14 +123,14 @@ fn test_effict(){
 	let mut fast_deque: SlabDeque<u32> = SlabDeque::new();
     let max = 100000;
 
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         fast_deque.push_back(i);
     }
 
-    println!("push back time{}",  now_millis() - now);
+    println!("push back time{}",  now_millisecond() - now);
 
-    let now = now_millis();
+    let now = now_millisecond();
     for _ in 0..max {
         fast_deque.pop_back().unwrap();
         //println!("i---------------------{}", i);
@@ -139,32 +139,32 @@ fn test_effict(){
         // assert_eq!(fast_SlabDeque.remove(&(index + 1)).unwrap(), index as u32);
         //assert_eq!(fast_SlabDeque.pop_front().unwrap(), i);
     }
-    println!("pop_back time{}",  now_millis() - now);
+    println!("pop_back time{}",  now_millisecond() - now);
 
     let mut vec_deque = VecDeque::new();
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         vec_deque.push_back(i);
     }
-    println!("push vec front time{}",  now_millis() - now);
+    println!("push vec front time{}",  now_millisecond() - now);
 
-    let now = now_millis();
+    let now = now_millisecond();
     for _ in 0..max{
         vec_deque.pop_back();
     }
-    println!("pop vec front time{}",  now_millis() - now);
+    println!("pop vec front time{}",  now_millisecond() - now);
 
     let mut map = HashMap::new();
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         map.insert(i, i);
     }
-    println!("insert HashMap front time{}",  now_millis() - now);
+    println!("insert HashMap front time{}",  now_millisecond() - now);
 
-    let now = now_millis();
+    let now = now_millisecond();
     for i in 0..max {
         assert_eq!(map.remove(&i).unwrap(), i);
     }
-    println!("remove HashMap front time{}",  now_millis() - now);
+    println!("remove HashMap front time{}",  now_millisecond() - now);
 
 }

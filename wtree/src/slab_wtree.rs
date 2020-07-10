@@ -149,7 +149,7 @@ fn test(){
 }
 
 #[cfg(test)]
-use time::now_millis;
+use time::now_millisecond;
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
@@ -159,30 +159,30 @@ use std::collections::VecDeque;
 fn test_effic(){
 	let mut weight_tree: WeightTree<u32> = WeightTree::new();
 	let max = 100000;
-	let now = now_millis();
+	let now = now_millisecond();
 	for i in 0..max{
 		weight_tree.push(i, (i+1) as usize);
 	}
-	println!("slab_wtree push max_heap time{}",  now_millis() - now);
+	println!("slab_wtree push max_heap time{}",  now_millisecond() - now);
 
 	let mut arr = VecDeque::new();
-	let now = now_millis();
+	let now = now_millisecond();
 	for i in 0..max{
 		arr.push_front(i);
 	}
-	println!("push VecDeque time{}",  now_millis() - now);
+	println!("push VecDeque time{}",  now_millisecond() - now);
 
-	let now = now_millis();
+	let now = now_millisecond();
 	for _ in 0..max{
 		rand::thread_rng().gen_range(0, 100000);
 	}
-	println!("slab_wtree rand time{}",  now_millis() - now);
+	println!("slab_wtree rand time{}",  now_millisecond() - now);
 
 
-	let now = now_millis();
+	let now = now_millisecond();
 	for _ in 0..max{
 		//let r = rand::thread_rng().gen_range(0, weight_tree.amount());
 		weight_tree.try_pop(1);
 	}
-	println!("slab_wtree pop time{}",  now_millis() - now);
+	println!("slab_wtree pop time{}",  now_millisecond() - now);
 }

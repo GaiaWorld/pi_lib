@@ -790,7 +790,7 @@ use time::run_millis;
 
 #[test]
 fn test(){
-    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Box::new(|| {}));
+    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Arc::new(|ty, n| {}));
 
     let queue1 = task_pool.create_dyn_queue(1);
     let queue2 = task_pool.create_dyn_queue(2);
@@ -901,7 +901,7 @@ fn test(){
 
 #[test]
 fn test_effect(){
-    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|| {}));
+    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|ty, n| {}));
 
     let time = run_millis();
     for i in 1..100001 {
