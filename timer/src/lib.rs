@@ -46,6 +46,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
         Timer(Arc::new(Mutex::new(TimerImpl::new(clock_ms))))
     }
 
+    #[allow(unused_must_use)]
     pub fn run(&self){
         let s = self.0.clone();
 		thread::Builder::new()

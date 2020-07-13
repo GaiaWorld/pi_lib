@@ -6,21 +6,34 @@
 use std::cmp::{Ord, Ordering};
 use std::mem::{replace, swap};
 use std::fmt::{Debug, Formatter, Result as FResult};
+use std::collections::VecDeque;
 
 use heap::heap::Heap;
 use dyn_uint::{UintFactory, ClassFactory};
 
+// 描述了毫秒、秒、分、小时几种不同单位的任务在arr中的开始索引
 static START:[u8; 4] = [0, 100, 160, 220];
+// 描述了毫秒、秒、分、小时几种不同单位任务分别在arr中的个数
 static CAPACITY:[u8; 4] = [100, 60, 60, 24];
+// 描述了毫秒、秒、分、小时几种不同单位换算为毫秒后的数值
 static UNIT:[u32; 4] = [10, 1000, 60000, 3600000];
 
 pub struct Wheel<T>{
-	arr: [Vec<(Item<T>, usize)>; 244],//毫秒精度为10， 秒，分钟， 小时精度为1
-    zero_arr:Vec<(Item<T>, usize)>,
-    zero_cache: Vec<(Item<T>, usize)>,
+	// 毫秒精度为10， 秒，分钟， 小时精度为1, arr中，将容纳 100(单位：10毫秒)+60(秒)+60(分)+24(小时) 时间内的任务
+	// 超出该时间的任务放入heap中
+	arr: [Vec<(Item<T>, usize)>; 244],
 	heap: Heap<Item<T>>,
+
+	// 为0毫秒的任务特殊优化
+    zero_arr:Vec<(Item<T>, usize)>,
+	zero_cache: Vec<(Item<T>, usize)>,
+	
+	// 记录每个不同时间单位当前的位置
 	point:[u8; 4],
 	time: u64,//当前时间
+
+	// 弹出缓存，调用roll_once方法，使时间向前推动，超时的任务将缓存在这里
+	pop_catch: VecDeque<(Item<T>, usize)>,
 }
 
 impl<T> Wheel<T>{
@@ -34,7 +47,8 @@ impl<T> Wheel<T>{
 			zero_cache: Vec::new(),
 			heap: Heap::new(Ordering::Less),
 			point:[0, 0, 0, 0],
-			time:0
+			time:0,
+			pop_catch: VecDeque::new(),
 		}
 	}
 
@@ -95,28 +109,39 @@ impl<T> Wheel<T>{
 
 	pub fn roll< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F) -> Vec<(Item<T>, usize)>{
 		self.time += 10;
-		self.forward(0, index_factory)
+		let point = self.point[0] as usize;
+		let s = START[0] as usize;
+		let r= replace(&mut self.arr[point + s], Vec::new());
+		self.point[0] = next_tail(point as u8, 1, CAPACITY[0]);
+		if self.point[0] == 0 {
+			self.adjust(1, index_factory);
+		}
+		r
 	}
 
-	// pub fn try_remove< F: UintFactory + ClassFactory<usize>>(&mut self, index: usize, index_factory: &mut F) -> Option<(Item<T>, usize)>{
-	// 	let i = index_factory.load(index);
-	// 	if (i >> 2) == 0 {
-	// 		return None;
-	// 	}
-	// 	let t = i & 3; //类型
-	// 	if t == 0{
-	// 		self.heap.try_remove(index, index_factory)
-	// 	}else if t == 1{
-	// 		let index = resolve_index(i);
-	// 		let arr = &mut self.arr[index.0];
-	// 		if index.1 >= arr.len(){
-	// 			return None;
-	// 		}
-	// 		Some(Wheel::delete(arr, index.1, i, index_factory))
-	// 	}else{
-	// 		None
-	// 	}
-	// }
+	/// 时间向后推动10ms，并将超时任务缓存起来，外部需要通过pop放取出超时任务
+	pub fn roll_once< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F){
+		self.time += 10;
+		self.adjust(0, index_factory);
+		let point = self.point[0] as usize;
+		let s = START[0] as usize;
+
+		// 将超时任务交换到出来
+		let r = replace(&mut self.arr[point + s], Vec::new());
+		for i in 0..r.len(){
+			let (_, index) = r[i];
+			index_factory.store(index, i);
+			index_factory.set_class(index, 246);
+		}
+
+		let old_arr = replace(&mut self.pop_catch, VecDeque::from(r));
+		replace(&mut self.arr[point + s], Vec::from(old_arr));
+	}
+
+	/// 调用roll_once后， 可调用本方法取出超时任务
+	pub fn pop< F: UintFactory + ClassFactory<usize>>(&mut self) -> Option<(Item<T>, usize)>{
+		self.pop_catch.pop_front()
+	}
 
 	//Panics if index is out of bounds.
 	pub fn delete< F: UintFactory + ClassFactory<usize>>(&mut self, class: usize, index:usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
@@ -124,7 +149,9 @@ impl<T> Wheel<T>{
 			unsafe { Some(self.heap.delete(index, index_factory)) }
 		} else if class == 244 {
             Wheel::delete_wheel(&mut self.zero_arr, index, index_factory)
-        } else {//wheel的类型为1
+        } else if class == 246{
+			Wheel::delete_catch(&mut self.pop_catch, index, index_factory)
+		}else {//wheel的类型为1
 			Wheel::delete_wheel(&mut self.arr[class], index, index_factory)
 		}
 	}
@@ -137,6 +164,7 @@ impl<T> Wheel<T>{
 		}
 		self.zero_arr.clear();
 		self.zero_cache.clear();
+		self.pop_catch.clear();
 		self.point = [0,0,0,0];
 		self.time = 0;
 	}
@@ -165,39 +193,46 @@ impl<T> Wheel<T>{
 			}
 			return Some(r);
 		}
-
 		None
 	}
 
-	//前进一个单位
-	fn forward< F: UintFactory + ClassFactory<usize>>(&mut self, layer: usize, index_factory: &mut F) -> Vec<(Item<T>, usize)>{
-		let point = self.point[layer] as usize;
-		let s = START[layer] as usize;
-		let r = replace(&mut self.arr[point + s], Vec::new());
-		self.point[layer] = next_tail(point as u8, 1, CAPACITY[layer]);
-		if self.point[layer] == 0{
-			let above = match layer > 2{
-				true => self.get_from_heap(index_factory),
-				false => self.forward(layer + 1, index_factory)
-			};
-			for v in above.into_iter() {
-				let diff = match v.0.time_point > self.time{
-					true => v.0.time_point - self.time - 1,
-					false => 0,
-				};
-				match diff{
-					0..1000 => self.insert_ms(v, diff, index_factory),
-					1000..61000 => self.insert_wheel(v, 1, diff, index_factory),
-					61000..3661000 => self.insert_wheel(v, 2, diff, index_factory),
-					_ => self.insert_wheel(v, 3, diff, index_factory)
-				}
+	fn delete_catch< F: UintFactory + ClassFactory<usize>>(arr: &mut VecDeque<(Item<T>, usize)>, index: usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
+		if let Some(mut r) = arr.pop_back() {
+			if index < arr.len(){
+				index_factory.store(r.1, index);
+				swap(&mut r, &mut arr[index]);
 			}
+			return Some(r);
 		}
-		r
+		None
 	}
 
-	fn get_from_heap< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F) -> Vec<(Item<T>, usize)>{
-		let mut r = Vec::new();
+	/// 前进一个单位
+	fn adjust< F: UintFactory + ClassFactory<usize>>(&mut self, layer: usize, index_factory: &mut F){
+		let point = self.point[layer] as usize;
+		let s = START[layer] as usize;
+		if layer > 2 {
+			self.adjust_heap(index_factory);
+		} else {
+			let mut r = VecDeque::from(replace(&mut self.arr[point + s], Vec::new()));
+			loop {
+				match r.pop_front() {
+					Some(v) => self.adjust_item(v, index_factory),
+					None => break,
+				}
+			}
+			replace(&mut self.arr[point + s], Vec::from(r));
+			self.point[layer] = next_tail(point as u8, 1, CAPACITY[layer]);
+			if self.point[layer] == 0 {
+				self.adjust(layer + 1, index_factory);
+				
+			}
+		}
+		
+		
+	}
+
+	fn adjust_heap< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F){
 		loop {
 			match self.heap.len() > 0{
 				true => {
@@ -208,9 +243,23 @@ impl<T> Wheel<T>{
 				}
 				false => break
 			};
-			r.push(unsafe {self.heap.delete(0, index_factory) });
+			let value = unsafe{self.heap.delete(0, index_factory)};
+			self.adjust_item(value, index_factory);
 		}
-		r
+	}
+
+	// 根据时间，调整任务位置
+	fn adjust_item< F: UintFactory + ClassFactory<usize>>(&mut self, value: (Item<T>, usize), index_factory: &mut F) {
+		let diff = match value.0.time_point > self.time{
+			true => value.0.time_point - self.time - 1,
+			false => 0,
+		};
+		match diff{
+			0..1000 => self.insert_ms(value, diff, index_factory),
+			1000..61000 => self.insert_wheel(value, 1, diff, index_factory),
+			61000..3661000 => self.insert_wheel(value, 2, diff, index_factory),
+			_ => self.insert_wheel(value, 3, diff, index_factory)
+		}
 	}
 }
 
@@ -248,9 +297,11 @@ r##"Wheel(
     }
 }
 
+// 某个单位的指针的下一时刻位置
+// cur_local: 当前位置， span： 跨度， capacity：当前指针的最大位置
 #[inline]
-fn next_tail(cur: u8, span: u8, c: u8) -> u8{
-	(cur + span)%c
+fn next_tail(cur_local: u8, span: u8, capacity: u8) -> u8{
+	(cur_local + span)%capacity
 }
 
 #[inline]
