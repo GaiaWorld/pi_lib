@@ -40,6 +40,10 @@ impl<T> Wheel<T>{
 		self.wheel.zero_size()
 	}
 
+	#[inline]
+	pub fn get_one_zero(&mut self) -> (Item<T>, usize){
+		self.wheel.get_one_zero();
+	}
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
 		self.wheel.get_zero()
 	}

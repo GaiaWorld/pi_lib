@@ -68,6 +68,12 @@ impl<T> Wheel<T>{
 		self.zero_arr.len()
 	}
 
+	#[inline]
+	pub fn get_one_zero(&mut self) -> (Item<T>, usize){
+		self.zero_arr.pop();
+		// replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
+	}
+
     #[inline]
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
 		replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
