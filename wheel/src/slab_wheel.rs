@@ -41,8 +41,8 @@ impl<T> Wheel<T>{
 	}
 
 	#[inline]
-	pub fn get_one_zero(&mut self) -> (Item<T>, usize){
-		self.wheel.get_one_zero();
+	pub fn get_one_zero(&mut self) -> Option<(Item<T>, usize)> {
+		self.wheel.get_one_zero()
 	}
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
 		self.wheel.get_zero()
@@ -59,6 +59,16 @@ impl<T> Wheel<T>{
 
 	pub fn roll(&mut self) -> Vec<(Item<T>, usize)>{
 		self.wheel.roll(&mut self.index_factory)
+	}
+
+	#[inline]
+	pub fn roll_once(&mut self) {
+		self.wheel.roll_once(&mut self.index_factory);
+	}
+
+	#[inline]
+	pub fn pop(&mut self) -> Option<(Item<T>, usize)> {
+		self.wheel.pop()
 	}
 
 	pub fn try_remove(&mut self, index: usize) -> Option<Item<T>>{

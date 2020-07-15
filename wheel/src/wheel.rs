@@ -69,8 +69,8 @@ impl<T> Wheel<T>{
 	}
 
 	#[inline]
-	pub fn get_one_zero(&mut self) -> (Item<T>, usize){
-		self.zero_arr.pop();
+	pub fn get_one_zero(&mut self) -> Option<(Item<T>, usize)> {
+		self.zero_arr.pop()
 		// replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
 	}
 
@@ -128,7 +128,6 @@ impl<T> Wheel<T>{
 	/// 时间向后推动10ms，并将超时任务缓存起来，外部需要通过pop放取出超时任务
 	pub fn roll_once< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F){
 		self.time += 10;
-		self.adjust(0, index_factory);
 		let point = self.point[0] as usize;
 		let s = START[0] as usize;
 
@@ -142,10 +141,15 @@ impl<T> Wheel<T>{
 
 		let old_arr = replace(&mut self.pop_catch, VecDeque::from(r));
 		replace(&mut self.arr[point + s], Vec::from(old_arr));
+
+		self.point[0] = next_tail(point as u8, 1, CAPACITY[0]);
+		if self.point[0] == 0 {
+			self.adjust(1, index_factory);
+		}
 	}
 
 	/// 调用roll_once后， 可调用本方法取出超时任务
-	pub fn pop< F: UintFactory + ClassFactory<usize>>(&mut self) -> Option<(Item<T>, usize)>{
+	pub fn pop(&mut self) -> Option<(Item<T>, usize)>{
 		self.pop_catch.pop_front()
 	}
 
