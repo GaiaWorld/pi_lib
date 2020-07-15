@@ -24,6 +24,8 @@ pub struct Wheel<T>{
 	arr: [Vec<(Item<T>, usize)>; 244],
 	heap: Heap<Item<T>>,
 
+	len: usize,
+
 	// 为0毫秒的任务特殊优化
     zero_arr:Vec<(Item<T>, usize)>,
 	zero_cache: Vec<(Item<T>, usize)>,
@@ -49,9 +51,13 @@ impl<T> Wheel<T>{
 			point:[0, 0, 0, 0],
 			time:0,
 			pop_catch: VecDeque::new(),
+			len: 0,
 		}
 	}
 
+	pub fn len(&self) -> usize {
+		self.len
+	}
 	//Setting wheel time
     #[inline]
 	pub fn set_time(&mut self, ms: u64){
@@ -70,13 +76,20 @@ impl<T> Wheel<T>{
 
 	#[inline]
 	pub fn get_one_zero(&mut self) -> Option<(Item<T>, usize)> {
-		self.zero_arr.pop()
+		if let Some(ts) = self.zero_arr.pop() {
+			self.len -= 1;
+			return Some(ts);
+		}
+
+		None
 		// replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
 	}
 
     #[inline]
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
-		replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
+		let mut vec = replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()));
+		self.len -= vec.len();
+		vec
 	}
 
     #[inline]
@@ -88,6 +101,7 @@ impl<T> Wheel<T>{
 	pub fn insert< F: UintFactory + ClassFactory<usize>>(&mut self, item: Item<T>, index: usize, index_factory: &mut F){
 		// 计算时间差
 		let mut diff = sub(item.time_point, self.time);
+		self.len += 1;
 
 		//如果时间差为0， 则将其插入到zero_arr（特殊处理0毫秒）
 		if diff == 0 {
@@ -122,6 +136,7 @@ impl<T> Wheel<T>{
 		if self.point[0] == 0 {
 			self.adjust(1, index_factory);
 		}
+		self.len -= r.len();
 		r
 	}
 
@@ -150,12 +165,18 @@ impl<T> Wheel<T>{
 
 	/// 调用roll_once后， 可调用本方法取出超时任务
 	pub fn pop(&mut self) -> Option<(Item<T>, usize)>{
-		self.pop_catch.pop_front()
+
+		let r = self.pop_catch.pop_front();
+		if r.is_some() {
+			self.len -= 1;
+		}
+		r
+
 	}
 
 	//Panics if index is out of bounds.
 	pub fn delete< F: UintFactory + ClassFactory<usize>>(&mut self, class: usize, index:usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
-		if class == 245 { //heap的类型为245
+		let r = if class == 245 { //heap的类型为245
 			unsafe { Some(self.heap.delete(index, index_factory)) }
 		} else if class == 244 {
             Wheel::delete_wheel(&mut self.zero_arr, index, index_factory)
@@ -163,7 +184,11 @@ impl<T> Wheel<T>{
 			Wheel::delete_catch(&mut self.pop_catch, index, index_factory)
 		}else {//wheel的类型为1
 			Wheel::delete_wheel(&mut self.arr[class], index, index_factory)
+		};
+		if r.is_some() {
+			self.len -= 1;
 		}
+		r
 	}
 
 	//clear all elem
@@ -177,6 +202,7 @@ impl<T> Wheel<T>{
 		self.pop_catch.clear();
 		self.point = [0,0,0,0];
 		self.time = 0;
+		self.len = 0;
 	}
 
 	//插入到毫秒轮

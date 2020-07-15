@@ -18,6 +18,10 @@ impl<T> Wheel<T>{
         }
 	}
 
+	pub fn len(&self) -> usize {
+		self.wheel.len()
+	}
+
 	//Setting wheel time
     #[inline]
 	pub fn set_time(&mut self, ms: u64){
