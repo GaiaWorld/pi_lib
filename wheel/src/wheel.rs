@@ -87,7 +87,7 @@ impl<T> Wheel<T>{
 
     #[inline]
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
-		let mut vec = replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()));
+		let vec = replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()));
 		self.len -= vec.len();
 		vec
 	}

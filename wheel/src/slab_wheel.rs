@@ -45,11 +45,19 @@ impl<T> Wheel<T>{
 	}
 
 	#[inline]
-	pub fn get_one_zero(&mut self) -> Option<(Item<T>, usize)> {
-		self.wheel.get_one_zero()
+	pub fn get_one_zero(&mut self) -> Option<Item<T>> {
+		if let Some((elem, index)) = self.wheel.get_one_zero() {
+			self.index_factory.destroy(index);
+			return Some(elem);
+		}
+		None
 	}
 	pub fn get_zero(&mut self) -> Vec<(Item<T>, usize)>{
-		self.wheel.get_zero()
+		let arr = self.wheel.get_zero();
+		for r in arr.iter() {
+			self.index_factory.destroy(r.1);
+		}
+		arr
 	}
 
     pub fn set_zero_cache(&mut self, v: Vec<(Item<T>, usize)>){
@@ -59,10 +67,15 @@ impl<T> Wheel<T>{
     //clear all elem
 	pub fn clear(&mut self){
 		self.wheel.clear();
+		self.index_factory.clear();
 	}
 
 	pub fn roll(&mut self) -> Vec<(Item<T>, usize)>{
-		self.wheel.roll(&mut self.index_factory)
+		let arr = self.wheel.roll(&mut self.index_factory);
+		for r in arr.iter() {
+			self.index_factory.destroy(r.1);
+		}
+		arr
 	}
 
 	#[inline]
@@ -71,8 +84,12 @@ impl<T> Wheel<T>{
 	}
 
 	#[inline]
-	pub fn pop(&mut self) -> Option<(Item<T>, usize)> {
-		self.wheel.pop()
+	pub fn pop(&mut self) -> Option<Item<T>> {
+		if let Some((elem, index)) = self.wheel.pop() {
+			self.index_factory.destroy(index);
+			return Some(elem);
+		}
+		None
 	}
 
 	pub fn try_remove(&mut self, index: usize) -> Option<Item<T>>{
@@ -95,7 +112,6 @@ impl<T> Wheel<T>{
 			self.index_factory.destroy(index);
 			return Some(elem);
 		}
-
 		None
 	}
 }
