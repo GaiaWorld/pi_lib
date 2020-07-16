@@ -193,3 +193,45 @@ fn test(){
 
     println!("{:?}", wheel);
 }
+
+
+#[test]
+fn test1(){
+	let mut wheel = Wheel::new();
+	for i in 1..1001 {
+		wheel.insert(Item{elem: i, time_point: 3000 });
+	}
+
+	let mut count = 0;
+	let mut roll_count = 0;
+	loop {
+		match wheel.pop() {
+			Some(_) => {
+				count +=1;
+				continue;
+			},
+			None => (),
+		}
+		wheel.roll_once();
+		roll_count += 1;
+		if roll_count == 3002 {
+			println!("count: {}", count);
+			break;
+		}
+	}
+}
+
+
+
+#[test]
+fn test_insert() {
+
+    let mut wheel = Wheel::new();
+
+	let mut timer_refs = vec![];
+    for i in 1..50001 {
+        timer_refs.push(wheel.insert(Item{elem: i, time_point: 3000 }));
+    }
+
+	println!("timer refs = {:?}, len:{}", timer_refs,timer_refs.len());
+}

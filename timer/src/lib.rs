@@ -15,6 +15,7 @@ use std::time::{Duration};
 use std::sync::atomic::{AtomicUsize, Ordering, AtomicU64};
 use std::mem::{transmute};
 use std::marker::Send;
+use std::fmt::{Debug, Formatter, Result as FResult};
 
 use atom::Atom;
 use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
@@ -142,12 +143,18 @@ impl Runer for FuncRuner {
     }
 }
 
+impl Debug for FuncRuner {
+	fn fmt(&self, fmt: &mut Formatter) -> FResult {
+        write!(fmt,"F")
+    }
+}
+
 
 lazy_static! {
 	pub static ref TIMER: Timer<FuncRuner> = Timer::new(10);
 }
 
-pub struct Timer<T: 'static + Send + Runer>(Arc<Mutex<TimerImpl<T>>>);
+pub struct Timer<T: 'static + Send + Runer>(pub Arc<Mutex<TimerImpl<T>>>);
 
 impl<T: 'static + Send + Runer> Clone for Timer<T> {
     fn clone(&self) -> Self{
@@ -196,14 +203,15 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> 
 //执行任务，返回任务执行完的时间
 fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>) -> u64{
     let start = TIMER_RUN_TIME.start();
-    let mut j = r.len();
+	let mut j = r.len();
+	TIMER_RUN_COUNT.sum(r.len());
     for _ in 0..r.len(){
         j -= 1;
         let e = r.remove(j);
         e.0.elem.run(e.1);
     }
-
-    TIMER_RUN_COUNT.sum(1);
+	
+    
     TIMER_RUN_TIME.timing(start);
     run_millis()
 }
@@ -218,5 +226,91 @@ fn test(){
 	//let index = TIMER.set_timeout(Box::new(f), 1000);
     //println!("index-------------{}", index.load(Ordering::Relaxed));
 	thread::sleep(Duration::from_millis(500));
+}
+
+#[cfg(test)]
+extern crate rand;
+
+#[test]
+fn test_timer() {
+    use rand::thread_rng;
+    use rand::Rng;
+	use rand::seq::SliceRandom;
+	use std::collections::HashMap;
+
+    TIMER.run();
+    let mut rng = thread_rng();
+
+    let count = Arc::new(AtomicUsize::new(0));
+
+	let mut timer_refs = vec![];
+	let mut timer_map = HashMap::new();
+	// let mut pop = Arc::new(Mutex::new(Vec::new()));
+	// let mut run_success_map = HashMap::new();
+	// let mut run_success_vec = Vec::new();
+    for i in 1..100001 {
+		// let map1 = &mut run_success_map;
+		// let vec1 = &mut run_success_vec;
+		let count = count.clone();
+		let t = rng.gen_range(10, 5000);
+        let timer_ref  =TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+			// println!("timer task {:?}", i);
+			// map1.insert(i, true);
+			// vec1.push(i);
+			// pop.lock.push(i);
+        })), t);
+
+		// if let Some(r) = timer_map.get(&timer_ref) {
+		// 	panic!("error:{}", timer_ref);
+		// }
+		timer_refs.push(timer_ref);
+		timer_map.insert(timer_ref, true);
+	}
+	
+
+    // println!("timer refs = {:?}, len:{}", timer_refs,timer_refs.len());
+
+
+	let cancel: Vec<usize> = timer_refs.choose_multiple(&mut rng, 50).cloned().collect();
+	// let cancel = Vec::new();
+
+    println!("shuffled timer_refs = {:?}", cancel);
+
+	let mut cancel_success = Vec::new();
+	let mut cancel_fail = Vec::new();
+    for c in cancel {
+        if let Some(_) = TIMER.cancel(c) {
+			// println!("cancel success {:?}", c);
+			cancel_success.push(c);
+        } else {
+			// println!("cancel failed {:?}", c);
+			cancel_fail.push(c);
+        }
+        thread::sleep(Duration::from_millis(rng.gen_range(10, 100)));
+    }
+
+    thread::sleep(Duration::from_millis(7000));
+
+	println!("cancel success: {:?}, cancel fail: {:?}", cancel_success.len(), cancel_fail.len());
+	
+	// for cs in cancel_success.iter() {
+	// 	match run_success_map.get(cs) {
+	// 		Some(_) => {
+	// 			panic!("xxxxxxxxxxxxxxxxxxxxxx");
+	// 		}
+	// 	}
+	// }
+
+	// for cs in cancel_fail.iter() {
+	// 	match run_success_map.get(cs) {
+	// 		None => {panic!("xxxxxxxxxxxxxxxxxxxxxx");}
+	// 	}
+	// }
+
+	
+
+	println!("count = {:?}, {:?}", count, TIMER_RUN_COUNT.get());
+	// for i of cancel {}
 }
 
