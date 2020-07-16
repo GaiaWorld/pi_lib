@@ -9,3 +9,4 @@ apm = {path="../apm"}
 wheel = {path="../wheel"}
 time = {path="../time"}
 lazy_static = "*"
+rand = "*"

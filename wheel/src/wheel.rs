@@ -133,9 +133,11 @@ impl<T> Wheel<T>{
 		let s = START[0] as usize;
 		let r= replace(&mut self.arr[point + s], Vec::new());
 		self.point[0] = next_tail(point as u8, 1, CAPACITY[0]);
+		// println!("roll===============time:{}, len:{}, self_len:{}", self.time, r.len(), self.len());
 		if self.point[0] == 0 {
 			self.adjust(1, index_factory);
 		}
+		
 		self.len -= r.len();
 		r
 	}
@@ -215,10 +217,12 @@ impl<T> Wheel<T>{
 
 	//秒，分钟，小时轮的插入方法
 	fn insert_wheel< F: UintFactory + ClassFactory<usize>>(&mut self, item: (Item<T>, usize), layer: usize, diff: u64, index_factory: &mut F){
-		let i = (next_tail(self.point[layer], (diff/(UNIT[layer] as u64)) as u8 - 1, CAPACITY[layer]) + START[layer]) as usize;
+		let i = (next_tail(self.point[layer], (diff/(UNIT[layer] as u64)) as u8, CAPACITY[layer]) + START[layer]) as usize;
 		index_factory.store(item.1, self.arr[i].len());
-        index_factory.set_class(item.1, i);
+		index_factory.set_class(item.1, i);
+		// println!("layer:{},insert_wheel:{}, len:{}, time:{}, diff:{}, itemtime:{}",layer, i, self.arr[i].len(), self.time, diff,item.0.time_point);
 		self.arr[i].push(item);
+		
 	}
 
 	fn delete_wheel< F: UintFactory + ClassFactory<usize>>(arr: &mut Vec<(Item<T>, usize)>, index: usize, index_factory: &mut F) -> Option<(Item<T>, usize)> {
@@ -244,12 +248,14 @@ impl<T> Wheel<T>{
 	}
 
 	/// 前进一个单位
-	fn adjust< F: UintFactory + ClassFactory<usize>>(&mut self, layer: usize, index_factory: &mut F){
-		let point = self.point[layer] as usize;
-		let s = START[layer] as usize;
-		if layer > 2 {
+	fn adjust< F: UintFactory + ClassFactory<usize>>(&mut self, mut layer: usize, index_factory: &mut F){
+		// println!("adjust==============");
+		if layer > 3 {
 			self.adjust_heap(index_factory);
 		} else {
+			let point = self.point[layer] as usize;
+			let s = START[layer] as usize;
+			// println!("adjust==============layer:{}, point:{}, start:{}", layer, point, s);
 			let mut r = VecDeque::from(replace(&mut self.arr[point + s], Vec::new()));
 			loop {
 				match r.pop_front() {
@@ -261,11 +267,8 @@ impl<T> Wheel<T>{
 			self.point[layer] = next_tail(point as u8, 1, CAPACITY[layer]);
 			if self.point[layer] == 0 {
 				self.adjust(layer + 1, index_factory);
-				
 			}
 		}
-		
-		
 	}
 
 	fn adjust_heap< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F){
@@ -290,6 +293,7 @@ impl<T> Wheel<T>{
 			true => value.0.time_point - self.time - 1,
 			false => 0,
 		};
+		// println!("adjust_item===========item_time:{}, self:time{}, diff:{}", value.0.time_point, self.time, diff );
 		match diff{
 			0..1000 => self.insert_ms(value, diff, index_factory),
 			1000..61000 => self.insert_wheel(value, 1, diff, index_factory),
@@ -321,14 +325,16 @@ r##"Wheel(
     zero_cache:{:?},
     heap:{:?},
     point:{:?},
-    time:{}
+	time:{},
+	len:{},
 )"##,
                arr_str,
                self.zero_arr,
                self.zero_cache,
                self.heap,
                self.point,
-               self.time,
+			   self.time,
+			   self.len,
         )
     }
 }
