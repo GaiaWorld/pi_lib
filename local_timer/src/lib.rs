@@ -33,6 +33,11 @@ impl<T: Send + 'static> LocalTimer<T>{
         }
     }
 
+    //获取当前未到期的定时任务
+    pub fn len(&self) -> usize {
+        self.wheel.len()
+    }
+
     //设置定时任务，返回任务句柄
     pub fn set_timeout(&mut self, task: T, timeout: usize) -> usize {
 	    let item = Item {
@@ -45,13 +50,12 @@ impl<T: Send + 'static> LocalTimer<T>{
     //推动定时器运行，已到时间的任务，会从定时器中移除，并返回
     pub fn poll(&mut self) -> Vec<T> {
         let mut tasks = Vec::new();
-        self.wheel.set_time(run_millis());
 
         poll_zero(self, &mut tasks); //运行0毫秒任务
         let mut r = self.wheel.roll();
         poll_task(&mut r, &mut tasks);
 
-        while run_millis() >= self.tick_time as u64 + self.wheel.get_time() {
+        while run_millis() > self.tick_time as u64 + self.wheel.get_time() {
             r = self.wheel.roll();
             poll_task(&mut r, &mut tasks);
             poll_zero(self, &mut tasks); //运行0毫秒任务
@@ -60,22 +64,30 @@ impl<T: Send + 'static> LocalTimer<T>{
         tasks
     }
 
-    //推动定时器运行，尝试返回一个已到时间的任务，返回的任务会从定时器中移除
-    pub fn try_poll(&mut self) -> Option<T> {
-        if let Some((item, _)) = self.wheel.get_one_zero() {
+    //尝试推动定时器运行，返回定时器内部时间与当前时间的差值
+    pub fn try_poll(&mut self) -> u64 {
+        let now = run_millis();
+        let last = self.wheel.get_time();
+        let diff = now - last;
+
+        if now > self.tick_time as u64 + last {
+            //当前时间没有任何到期的任务，且超过定时轮最小定时间隔，则立即推动一次定时轮
+            self.wheel.roll_once();
+        }
+
+        diff
+    }
+
+    //尝试获取一个已到时间的任务，返回的任务会从定时器中移除
+    pub fn try_pop(&mut self) -> Option<T> {
+        if let Some(item) = self.wheel.get_one_zero() {
             //有0毫秒任务
             return Some(item.elem);
         } else {
             //没有0毫秒任务，则弹出其它任务
-            if let Some((item, _)) = self.wheel.pop() {
+            if let Some(item) = self.wheel.pop() {
                 return Some(item.elem);
             }
-        }
-
-        if run_millis() >= self.tick_time as u64 + self.wheel.get_time() {
-            //当前时间没有任何到期的任务，且超过定时轮最小定时间隔，则立即推动一次定时轮
-            self.wheel.roll_once();
-            self.wheel.set_time(run_millis()); //重置定时轮上次推动的时间
         }
 
         None

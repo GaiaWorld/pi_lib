@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 time = { path = "../time" }
 wheel = { path = "../wheel" }
+
+[dev-dependencies]
+crossbeam-channel = "0.4"
