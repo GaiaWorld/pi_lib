@@ -1,19 +1,21 @@
-use std::thread;
 use std::sync::Arc;
-use std::io::Result;
 use std::future::Future;
 use std::time::Duration;
-use std::thread::Builder;
 use std::cell::UnsafeCell;
+use std::thread::{self, Builder};
 use std::task::{Waker, Context, Poll};
+use std::io::{Error, Result, ErrorKind};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use crossbeam_channel::unbounded;
 use parking_lot::{Mutex, Condvar};
+use crossbeam_channel::{Sender, unbounded};
 use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}, TryFuture};
 
+use time::run_millis;
+
 use crate::{AsyncTask,
-            lock::steal_deque::{Sender as StealSent, Receiver as StealRecv, steal_deque}};
+            lock::steal_deque::{Sender as StealSent, Receiver as StealRecv, steal_deque},
+            rt::{WaitRunTask, AsyncTimingTask}};
 use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
 
 /*
@@ -21,7 +23,6 @@ use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, A
 */
 thread_local! {
     static THREAD_LOCAL_ID: UnsafeCell<usize> = UnsafeCell::new(0);
-    static THREAD_LOCAL_STATUS: AtomicBool = AtomicBool::new(false);
 }
 
 /*
@@ -94,6 +95,7 @@ pub struct MultiTasks<O: Default + 'static> {
     id:             usize,                          //绑定的线程唯一id
     consumer:       StealRecv<Arc<MultiTask<O>>>,   //任务消费者
     producer:       StealSent<Arc<MultiTask<O>>>,   //任务生产者
+    is_working:     Arc<AtomicBool>,                //工作者是否正在工作
     worker_waker:   Arc<(Mutex<bool>, Condvar)>,    //工作者唤醒器
     recv_counter:   Arc<AtomicUsize>,               //接收队列计数器
 }
@@ -107,6 +109,7 @@ impl<O: Default + 'static> Clone for MultiTasks<O> {
             id: self.id,
             consumer: self.consumer.clone(),
             producer: self.producer.clone(),
+            is_working: self.is_working.clone(),
             worker_waker: self.worker_waker.clone(),
             recv_counter: self.recv_counter.clone(),
         }
@@ -118,6 +121,24 @@ impl<O: Default + 'static> MultiTasks<O> {
     #[inline]
     pub fn len(&self) -> usize {
         self.producer.len() + self.consumer.len()
+    }
+
+    //当前队列的工作者是否正在工作
+    pub fn is_working(&self) -> bool {
+        self.is_working.load(Ordering::Relaxed)
+    }
+
+    //设置当前工作者状态为正在工作
+    pub fn running_worker(&self) {
+        self.is_working.store(true, Ordering::Relaxed);
+    }
+
+    //设置当前工作者状态为已休眠
+    pub fn sleep_worker(&self) {
+        self.is_working.compare_exchange(true,
+                                         false,
+                                         Ordering::Acquire,
+                                         Ordering::Relaxed);
     }
 
     //尝试向多线程任务队列尾推入指定的任务
@@ -143,16 +164,15 @@ impl<O: Default + 'static> MultiTasks<O> {
             return Some(task);
         }
 
-        let worker_waker = self.worker_waker.clone();
-        let _ = THREAD_LOCAL_STATUS.try_with(move |status| {
-            if !status.swap(true, Ordering::SeqCst) {
-                //需要唤醒工作者
-                let (lock, cvar) = &**&worker_waker;
-                let mut status = lock.lock();
-                *status = true;
-                cvar.notify_one();
-            }
-        });
+        if !self.is_working.compare_and_swap(false,
+                                             true,
+                                             Ordering::Acquire) {
+            //需要唤醒工作者
+            let (lock, cvar) = &**&self.worker_waker;
+            let mut status = lock.lock();
+            *status = true;
+            cvar.notify_one();
+        }
 
         None
     }
@@ -161,21 +181,25 @@ impl<O: Default + 'static> MultiTasks<O> {
     pub fn push_back_notify(&self, task: Arc<MultiTask<O>>) -> Result<()> {
         self.producer.send(task);
 
-        let worker_waker = self.worker_waker.clone();
-        let _ = THREAD_LOCAL_STATUS.try_with(move |status| {
-            if !status.swap(true, Ordering::SeqCst) {
-                //需要唤醒工作者
-                let (lock, cvar) = &**&worker_waker;
-                let mut status = lock.lock();
-                *status = true;
-                cvar.notify_one();
-            }
-        });
+        if !self.is_working.compare_and_swap(false,
+                                             true,
+                                             Ordering::Acquire) {
+            //需要唤醒工作者
+            let (lock, cvar) = &**&self.worker_waker;
+            let mut status = lock.lock();
+            *status = true;
+            cvar.notify_one();
+        }
 
         Ok(())
     }
 
-    //向多线程任务接收队列尾推入指定的任务
+    //向多线程任务接收队列头推入指定的任务，一般用于当前线程内的推入
+    pub fn push_recv_front(&self, task: Arc<MultiTask<O>>) {
+        self.consumer.push_front(task, &self.recv_counter);
+    }
+
+    //向多线程任务接收队列尾推入指定的任务，一般用于当前线程内的推入
     pub fn push_recv_back(&self, task: Arc<MultiTask<O>>) {
         self.consumer.append(task, &self.recv_counter);
     }
@@ -185,11 +209,11 @@ impl<O: Default + 'static> MultiTasks<O> {
 * 异步多线程任务运行时，支持运行时线程间任务窃取
 */
 pub struct MultiTaskRuntime<O: Default + 'static>(Arc<(
-    usize,                                          //运行时唯一id
-    AtomicUsize,                                    //异步任务计数器
-    Arc<Vec<Arc<MultiTasks<O>>>>,                   //异步任务队列
-    Arc<AtomicUsize>,                               //所有待处理任务数量，只包括所有接收队列的任务数量
-    Option<AsyncTaskTimer>,                         //本地定时器
+    usize,                                                                              //运行时唯一id
+    AtomicUsize,                                                                        //异步任务计数器
+    Arc<Vec<Arc<MultiTasks<O>>>>,                                                       //异步任务队列
+    Arc<AtomicUsize>,                                                                   //所有待处理任务数量，只包括所有接收队列的任务数量
+    Option<Vec<(Sender<(usize, AsyncTimingTask<O>)>, Arc<Mutex<AsyncTaskTimer<O>>>)>>,  //休眠的异步任务生产者和本地定时器
 )>);
 
 unsafe impl<O: Default + 'static> Send for MultiTaskRuntime<O> {}
@@ -278,6 +302,32 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         Ok(())
     }
 
+    //派发一个在指定时间后执行的异步任务到异步多线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<u64>
+        where F: Future<Output = O> + Send + 'static {
+        if let Some(timers) = &(self.0).4 {
+            let queues = &(self.0).2;
+            let mut index: usize = (self.0).1.fetch_add(1, Ordering::Relaxed) % (self.0).2.len(); //随机选择一个线程的队列和定时器
+            let queue = &queues[index];
+            let (_, timer) = &timers[index];
+            let handle = timer.lock().set_timer(AsyncTimingTask::WaitRun(WaitRunTask::MultiTask(Arc::new(MultiTask::new(task_id, queue.clone(), Some(Box::new(future).boxed()))))), time);
+
+            return Ok(((index as u64) << 40) | (handle as u64)); //定时器偏移加上定时异步任务的句柄
+        }
+
+        Err(Error::new(ErrorKind::Other, format!("Spawn timing task failed, task_id: {:?}, reason: timer not exist", task_id)))
+    }
+
+    //取消指定句柄的多线程定时异步任务
+    pub fn cancel_timing(&self, handle: u64) {
+        if let Some(timers) = &(self.0).4 {
+            let index = (handle >> 40) as usize; //获取多线程定时异步任务所在定时器偏移
+            let handle = handle & 0xffffffffff; //获取多线程定时异步任务句柄
+            let (_, timer) = &timers[index];
+            timer.lock().timer.as_ref().borrow_mut().cancel(handle as usize);
+        }
+    }
+
     //挂起指定唯一id的异步任务
     pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
         task_id.0.store(Box::into_raw(Box::new(waker)) as usize, Ordering::Relaxed);
@@ -316,9 +366,19 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
 impl<O: Default + 'static> MultiTaskRuntime<O> {
     //挂起当前多线程运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
-        if let Some(timer) = (self.0).4.as_ref() {
+        if let Some(timers) = &(self.0).4 {
             //有本地定时器，则异步等待指定时间
-            AsyncWaitTimeout::new(AsyncRuntime::Multi(self.clone()), timer.get_producor(), timeout).await
+            match THREAD_LOCAL_ID.try_with(move |id| {
+                //将休眠的异步任务投递到当前派发线程的定时器内
+                let thread_id = unsafe { *id.get() };
+                let (producor, _) = &timers[(thread_id & 0xff) - 1];
+                producor.clone()
+            }) {
+                Err(_) => (),
+                Ok(producor) => {
+                    AsyncWaitTimeout::new(AsyncRuntime::Multi(self.clone()), producor.clone(), timeout).await;
+                },
+            }
         } else {
             //没有本地定时器，则同步休眠指定时间
             thread::sleep(Duration::from_millis(timeout as u64));
@@ -348,8 +408,6 @@ pub struct MultiTaskPool<O: Default + 'static> {
     runtime:    MultiTaskRuntime<O>,            //异步多线程任务运行时
     timeout:    u64,                            //工作者空闲时最长休眠时间
     builders:   Vec<Builder>,                   //工作者构建器列表
-    interval:   Option<u64>,                    //定时器运行间隔时间
-    builer:     Option<Builder>,                //定时器构建器
 }
 
 unsafe impl<O: Default + 'static> Send for MultiTaskPool<O> {}
@@ -357,7 +415,7 @@ unsafe impl<O: Default + 'static> Sync for MultiTaskPool<O> {}
 
 impl<O: Default + 'static> MultiTaskPool<O> {
     //构建指定线程名前缀、线程数量、线程栈大小、线程空闲时最长休眠时间和是否使用本地定时器的多线程任务池
-    pub fn new(prefix: String, mut size: usize, stack_size: usize, timeout: u64, interval: Option<u64>) -> Self {
+    pub fn new(prefix: String, mut size: usize, stack_size: usize, timeout: u64, interval: Option<usize>) -> Self {
         if size == 0 {
             //如果线程太少，则设置至少1个线程
             size = 1;
@@ -374,29 +432,35 @@ impl<O: Default + 'static> MultiTaskPool<O> {
         //构建多线程任务队列
         let rt_uid = alloc_rt_uid();
         let mut queues = Vec::with_capacity(size);
+        let mut timers = if let Some(interval) = interval {
+            Some(Vec::with_capacity(size))
+        } else {
+            None
+        };
         let counter = Arc::new(AtomicUsize::new(0));
         for index in 0..size {
             let (producer, consumer) = steal_deque();
             let worker_waker = Arc::new((Mutex::new(false), Condvar::new()));
+
+            //构建任务队列
             let queue = Arc::new(MultiTasks {
                 id: (rt_uid << 8) & 0xffff | (index + 1) & 0xff,
                 consumer,
                 producer,
+                is_working: Arc::new(AtomicBool::new(false)),
                 worker_waker,
                 recv_counter: counter.clone(),
             });
             queues.push(queue);
-        }
 
-        //构建本地定时器
-        let (timer, builer) = if let Some(interval) = interval {
-            let builder = Builder::new()
-                .name(prefix.to_string() + "-Timer")
-                .stack_size(stack_size);
-            (Some(AsyncTaskTimer::new()), Some(builder))
-        } else {
-            (None, None)
-        };
+            //构建本地定时器和定时异步任务生产者
+            if let Some(vec) = &mut timers {
+                let timer = AsyncTaskTimer::with_interval(interval.unwrap());
+                let producor = timer.producor.clone();
+                let timer = Arc::new(Mutex::new(timer));
+                vec.push((producor, timer));
+            };
+        }
 
         //构建多线程任务运行时
         let runtime = MultiTaskRuntime(Arc::new((
@@ -404,15 +468,13 @@ impl<O: Default + 'static> MultiTaskPool<O> {
             AtomicUsize::new(0),
             Arc::new(queues),
             counter,
-            timer,
+            timers,
         )));
 
         MultiTaskPool {
             runtime,
             timeout,
             builders,
-            interval,
-            builer,
         }
     }
 
@@ -423,40 +485,39 @@ impl<O: Default + 'static> MultiTaskPool<O> {
 
     //启动异步多线程任务池，如果任务有大量或长时间的阻塞则建议允许窃取，否则建议不允许窃取
     pub fn startup(mut self, enable_steal: bool) -> MultiTaskRuntime<O> {
-        if let Some(builer) = self.builer.take() {
-            //启动本地定时器
-            let runtime = self.runtime.clone();
-            let interval = self.interval.unwrap();
-            builer.spawn(move || {
-                timer_loop(runtime, interval);
-            });
-        }
-
         //启动工作线程
         for index in 0..self.builders.len() {
             let builder = self.builders.remove(0);
             let runtime = self.runtime.clone();
             let timeout = self.timeout;
-            let _ = builder.spawn(move || {
-                work_loop(runtime, index, enable_steal, timeout);
-            });
+            let timer = if let Some(timers) = &(self.runtime.0).4 {
+                let (_, timer) = &timers[index];
+                Some(timer.clone())
+            } else {
+                None
+            };
+
+            if let Some(timer) = timer {
+                //设置了定时器
+                let _ = builder.spawn(move || {
+                    timer_work_loop(runtime,
+                                    index,
+                                    enable_steal,
+                                    timeout,
+                                    timer);
+                });
+            } else {
+                //未设置定时器
+                let _ = builder.spawn(move || {
+                    work_loop(runtime,
+                              index,
+                              enable_steal,
+                              timeout);
+                });
+            }
         }
 
         self.runtime
-    }
-}
-
-//定时器循环
-fn timer_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>, interval: u64) {
-    loop {
-        //设置新的定时任务，并唤醒已过期的定时任务
-        (runtime.0).4.as_ref().unwrap().consume();
-        for expired in &(runtime.0).4.as_ref().unwrap().poll() {
-            runtime.wakeup(expired);
-        }
-
-        //间隔指定时间后继续
-        thread::sleep(Duration::from_millis(interval));
     }
 }
 
@@ -474,11 +535,7 @@ fn work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
     }) {
         panic!("Multi thread runtime startup failed, thread id: {:?}, reason: {:?}", thread_id, e);
     }
-    if let Err(e) = THREAD_LOCAL_STATUS.try_with(move |status| {
-        status.store(true, Ordering::Relaxed);
-    }) {
-        panic!("Multi thread runtime startup failed, thread id: {:?}, reason: {:?}", thread_id, e);
-    }
+    queue.running_worker(); //设置队列工作者的状态为正在工作
 
     let counter = &(runtime.0).3;
     loop {
@@ -494,20 +551,89 @@ fn work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
                 }
 
                 //获取任务失败，则准备休眠
-                let _ = THREAD_LOCAL_STATUS.try_with(move |status| {
-                    status.store(false, Ordering::SeqCst); //设置线程为非活动
-                });
-                let (lock, cvar) = &**worker_waker;
-                let mut status = lock.lock();
-                while !*status {
+                queue.sleep_worker(); //设置队列工作者的状态为已休眠
+                {
+                    let (lock, cvar) = &**worker_waker;
+                    let mut status = lock.lock();
                     //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
-                    let wait = cvar.wait_for(&mut status, Duration::from_millis(timeout));
-                     if wait.timed_out() {
-                        //超时后自动唤醒，则更新工作者唤醒状态，并退出唤醒状态的检查
-                        break;
+                    cvar.wait_for(&mut status, Duration::from_millis(timeout));
+                }
+                queue.running_worker(); //设置队列工作者的状态为正在工作
+            },
+            Some(task) => {
+                run_task(&runtime, queue, task);
+            },
+        }
+    }
+}
+
+//有定时器的线程工作循环
+fn timer_work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
+                                   queue_index: usize,
+                                   enable_steal: bool,
+                                   timeout: u64,
+                                   timer: Arc<Mutex<AsyncTaskTimer<O>>>) {
+    //初始化当前线程的线程id和线程活动状态
+    let queue = (runtime.0).2.get(queue_index).unwrap();
+    let worker_waker = &queue.worker_waker;
+    let thread_id = queue.id;
+    if let Err(e) = THREAD_LOCAL_ID.try_with(move |id| {
+        unsafe { (*id.get()) = thread_id; }
+    }) {
+        panic!("Multi thread runtime startup failed, thread id: {:?}, reason: {:?}", thread_id, e);
+    }
+    queue.running_worker(); //设置队列工作者的状态为正在工作
+
+    let mut last_run_millis = 0;
+    let rt = runtime.clone();
+    let counter = &(runtime.0).3;
+    loop {
+        //设置新的定时任务，并唤醒已过期的定时任务
+        timer.lock().consume();
+        let timing_task = timer.lock().pop();
+        match timing_task {
+            Some(AsyncTimingTask::Pended(expired)) => {
+                //唤醒休眠的异步任务
+                rt.wakeup(&expired);
+            },
+            Some(AsyncTimingTask::WaitRun(WaitRunTask::MultiTask(expired))) => {
+                //立即执行到期的定时异步任务
+                queue.push_recv_front(expired);
+            },
+            _ => {
+                //当前没有定时异步任务，则推动定时器
+                last_run_millis = timer.lock().poll();
+            },
+        }
+
+        match queue.consumer.try_recv(counter) {
+            None => {
+                //当前没有任务
+                if enable_steal {
+                    //允许窃取任务
+                    if try_steal_task(&runtime, queue) {
+                        //尝试窃取成功，则继续工作
+                        continue;
                     }
                 }
-                *status = false; //重置工作者唤醒状态，并继续工作
+
+                //获取任务失败，则准备休眠
+                let diff_time = run_millis() - last_run_millis;
+                let real_timeout = if diff_time > timeout {
+                    //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
+                    continue;
+                } else {
+                    //定时器内部时间与当前时间差距不大，则休眠差值时间
+                    timeout - diff_time
+                };
+                queue.sleep_worker(); //设置队列工作者的状态为已休眠
+                {
+                    let (lock, cvar) = &**worker_waker;
+                    let mut status = lock.lock();
+                    //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
+                    cvar.wait_for(&mut status, Duration::from_millis(real_timeout));
+                }
+                queue.running_worker(); //设置队列工作者的状态为正在工作
             },
             Some(task) => {
                 run_task(&runtime, queue, task);

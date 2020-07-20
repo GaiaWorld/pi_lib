@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::ptr::null_mut;
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU8, AtomicPtr, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicPtr, AtomicUsize, Ordering};
+
+use parking_lot::{Mutex, Condvar};
 
 use super::spin;
 
@@ -461,6 +463,25 @@ impl<T: 'static> Receiver<T> {
     pub fn take(&self) -> Option<VecDeque<T>> {
         //交换接收队列，返回当前接收队列
         swap_recv_deque(&self.inner.deque, Box::into_raw(Box::new(VecDeque::new())))
+    }
+
+    //向接收缓冲区头部增加值
+    pub fn push_front(&self, value: T, counter: &AtomicUsize)  {
+        unsafe {
+            if let Some(last_value) = (&mut *self.inner.buf.get()).take() {
+                //缓冲区有值，则将缓冲区的值放入接收缓冲区头
+                if let Some(mut deque) = swap_recv_deque(&self.inner.deque, null_mut()) {
+                    deque.push_front(last_value);
+                    swap_recv_deque(&self.inner.deque, Box::into_raw(Box::new(deque)));
+                } else {
+                    panic!("!!!!!!Push to recv deque front failed, reason: recv dqeueu not exist");
+                }
+            }
+
+            //将值放入缓冲区，并增加接收队列的任务计数
+            *self.inner.buf.get() = Some(value);
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     //向接收缓冲区尾部增加值
