@@ -66,16 +66,13 @@ impl<T: Send + 'static> LocalTimer<T>{
 
     //尝试推动定时器运行，返回定时器内部时间与当前时间的差值
     pub fn try_poll(&mut self) -> u64 {
-        let now = run_millis();
-        let last = self.wheel.get_time();
-        let diff = now - last;
-
-        if now > self.tick_time as u64 + last {
+        let last_run_millis = self.wheel.get_time();
+        if run_millis() > self.tick_time as u64 + last_run_millis {
             //当前时间没有任何到期的任务，且超过定时轮最小定时间隔，则立即推动一次定时轮
             self.wheel.roll_once();
         }
 
-        diff
+        last_run_millis
     }
 
     //尝试获取一个已到时间的任务，返回的任务会从定时器中移除

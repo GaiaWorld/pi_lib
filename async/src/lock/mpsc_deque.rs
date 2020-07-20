@@ -204,6 +204,13 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
+    //将指定值推入接收缓冲区头
+    pub fn push_front(&mut self, value: T) {
+        unsafe {
+            (&mut *self.inner.buf.get()).as_mut().unwrap().push_front(value);
+        }
+    }
+
     //非阻塞接收值
     pub fn try_recv(&mut self) -> Option<T> {
         unsafe {
@@ -246,6 +253,60 @@ impl<T: 'static> Receiver<T> {
                                     return None;
                                 }
                             },
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    //非阻塞接收当前所有值
+    pub fn try_recv_all(&mut self) -> Vec<T> {
+        let mut truncated = false;
+        let mut vec = Vec::new();
+        unsafe {
+            loop {
+                if let Some(value) = (&mut *self.inner.buf.get()).as_mut().unwrap().pop_front() {
+                    //接收缓冲区有值，则缓存，并继续弹出接收缓冲区的值
+                    vec.push(value);
+                } else {
+                    //接收缓冲区没有值
+                    if truncated || self.inner.sender.try_is_empty() {
+                        //本次获取已截短或发送缓冲区没有值，则立即返回
+                        return vec;
+                    } else {
+                        //发送缓冲区有值，则交换发送缓冲区和接收缓冲区，并从接收缓冲区弹出
+                        let mut spin_len = 1;
+                        let mut status = UNLOCK_NON_EMPTY;
+                        loop {
+                            match self.inner.sender.inner.buf_status.compare_exchange_weak(status,
+                                                                                           LOCKED,
+                                                                                           Ordering::Acquire,
+                                                                                           Ordering::Relaxed) {
+                                Err(current) if current == LOCKED => {
+                                    //已锁，则自旋后继续尝试锁
+                                    spin_len = spin(spin_len);
+                                    continue;
+                                },
+                                Err(current) => {
+                                    //锁状态不匹配，则更新当前锁状态，并立即尝试锁
+                                    status = current;
+                                    continue;
+                                },
+                                Ok(_) => {
+                                    //锁成功，则交换发送缓冲区和接收缓冲区，并从接收缓冲区弹出
+                                    if swap(self.inner.sender.inner.buf.get(), self.inner.buf.get()) {
+                                        //交换成功，则从交换后的接收缓冲区弹出值
+                                        self.inner.sender.inner.buf_status.store(UNLOCK_EMPTY, Ordering::SeqCst);
+                                        truncated = true; //已截短
+                                        break;
+                                    } else {
+                                        //交换失败，则立即返回
+                                        self.inner.sender.inner.buf_status.store(UNLOCK_EMPTY, Ordering::SeqCst);
+                                        return vec;
+                                    }
+                                },
+                            }
                         }
                     }
                 }
