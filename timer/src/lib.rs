@@ -33,7 +33,7 @@ lazy_static! {
     //定时任务运行数量
     pub static ref TIMER_RUN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_run_count"), 0).unwrap();
     //定时任务运行总时长
-    pub static ref TIMER_RUN_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("timer_run_time"), 0).unwrap();
+	pub static ref TIMER_RUN_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("timer_run_time"), 0).unwrap();
 }
 
 pub trait Runer{
@@ -53,28 +53,28 @@ impl<T: 'static + Send + Runer> Timer<T>{
 		thread::Builder::new()
             .name("Timer".to_string())
             .spawn(move ||{
-                let mut sleep_time = {
-                    let mut lock = s.lock().unwrap();
-                    lock.wheel.set_time(run_millis());
-                    lock.clock_ms
-                };
+                let mut sleep_time = s.lock().unwrap().clock_ms;
+				let start_time = run_millis();
                 loop {
                     thread::sleep(Duration::from_millis(sleep_time));
                     let mut now = run_millis();
-                    now = run_zero(&s, now);//运行0毫秒任务
+                    run_zero(&s);//运行0毫秒任务
                     loop {
                         let mut r = {
-                            let mut s = s.lock().unwrap();
-                            match now >= s.clock_ms + s.wheel.get_time(){
+							let mut s = s.lock().unwrap();
+							let next_roll_time = s.clock_ms + s.wheel.get_time() + start_time;
+                            match now >= next_roll_time{
                                 true => s.wheel.roll(),
                                 false => {
-                                    sleep_time = s.clock_ms + s.wheel.get_time()- now;
+                                    sleep_time = next_roll_time - now;
                                     break;
                                 }
                             }
-                        };
-                        now = run_task(&s, &mut r);
-                        now = run_zero(&s, now);//运行0毫秒任务
+						};
+						
+                        run_task(&s, &mut r);
+						run_zero(&s);//运行0毫秒任务
+						now = run_millis();
                     }
                 }
 		});
@@ -84,7 +84,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
         TIMER_CREATE_COUNT.sum(1);
 
         let mut lock = self.0.lock().unwrap();
-        let time =  lock.wheel.get_time();
+		let time =  lock.wheel.get_time();
 		lock.wheel.insert(Item{elem: elem, time_point: time + (ms as u64)})
 	}
 
@@ -145,7 +145,7 @@ impl Runer for FuncRuner {
 
 impl Debug for FuncRuner {
 	fn fmt(&self, fmt: &mut Formatter) -> FResult {
-        write!(fmt,"F")
+        write!(fmt,"FuncRuner")
     }
 }
 
@@ -182,7 +182,7 @@ impl Statistics{
 }
 
 
-fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> u64{
+fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>){
     loop {
         let mut r = {
             let mut s = timer.lock().unwrap();
@@ -193,15 +193,14 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, mut now: u64) -> 
                 }
             }
         };
-        now = run_task(timer, &mut r);
+        run_task(timer, &mut r);
         r.clear();
         timer.lock().unwrap().wheel.set_zero_cache(r);
     }
-    now
 }
 
 //执行任务，返回任务执行完的时间
-fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>) -> u64{
+fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>){
     let start = TIMER_RUN_TIME.start();
 	let mut j = r.len();
 	TIMER_RUN_COUNT.sum(r.len());
@@ -213,7 +212,6 @@ fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item
 	
     
     TIMER_RUN_TIME.timing(start);
-    run_millis()
 }
 #[test]
 fn test(){
@@ -231,8 +229,9 @@ fn test(){
 #[cfg(test)]
 extern crate rand;
 
+// 测试定时任务弹出数量是否和插入数量保持一致
 #[test]
-fn test_timer() {
+fn test_count() {
     use rand::thread_rng;
     use rand::Rng;
 	use rand::seq::SliceRandom;
@@ -245,31 +244,17 @@ fn test_timer() {
 
 	let mut timer_refs = vec![];
 	let mut timer_map = HashMap::new();
-	// let mut pop = Arc::new(Mutex::new(Vec::new()));
-	// let mut run_success_map = HashMap::new();
-	// let mut run_success_vec = Vec::new();
-    for i in 1..100001 {
-		// let map1 = &mut run_success_map;
-		// let vec1 = &mut run_success_vec;
+	let total = 100000;
+    for _i in 1..total + 1 {
 		let count = count.clone();
 		let t = rng.gen_range(10, 5000);
         let timer_ref  =TIMER.set_timeout(FuncRuner::new(Box::new(move || {
             count.fetch_add(1, Ordering::SeqCst);
-			// println!("timer task {:?}", i);
-			// map1.insert(i, true);
-			// vec1.push(i);
-			// pop.lock.push(i);
         })), t);
 
-		// if let Some(r) = timer_map.get(&timer_ref) {
-		// 	panic!("error:{}", timer_ref);
-		// }
 		timer_refs.push(timer_ref);
 		timer_map.insert(timer_ref, true);
 	}
-	
-
-    // println!("timer refs = {:?}, len:{}", timer_refs,timer_refs.len());
 
 
 	let cancel: Vec<usize> = timer_refs.choose_multiple(&mut rng, 50).cloned().collect();
@@ -290,27 +275,131 @@ fn test_timer() {
         thread::sleep(Duration::from_millis(rng.gen_range(10, 100)));
     }
 
-    thread::sleep(Duration::from_millis(7000));
-
-	println!("cancel success: {:?}, cancel fail: {:?}", cancel_success.len(), cancel_fail.len());
-	
-	// for cs in cancel_success.iter() {
-	// 	match run_success_map.get(cs) {
-	// 		Some(_) => {
-	// 			panic!("xxxxxxxxxxxxxxxxxxxxxx");
-	// 		}
-	// 	}
-	// }
-
-	// for cs in cancel_fail.iter() {
-	// 	match run_success_map.get(cs) {
-	// 		None => {panic!("xxxxxxxxxxxxxxxxxxxxxx");}
-	// 	}
-	// }
-
-	
-
-	println!("count = {:?}, {:?}", count, TIMER_RUN_COUNT.get());
-	// for i of cancel {}
+    thread::sleep(Duration::from_millis(5100));
+	println!("run: {:?}, total: {:?}, cancel_success: {}, cancel_fail:{}", count, total, cancel_success.len(), cancel_fail.len());
 }
 
+
+// 测试定时器得延时情况
+#[test]
+fn test_timer_delay() {
+    use rand::thread_rng;
+    use rand::Rng;
+
+	TIMER.run();
+    let mut rng = thread_rng();
+    for _i in 1..100000 {
+		let t = rng.gen_range(10, 10000);
+		let time = run_millis();
+        TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+			if run_millis() as isize - time as isize - t as isize > 11 || -11 > run_millis() as isize - time as isize - t as isize {
+				println!("task delay================{}, {}", run_millis() as isize - time as isize - t as isize, t as u64 + time);
+			}
+		})), t);
+	}
+	
+	thread::sleep(Duration::from_millis(11000));
+}
+
+// test_timer_delay中如果存在某个时间延迟较多，则可在此测试中单独测试该时间任务是否准时
+#[test] 
+fn test_timer_delay_single() {
+	TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+		println!("task================{}", run_millis());
+	})), 6692);
+
+	println!("start================{}", run_millis());
+	TIMER.run();
+	thread::sleep(Duration::from_millis(11000));
+}
+
+// #[test]
+// fn test_timer2() {
+//     use rand::thread_rng;
+//     use rand::Rng;
+// 	use rand::seq::SliceRandom;
+// 	use std::collections::HashMap;
+
+// 	TIMER.run();
+//     let mut rng = thread_rng();
+
+//     let count = Arc::new(AtomicUsize::new(0));
+
+// 	// let mut timer_refs = Arc::new(Mutex::new(vec![]));
+// 	// let mut timer_map = HashMap::new();
+
+// 		let count = count.clone();
+// 		let t = 9231;
+// 		let time = run_millis();
+//         let timer_ref  =TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+// 			// count.fetch_add(1, Ordering::SeqCst);
+// 			// t1.lock().unwrap().push(( run_millis() as isize - time as isize - t as isize, t, run_millis()));
+// 			println!("==============={}, {}, now:{}", run_millis() as isize - time as isize - t as isize, t, run_millis());
+// 		})), t);
+	
+	
+// 	// 	timer_refs.push(timer_ref);
+// 	// 	timer_map.insert(timer_ref, true);
+// 	// }
+
+//     // thread::sleep(Duration::from_millis(11000));
+// 	// println!("count = {:?}, {:?}", count, TIMER_RUN_COUNT.get());
+
+// 	// let time = run_millis();
+// 	// let timer_ref  =TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+		
+// 	// 	println!("=================={}", run_millis() - time);
+// 	// })), 10000);
+	
+// 	thread::sleep(Duration::from_millis(13000));
+// 	println!("timer_refs1======================{:?}", timer_refs1.lock().unwrap().as_slice());
+// }
+
+// #[test]
+// fn test_wheel() {
+//     use rand::thread_rng;
+//     use rand::Rng;
+// 	use rand::seq::SliceRandom;
+// 	use std::collections::HashMap;
+// 	use wheel::wheel::Item;
+// 	let mut rng = thread_rng();
+// 	let mut timer_refs = Arc::new(Mutex::new(vec![]));
+
+// 	let mut r = Wheel::new();
+// 	for i in 1..1000 {
+// 		let t = rng.gen_range(10, 10000);
+// 		let time = run_millis();
+// 		let t1 = timer_refs.clone();
+// 		r.insert(Item{
+// 			elem: FuncRuner::new(Box::new(move || {
+// 				// t1.lock().unwrap().push(( run_millis() as isize - time as isize - t as isize, t));
+// 			})),
+// 			time_point: run_millis() + t,
+// 		});
+// 	}
+
+// 	let mut count=  0;
+// 	while count < 1000 {
+// 		count +=  1;
+// 		let time = run_millis();
+// 		r.roll();
+// 		timer_refs.lock().unwrap().push( run_millis() as isize - time as isize);
+// 	}
+// 	// let mut timer_map = HashMap::new();
+    
+	
+// 	// 	timer_refs.push(timer_ref);
+// 	// 	timer_map.insert(timer_ref, true);
+// 	// }
+
+//     // thread::sleep(Duration::from_millis(11000));
+// 	// println!("count = {:?}, {:?}", count, TIMER_RUN_COUNT.get());
+
+// 	// let time = run_millis();
+// 	// let timer_ref  =TIMER.set_timeout(FuncRuner::new(Box::new(move || {
+		
+// 	// 	println!("=================={}", run_millis() - time);
+// 	// })), 10000);
+// 	thread::sleep(Duration::from_millis(13000));
+// 	println!("======================{:?}", timer_refs);
+// }
