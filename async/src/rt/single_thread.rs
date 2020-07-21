@@ -331,20 +331,23 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
 
         //设置新的定时任务，并唤醒已过期的定时任务
         (self.runtime.0).3.lock().consume();
-        let timing_task = (self.runtime.0).3.lock().pop();
-        match timing_task {
-            Some(AsyncTimingTask::Pended(expired)) => {
-                //唤醒休眠的异步任务
-                self.runtime.wakeup(&expired);
-            },
-            Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
-                //立即执行到期的定时异步任务
-                (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
-            },
-            _ => {
-                //当前没有定时异步任务，则推动定时器
-                (self.runtime.0).3.lock().poll();
-            },
+        loop {
+            let timing_task = (self.runtime.0).3.lock().pop();
+            match timing_task {
+                Some(AsyncTimingTask::Pended(expired)) => {
+                    //唤醒休眠的异步任务
+                    self.runtime.wakeup(&expired);
+                },
+                Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
+                    //立即执行到期的定时异步任务
+                    (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
+                },
+                _ => {
+                    //当前没有定时异步任务，则推动定时器，并退出定时器处理循环
+                    (self.runtime.0).3.lock().poll();
+                    break;
+                },
+            }
         }
 
         //执行异步任务
