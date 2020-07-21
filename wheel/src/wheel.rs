@@ -80,7 +80,6 @@ impl<T> Wheel<T>{
 			self.len -= 1;
 			return Some(ts);
 		}
-
 		None
 		// replace(&mut self.zero_arr, replace(&mut self.zero_cache, Vec::new()))
 	}
@@ -102,6 +101,7 @@ impl<T> Wheel<T>{
 		// 计算时间差
 		let mut diff = sub(item.time_point, self.time);
 		self.len += 1;
+		// println!("diff============{}", diff);
 
 		//如果时间差为0， 则将其插入到zero_arr（特殊处理0毫秒）
 		if diff == 0 {
@@ -115,16 +115,24 @@ impl<T> Wheel<T>{
 			return self.heap.push(item, index, index_factory);
 		}
 		diff = diff - 1;
-		
-		if diff < 1000{
+
+		let layer = if diff < 1000{
 			self.insert_ms((item, index), diff, index_factory);
+			return;
 		}else if diff < 61000{
-			self.insert_wheel((item, index), 1, diff, index_factory);
+			1
 		}else if diff < 3661000{
-			self.insert_wheel((item, index), 2, diff, index_factory);
+			2
 		}else{
-			self.insert_wheel((item, index), 3, diff, index_factory);
+			3
+		};
+
+		let mut pre_layer = 0;
+		while pre_layer < layer{
+			diff += self.point[pre_layer] as u64 * UNIT[pre_layer] as u64;
+			pre_layer += 1;
 		}
+		self.insert_wheel((item, index), layer, diff, index_factory);
 	}
 
 	pub fn roll< F: UintFactory + ClassFactory<usize>>(&mut self, index_factory: &mut F) -> Vec<(Item<T>, usize)>{
@@ -210,17 +218,17 @@ impl<T> Wheel<T>{
 	//插入到毫秒轮
 	fn insert_ms< F: UintFactory + ClassFactory<usize>>(&mut self, item: (Item<T>, usize), diff: u64, index_factory: &mut F){
 		let i = (next_tail(self.point[0], (diff/10) as u8, 100)) as usize;
-        index_factory.store(item.1, self.arr[i].len());
+		// println!("insert_ms===========diff:{}, i:{}", diff, i);
+		index_factory.store(item.1, self.arr[i].len());
         index_factory.set_class(item.1, i);
 		self.arr[i].push(item);
 	}
 
 	//秒，分钟，小时轮的插入方法
 	fn insert_wheel< F: UintFactory + ClassFactory<usize>>(&mut self, item: (Item<T>, usize), layer: usize, diff: u64, index_factory: &mut F){
-		let i = (next_tail(self.point[layer], (diff/(UNIT[layer] as u64)) as u8, CAPACITY[layer]) + START[layer]) as usize;
+		let i = (next_tail(self.point[layer], (diff/(UNIT[layer] as u64)) as u8 - 1, CAPACITY[layer]) + START[layer]) as usize;
 		index_factory.store(item.1, self.arr[i].len());
 		index_factory.set_class(item.1, i);
-		// println!("layer:{},insert_wheel:{}, len:{}, time:{}, diff:{}, itemtime:{}",layer, i, self.arr[i].len(), self.time, diff,item.0.time_point);
 		self.arr[i].push(item);
 		
 	}
@@ -248,15 +256,16 @@ impl<T> Wheel<T>{
 	}
 
 	/// 前进一个单位
-	fn adjust< F: UintFactory + ClassFactory<usize>>(&mut self, mut layer: usize, index_factory: &mut F){
+	fn adjust< F: UintFactory + ClassFactory<usize>>(&mut self, layer: usize, index_factory: &mut F){
 		// println!("adjust==============");
 		if layer > 3 {
 			self.adjust_heap(index_factory);
 		} else {
 			let point = self.point[layer] as usize;
 			let s = START[layer] as usize;
-			// println!("adjust==============layer:{}, point:{}, start:{}", layer, point, s);
+			// println!("adjust==============layer:{}, point:{}, start:{}, time:{}", layer, point, s, self.time);
 			let mut r = VecDeque::from(replace(&mut self.arr[point + s], Vec::new()));
+			// println!("adjust==============point:{}, layer:{}", self.point[layer], layer);
 			loop {
 				match r.pop_front() {
 					Some(v) => self.adjust_item(v, index_factory),
@@ -265,6 +274,7 @@ impl<T> Wheel<T>{
 			}
 			replace(&mut self.arr[point + s], Vec::from(r));
 			self.point[layer] = next_tail(point as u8, 1, CAPACITY[layer]);
+			
 			if self.point[layer] == 0 {
 				self.adjust(layer + 1, index_factory);
 			}
@@ -296,7 +306,10 @@ impl<T> Wheel<T>{
 		// println!("adjust_item===========item_time:{}, self:time{}, diff:{}", value.0.time_point, self.time, diff );
 		match diff{
 			0..1000 => self.insert_ms(value, diff, index_factory),
-			1000..61000 => self.insert_wheel(value, 1, diff, index_factory),
+			1000..61000 => {
+				// println!("insert wheel===========diff:{}, layer:{}, UNIT:{}, point:{}, time:{}, time_point:{}", diff, 1, UNIT[1], self.point[1], self.time, value.0.time_point);
+				self.insert_wheel(value, 1, diff, index_factory);
+			},
 			61000..3661000 => self.insert_wheel(value, 2, diff, index_factory),
 			_ => self.insert_wheel(value, 3, diff, index_factory)
 		}
