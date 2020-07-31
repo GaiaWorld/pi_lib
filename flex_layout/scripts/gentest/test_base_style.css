@@ -1,0 +1,50 @@
+body {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  width: 1920px;
+  height: 1024px;
+  align-items: start;
+}
+
+div, span, img {
+  box-sizing: border-box;
+  position: relative;
+  border: 0 solid black;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: start;
+}
+
+body > * {
+  position: absolute;
+}
+
+div {
+  background-color: #222;
+}
+
+div > div {
+  background-color: #444;
+}
+
+div > div > div {
+  background-color: #666;
+}
+
+div > div > div > div {
+  background-color: #888;
+}
+
+div > div > div > div > div {
+  background-color: #aaa;
+}
+
+div > div > div > div > div > div {
+  background-color: #ccc;
+}
+
+div > div > div > div > div > div > div {
+  background-color: #eee;
+}

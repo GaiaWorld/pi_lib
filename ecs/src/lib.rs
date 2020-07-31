@@ -26,8 +26,6 @@ pub mod entity;
 pub mod monitor;
 pub mod single;
 
-pub mod idtree;
-
 pub use component::{CellMultiCase, Component, MultiCaseImpl};
 pub use dispatch::{Dispatcher, SeqDispatcher};
 pub use entity::{CellEntity, EntityImpl};

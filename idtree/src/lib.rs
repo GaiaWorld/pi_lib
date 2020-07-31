@@ -1,5 +1,7 @@
 extern crate map;
 
+use std::ops::{Index, IndexMut};
+
 use map::vecmap::VecMap;
 
 pub enum InsertType {
@@ -8,12 +10,26 @@ pub enum InsertType {
 }
 
 #[derive(Default)]
-pub struct IdTree<T:Default> {
+pub struct IdTree<T: Default> {
     map: VecMap<Node<T>>,
     statistics_count: bool,
 }
 
-impl<T:Default> IdTree<T> {
+impl<T: Default> Index<usize> for IdTree<T> {
+    type Output = Node<T>;
+
+    fn index(&self, index: usize) -> &Node<T> {
+        &self.map[index]
+    }
+}
+
+impl<T: Default> IndexMut<usize> for IdTree<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Node<T> {
+        &mut self.map[index]
+    }
+}
+
+impl<T: Default> IdTree<T> {
     pub fn is_statistics_count(&self) -> bool {
         self.statistics_count
     }
@@ -24,14 +40,14 @@ impl<T:Default> IdTree<T> {
         self.map.get(id)
     }
     pub fn get_mut(&mut self, id: usize) -> Option<&mut Node<T>> {
-      self.map.get_mut(id)
-  }
+        self.map.get_mut(id)
+    }
     pub unsafe fn get_unchecked(&self, id: usize) -> &Node<T> {
         self.map.get_unchecked(id)
     }
     pub unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut Node<T> {
-      self.map.get_unchecked_mut(id)
-  }
+        self.map.get_unchecked_mut(id)
+    }
     pub fn create(&mut self, id: usize) {
         self.map.insert(id, Node::default());
     }
@@ -39,15 +55,15 @@ impl<T:Default> IdTree<T> {
     pub fn insert_child(&mut self, id: usize, parent: usize, mut index: usize) -> usize {
         if parent > 0 {
             let (layer, prev, next) = match self.map.get(parent) {
-                Some(n) if index >= n.children_len => (
+                Some(n) if index >= n.children.len => (
                     if n.layer > 0 { n.layer + 1 } else { 0 },
-                    n.children_tail,
+                    n.children.tail,
                     0,
                 ),
-                Some(n) if index + index >= n.children_len => {
-                    let mut prev = n.children_tail;
+                Some(n) if index + index >= n.children.len => {
+                    let mut prev = n.children.tail;
                     let mut next = 0;
-                    index = n.children_len - index;
+                    index = n.children.len - index;
                     while index > 0 && prev > 0 {
                         index -= 1;
                         next = prev;
@@ -58,7 +74,7 @@ impl<T:Default> IdTree<T> {
                 }
                 Some(n) => {
                     let mut prev = 0;
-                    let mut next = n.children_head;
+                    let mut next = n.children.head;
                     while index > 0 && next > 0 {
                         index -= 1;
                         prev = next;
@@ -90,9 +106,9 @@ impl<T:Default> IdTree<T> {
         }
     }
     /// 获得节点信息， 一般用于remove和destroy
-    pub fn get_info(&mut self, id: usize) -> Option<(usize, usize, isize, usize, usize, usize)> {
+    pub fn get_info(&mut self, id: usize) -> Option<(usize, usize, usize, usize, usize, usize)> {
         match self.map.get(id) {
-            Some(n) => Some((n.parent, n.layer, n.count, n.prev, n.next, n.children_head)),
+            Some(n) => Some((n.parent, n.layer, n.count, n.prev, n.next, n.children.head)),
             _ => return None,
         }
     }
@@ -100,7 +116,7 @@ impl<T:Default> IdTree<T> {
     pub fn remove(
         &mut self,
         id: usize,
-        (parent, layer, count, prev, next, head): (usize, usize, isize, usize, usize, usize),
+        (parent, layer, count, prev, next, head): (usize, usize, usize, usize, usize, usize),
     ) {
         if layer > 0 {
             self.remove_tree(head);
@@ -118,7 +134,7 @@ impl<T:Default> IdTree<T> {
     pub fn destroy(
         &mut self,
         id: usize,
-        (parent, layer, count, prev, next, mut head): (usize, usize, isize, usize, usize, usize),
+        (parent, layer, count, prev, next, mut head): (usize, usize, usize, usize, usize, usize),
         recursive: bool,
     ) {
         if recursive {
@@ -134,7 +150,7 @@ impl<T:Default> IdTree<T> {
                         head = n.next;
                         n.prev = 0;
                         n.next = 0;
-                        n.children_head
+                        n.children.head
                     };
                     self.remove_tree(child);
                 }
@@ -154,10 +170,10 @@ impl<T:Default> IdTree<T> {
     }
     /// 迭代指定节点的所有子元素
     pub fn iter_mut(&mut self, node_children_head: usize) -> ChildrenMutIterator<T> {
-      ChildrenMutIterator {
-          inner: &mut self.map,
-          head: node_children_head,
-      }
+        ChildrenMutIterator {
+            inner: &mut self.map,
+            head: node_children_head,
+        }
     }
     /// 迭代指定节点的所有子元素
     pub fn iter(&self, node_children_head: usize) -> ChildrenIterator<T> {
@@ -218,7 +234,7 @@ impl<T:Default> IdTree<T> {
                     panic!("already on the tree, id: {}", id)
                 }
                 n.layer = 1;
-                n.children_head
+                n.children.head
             }
             _ => panic!("invalid id: {}", id),
         };
@@ -247,7 +263,7 @@ impl<T:Default> IdTree<T> {
                     n.layer = layer;
                     n.prev = prev;
                     n.next = next;
-                    (n.count + 1, n.children_head, 0)
+                    (n.count + 1, n.children.head, 0)
                 } else {
                     // 调整
                     let fix_prev = n.prev;
@@ -281,28 +297,28 @@ impl<T:Default> IdTree<T> {
             if prev == 0 || next == 0 || fix_prev == 0 || fix_next == 0 {
                 let node = unsafe { self.map.get_unchecked_mut(parent) };
                 if prev == 0 {
-                    node.children_head = id;
+                    node.children.head = id;
                 } else if fix_prev == 0 {
-                    node.children_head = fix_next;
+                    node.children.head = fix_next;
                 }
                 if next == 0 {
-                    node.children_tail = id;
+                    node.children.tail = id;
                 } else if fix_next == 0 {
-                    node.children_tail = fix_prev;
+                    node.children.tail = fix_prev;
                 }
             }
-            return layer
+            return layer;
         }
         let p = {
             // 修改parent的children, count
             let node = unsafe { self.map.get_unchecked_mut(parent) };
             if prev == 0 {
-                node.children_head = id;
+                node.children.head = id;
             }
             if next == 0 {
-                node.children_tail = id;
+                node.children.tail = id;
             }
-            node.children_len += 1;
+            node.children.len += 1;
             node.count += count;
             node.parent
         };
@@ -322,7 +338,7 @@ impl<T:Default> IdTree<T> {
                 let n = unsafe { self.map.get_unchecked_mut(id) };
                 n.layer = layer;
                 id = n.next;
-                n.children_head
+                n.children.head
             };
             self.insert_tree(head, layer + 1);
         }
@@ -334,18 +350,18 @@ impl<T:Default> IdTree<T> {
                 let n = unsafe { self.map.get_unchecked_mut(id) };
                 n.layer = 0;
                 id = n.next;
-                n.children_head
+                n.children.head
             };
             self.remove_tree(head);
         }
     }
     // 递归销毁
     fn recursive_destroy(&mut self, parent: usize, mut id: usize) {
-        self.map.remove(parent);
+		self.map.remove(parent);
         while id > 0 {
             let (next, head) = {
                 let n = unsafe { self.map.get_unchecked(id) };
-                (n.next, n.children_head)
+                (n.next, n.children.head)
             };
             self.recursive_destroy(id, head);
             id = next;
@@ -355,12 +371,12 @@ impl<T:Default> IdTree<T> {
     fn modify_count(&mut self, mut id: usize, count: isize) {
         while id > 0 {
             let n = unsafe { self.map.get_unchecked_mut(id) };
-            n.count = n.count + count;
+            n.count = (n.count as isize + count) as usize;
             id = n.parent;
         }
     }
     // 移除节点
-    fn remove_node(&mut self, parent: usize, count: isize, prev: usize, next: usize) {
+    fn remove_node(&mut self, parent: usize, count: usize, prev: usize, next: usize) {
         // 修改prev和next的节点
         if prev > 0 {
             let node = unsafe { self.map.get_unchecked_mut(prev) };
@@ -370,20 +386,21 @@ impl<T:Default> IdTree<T> {
             let node = unsafe { self.map.get_unchecked_mut(next) };
             node.prev = prev;
         }
-        let p = {
+        
             // 修改parent的children, count
             let node = unsafe { self.map.get_unchecked_mut(parent) };
             if prev == 0 {
-                node.children_head = next;
+                node.children.head = next;
             }
             if next == 0 {
-                node.children_tail = prev;
+                node.children.tail = prev;
             }
-            node.children_len -= 1;
-            node.count -= count;
-            node.parent
-        };
+            node.children.len -= 1;
+            let p = node.parent;
+            
+
         if self.statistics_count {
+			node.count -= count;
             // 递归向上修改count
             self.modify_count(p, -(count as isize));
         }
@@ -391,77 +408,67 @@ impl<T:Default> IdTree<T> {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Node<T:Default> {
+pub struct Node<T: Default> {
     parent: usize,      // 父节点
     layer: usize,       // 表示第几层，如果不在根上，则为0。 在根上，则起步为1
-    count: isize,       // 所有的递归子节点的总数量
+    count: usize,       // 所有的递归子节点的总数量
     prev: usize,        // 前ab节点
     next: usize,        // 后ab节点
-    children_head: usize,
-    children_tail: usize,
-    children_len: usize,
+    children: NodeList, // 子节点列表
     pub data: T,
 }
-impl<T:Default> Node<T>{
-    #[inline(always)]
-  pub fn parent(&self) -> usize {
-    self.parent
-  }
-  #[inline(always)]
-  pub fn layer(&self) -> usize {
-    self.layer
-  }
-  #[inline(always)]
-  pub fn count(&self) -> isize {
-    self.count
-  }
-  #[inline(always)]
-  pub fn prev(&self) -> usize {
-    self.prev
-  }
-  #[inline(always)]
-  pub fn next(&self) -> usize {
-    self.next
-  }
-  #[inline(always)]
-  pub fn children_head(&self) -> usize {
-    self.children_head
-  }
-  #[inline(always)]
-  pub fn children_tail(&self) -> usize {
-    self.children_tail
-  }
-  #[inline(always)]
-  pub fn children_len(&self) -> usize {
-    self.children_len
-  }
+impl<T: Default> Node<T> {
+    pub fn parent(&self) -> usize {
+        self.parent
+    }
+    pub fn layer(&self) -> usize {
+        self.layer
+    }
+    pub fn count(&self) -> usize {
+        self.count
+    }
+    pub fn prev(&self) -> usize {
+        self.prev
+    }
+    pub fn next(&self) -> usize {
+        self.next
+    }
+    pub fn children(&self) -> &NodeList {
+        &self.children
+    }
 }
 
-pub struct ChildrenMutIterator<'a, T:Default> {
-  inner: &'a mut VecMap<Node<T>>,
-  head: usize,
+#[derive(Debug, Clone, Default)]
+pub struct NodeList {
+    pub head: usize,
+    pub tail: usize,
+    pub len: usize,
 }
-impl<'a, T:Default> Iterator for ChildrenMutIterator<'a, T> {
-  type Item = (usize, &'a mut Node<T>);
+pub struct ChildrenMutIterator<'a, T: Default> {
+    inner: &'a mut VecMap<Node<T>>,
+    head: usize,
+}
+impl<'a, T: Default> Iterator for ChildrenMutIterator<'a, T> {
+    type Item = (usize, &'a mut Node<T>);
 
-  fn next(&mut self) -> Option<Self::Item> {
-      if self.head == 0 {
-          return None;
-      }
-      let inner = unsafe { &mut *(self.inner as *mut VecMap<Node<T>>)};
-      let n = unsafe { inner.get_unchecked_mut(self.head) };
-      let next = n.next;
-      let r = Some((self.head, n));
-      self.head = next;
-      r
-  }
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.head == 0 {
+            return None;
+        }
+        let inner = unsafe { &mut *(self.inner as *mut VecMap<Node<T>>) };
+        let n = unsafe { inner.get_unchecked_mut(self.head) };
+        let next = n.next;
+        let r = Some((self.head, n));
+        self.head = next;
+        r
+    }
 }
-pub struct ChildrenIterator<'a, T:Default> {
+pub struct ChildrenIterator<'a, T: Default> {
     inner: &'a VecMap<Node<T>>,
     head: usize,
 }
 
-impl<'a, T:Default> Iterator for ChildrenIterator<'a, T> {
+impl<'a, T: Default> Iterator for ChildrenIterator<'a, T> {
     type Item = (usize, &'a Node<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -475,13 +482,13 @@ impl<'a, T:Default> Iterator for ChildrenIterator<'a, T> {
     }
 }
 
-pub struct RecursiveIterator<'a, T:Default> {
+pub struct RecursiveIterator<'a, T: Default> {
     inner: &'a VecMap<Node<T>>,
     arr: [usize; 32],
     len: usize,
 }
 
-impl<'a, T:Default> Iterator for RecursiveIterator<'a, T> {
+impl<'a, T: Default> Iterator for RecursiveIterator<'a, T> {
     type Item = (usize, &'a Node<T>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -496,8 +503,8 @@ impl<'a, T:Default> Iterator for RecursiveIterator<'a, T> {
             self.arr[self.len] = n.next;
             self.len += 1;
         }
-        if n.children_head > 0 {
-            self.arr[self.len] = n.children_head;
+        if n.children.head > 0 {
+            self.arr[self.len] = n.children.head;
             self.len += 1;
         }
         r
@@ -531,7 +538,7 @@ fn test11() {
     println!("info--------------------------------");
     tree.destroy(12, info, true);
     test_println(&tree);
-    for (i, _) in tree.iter(unsafe { tree.get_unchecked(1) }.children_head) {
+    for (i, _) in tree.iter(unsafe { tree.get_unchecked(1) }.children.head) {
         println!("i: {}", i);
     }
 }
