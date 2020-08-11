@@ -115,7 +115,7 @@ impl<T> Wheel<T>{
 			return self.heap.push(item, index, index_factory);
 		}
 		diff = diff - 1;
-
+		
 		let layer = if diff < 1000{
 			self.insert_ms((item, index), diff, index_factory);
 			return;
@@ -126,7 +126,7 @@ impl<T> Wheel<T>{
 		}else{
 			3
 		};
-
+		
 		let mut pre_layer = 0;
 		while pre_layer < layer{
 			diff += self.point[pre_layer] as u64 * UNIT[pre_layer] as u64;

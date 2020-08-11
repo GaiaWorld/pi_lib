@@ -106,7 +106,14 @@ impl<T> EntityImpl<T> {
         let id = self.slab.insert(0);
         self.notify.create_event(id);
         id
-    }
+	}
+	
+	// 创建但不通知
+	pub fn create_but_no_notify(&mut self) -> usize {
+        let id = self.slab.insert(0);
+        id
+	}
+	
     pub fn mark(&mut self, id: usize, bit_index: usize) {
         let mask = self.slab.get_mut(id).unwrap();
         *mask |= 1 << bit_index;
@@ -136,6 +143,10 @@ impl<T> EntityImpl<T> {
 
     pub fn iter(&self) -> EntityIter {
         EntityIter(self.slab.iter())
+	}
+	
+	pub fn len(&self) -> usize {
+        self.slab.len()
     }
 }
 

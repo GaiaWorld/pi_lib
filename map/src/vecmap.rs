@@ -127,12 +127,9 @@ impl<T> VecMap<T> {
         let index = index - 1;
         let len = self.entries.len();
         if index >= len {
-            for _ in 0..index - len  {
-                self.entries.push(None);
-            }
-            self.entries.push(Some(val));
+			self.entries.extend((0..index - len + 1).map(|_| None));
             self.len += 1;
-            None
+            replace(&mut self.entries[index], Some(val))
         }else {
             let r = replace(&mut self.entries[index], Some(val));
             if r.is_none(){

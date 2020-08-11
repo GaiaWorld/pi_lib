@@ -68,6 +68,16 @@ pub struct MultiCaseImpl<E, C: Component> {
     marker: PhantomData<E>,
 }
 
+impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
+    pub fn get_storage(&self) -> &C::Storage {
+        &self.map
+    }
+
+    pub fn get_storage_mut(&mut self) -> &mut C::Storage {
+        &mut self.map
+    }
+}
+
 impl<E: 'static, C: Component> Index<usize> for MultiCaseImpl<E, C> {
     type Output = C;
 
