@@ -2,6 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use std::future::Future;
+use std::time::SystemTime;
 use std::cell::{RefCell, Ref};
 use std::path::{Path, PathBuf};
 #[cfg(any(unix))]
@@ -529,7 +530,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         match self.0.inner.read().metadata().ok().unwrap().modified() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
             Ok(time) => {
-                match time.elapsed() {
+                match time.duration_since(SystemTime::UNIX_EPOCH) {
                     Err(e) => Err(Error::new(ErrorKind::Other, e)),
                     Ok(duration) => Ok(duration),
                 }
@@ -542,7 +543,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         match self.0.inner.read().metadata().ok().unwrap().accessed() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
             Ok(time) => {
-                match time.elapsed() {
+                match time.duration_since(SystemTime::UNIX_EPOCH) {
                     Err(e) => Err(Error::new(ErrorKind::Other, e)),
                     Ok(duration) => Ok(duration),
                 }
@@ -555,7 +556,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         match self.0.inner.read().metadata().ok().unwrap().created() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
             Ok(time) => {
-                match time.elapsed() {
+                match time.duration_since(SystemTime::UNIX_EPOCH) {
                     Err(e) => Err(Error::new(ErrorKind::Other, e)),
                     Ok(duration) => Ok(duration),
                 }
