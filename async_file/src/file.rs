@@ -590,7 +590,7 @@ impl<O: Default + 'static> AsyncFile<O> {
     }
 
     //从指定位置开始异步写指定字节
-    pub async fn write(&self, pos: u64, buf: Arc<Vec<u8>>, options: WriteOptions) -> Result<usize> {
+    pub async fn write(&self, pos: u64, buf: Arc<[u8]>, options: WriteOptions) -> Result<usize> {
         if buf.len() == 0 {
             //无效的字节数，则立即返回
             return Ok(0);
@@ -826,7 +826,7 @@ unsafe impl Sync for WriteFileResult {}
 */
 struct AsyncWriteFile<O: Default + 'static> {
     runtime:    MultiTaskRuntime<O>,    //异步运行时
-    buf:        Arc<Vec<u8>>,           //写缓冲
+    buf:        Arc<[u8]>,              //写缓冲
     buf_pos:    u64,                    //写缓冲指针位置
     file:       AsyncFile<O>,           //文件
     pos:        u64,                    //文件指针位置
@@ -926,7 +926,7 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
 
 impl<O: Default + 'static> AsyncWriteFile<O> {
     //构建从指定位置开始异步读指定字节的方法
-    pub fn new(runtime: MultiTaskRuntime<O>, buf: Arc<Vec<u8>>, buf_pos: u64, file: AsyncFile<O>, pos: u64, options: WriteOptions, writed: usize) -> Self {
+    pub fn new(runtime: MultiTaskRuntime<O>, buf: Arc<[u8]>, buf_pos: u64, file: AsyncFile<O>, pos: u64, options: WriteOptions, writed: usize) -> Self {
         AsyncWriteFile {
             runtime,
             buf,

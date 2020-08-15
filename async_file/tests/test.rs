@@ -13,6 +13,8 @@ fn test_async_file() {
     let rt = pool.startup(true);
 
     let rt_copy = rt.clone();
+    let vec = Vec::from("Hello 什么是 Async File 异步文件?");
+    let buf = Arc::from(&vec[..]);
     let future = async move {
         if let Err(e) = remove_dir(rt_copy.clone(), "./test_async_file/test/".to_string()).await {
             if e.kind() != ErrorKind::NotFound {
@@ -41,7 +43,7 @@ fn test_async_file() {
                     panic!("invalid file, reason: invalid file meta");
                 }
 
-                if let Err(e) = file.write(0, Arc::new(Vec::from("Hello 什么是 Async File 异步文件?")), WriteOptions::SyncAll(true)).await {
+                if let Err(e) = file.write(0, buf, WriteOptions::SyncAll(true)).await {
                     panic!("write file failed, file: {:?}, reason: {:?}", &test_file, e);
                 }
 
