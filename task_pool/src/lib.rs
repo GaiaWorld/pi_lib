@@ -1,4 +1,3 @@
-#![feature(box_into_raw_non_null)]
 #![feature(proc_macro_hygiene)]
 extern crate rand;
 
@@ -224,7 +223,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             direc: direc,
             index: index,
             sync_pool: self.sync_pool.clone(),
-            task: Box::into_raw_non_null(Box::new(task)),
+            task: unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(task))) },
             handler: self.handler.clone(),
         };
         let index1 = self.delay_queue.set_timeout(task, ms);
@@ -238,7 +237,7 @@ impl<T: Debug + 'static> TaskPool<T> {
             priority: priority,
             index: index,
             async_pool: self.async_pool.clone(),
-            task: Box::into_raw_non_null(Box::new(task)),
+            task: unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(task))) },
             handler: self.handler.clone(),
         };
         let index1 = self.delay_queue.set_timeout(task, ms);
