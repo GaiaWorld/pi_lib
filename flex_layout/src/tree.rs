@@ -83,6 +83,7 @@ pub fn compute<T>(dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl Inde
 			PC = 0;
 			PP = 0
 		};
+		let is_text = i_node.text.len() > 0;
 		if state.abs() {
 			// 如果节点是绝对定位， 则重新计算自身的布局数据
 			let (parent_size, flex) = if !i_node.state.abs_rect() {
@@ -102,6 +103,7 @@ pub fn compute<T>(dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl Inde
 				notify,
 				notify_arg,
 				*id,
+				is_text,
 				child_head,
 				child_tail,
 				state,
@@ -119,6 +121,7 @@ pub fn compute<T>(dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl Inde
 				notify,
 				notify_arg,
 				*id,
+				is_text,
 				child_head,
 				child_tail,
 				state,

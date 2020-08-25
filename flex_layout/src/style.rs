@@ -234,7 +234,6 @@ impl Default for Size<Dimension> {
 pub struct RectStyle {
     pub margin: Rect<Dimension>,
     pub size: Size<Dimension>,
-	pub line_start_margin: Number, // 行首的margin_start
 }
 
 impl Default for RectStyle {
@@ -242,49 +241,9 @@ impl Default for RectStyle {
         RectStyle {
             margin: Default::default(), // dom默认为undefined， 性能考虑，这里默认0.0
             size: Default::default(),
-			line_start_margin: Default::default(),
         }
     }
 }
-
-impl RectStyle {
-
-    // pub(crate) fn main_margin_start(&self, direction: FlexDirection) -> Dimension {
-    //     match direction {
-    //         FlexDirection::Row | FlexDirection::RowReverse => self.margin.start,
-    //         FlexDirection::Column | FlexDirection::ColumnReverse => self.margin.top,
-    //     }
-    // }
-
-    // pub(crate) fn main_margin_end(&self, direction: FlexDirection) -> Dimension {
-    //     match direction {
-    //         FlexDirection::Row | FlexDirection::RowReverse => self.margin.end,
-    //         FlexDirection::Column | FlexDirection::ColumnReverse => self.margin.bottom,
-    //     }
-    // }
-
-    // pub(crate) fn cross_size(&self, direction: FlexDirection) -> Dimension {
-    //     match direction {
-    //         FlexDirection::Row | FlexDirection::RowReverse => self.size.height,
-    //         FlexDirection::Column | FlexDirection::ColumnReverse => self.size.width,
-    //     }
-    // }
-
-    // pub(crate) fn cross_margin_start(&self, direction: FlexDirection) -> Dimension {
-    //     match direction {
-    //         FlexDirection::Row | FlexDirection::RowReverse => self.margin.top,
-    //         FlexDirection::Column | FlexDirection::ColumnReverse => self.margin.start,
-    //     }
-    // }
-
-    // pub(crate) fn cross_margin_end(&self, direction: FlexDirection) -> Dimension {
-    //     match direction {
-    //         FlexDirection::Row | FlexDirection::RowReverse => self.margin.bottom,
-    //         FlexDirection::Column | FlexDirection::ColumnReverse => self.margin.end,
-    //     }
-    // }
-}
-
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct OtherStyle {
@@ -310,7 +269,9 @@ pub struct OtherStyle {
     pub border: Rect<Dimension>,
     pub min_size: Size<Dimension>,
     pub max_size: Size<Dimension>,
-	pub aspect_ratio: Number,
+    pub aspect_ratio: Number,
+
+
 }
 
 impl Default for OtherStyle {
@@ -335,7 +296,7 @@ impl Default for OtherStyle {
             flex_basis: Dimension::Auto,
             min_size: Default::default(),
             max_size: Default::default(),
-			aspect_ratio: Default::default(),
+            aspect_ratio: Default::default(),
         }
     }
 }
