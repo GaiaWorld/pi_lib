@@ -5,7 +5,6 @@
 #![feature(generators, generator_trait)]
 #![feature(associated_type_defaults)]
 #![feature(exclusive_range_pattern)]
-#![feature(box_into_raw_non_null)]
 #![feature(trait_alias)]
 #![feature(const_fn)]
 #![feature(nll)]
