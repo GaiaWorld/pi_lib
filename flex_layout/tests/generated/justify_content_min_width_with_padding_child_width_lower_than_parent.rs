@@ -1,6 +1,6 @@
 fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
     *count += 1;
-    println!("result: {:?} {:?} {:?}", *count, id, layout);
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 #[test]
 fn justify_content_min_width_with_padding_child_width_lower_than_parent() {

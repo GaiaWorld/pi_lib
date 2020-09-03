@@ -1,6 +1,6 @@
 fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
     *count += 1;
-    println!("result: {:?} {:?} {:?}", *count, id, layout);
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 #[test]
 fn align_items_flex_end_child_without_margin_bigger_than_parent() {

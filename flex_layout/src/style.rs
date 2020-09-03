@@ -67,7 +67,7 @@ impl Default for Direction {
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Display {
     Flex,
-    None,
+	None,
 }
 
 impl Default for Display {
@@ -224,8 +224,8 @@ impl Default for Rect<Dimension> {
 impl Default for Size<Dimension> {
     fn default() -> Size<Dimension> {
         Size {
-            width: Dimension::Auto,
-            height: Dimension::Auto,
+            width: Dimension::Undefined,
+            height: Dimension::Undefined,
         }
     }
 }

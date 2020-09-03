@@ -1,6 +1,6 @@
 fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
     *count += 1;
-    println!("result: {:?} {:?} {:?}", *count, id, layout);
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 #[test]
 fn parent_wrap_child_size_overflowing_parent() {

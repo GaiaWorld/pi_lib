@@ -156,7 +156,8 @@ macro_rules! make_impl {
             make_func!(abs, Abs);
             make_func!(abs_rect, AbsRect);
             make_func!(size_defined, SizeDefined);
-            make_func!(line_start_margin_zero, LineStartMarginZero);
+			make_func!(line_start_margin_zero, LineStartMarginZero);
+			make_func!(breakline, BreakLine);
             pub(crate) fn set_true(&mut self, other: &Self) {
                 self.0 |= other.0;
             }
@@ -214,28 +215,44 @@ pub enum INodeStateType {
     AbsRect = 256, // 是否为绝对区域，完全指定宽高和左上。 否则需要根据父节点的宽度进行计算。
     SizeDefined = 512, // 是否为根据子节点自动计算大小
     LineStartMarginZero = 1024, // 如果该元素为行首，则margin_start为0
+    BreakLine = 2048, // 强制换行
 }
 // TODO max min aspect_ratio， RectStyle也可去掉了. 将start end改为left right。 将数据结构统一到标准结构下， 比如Rect Size Point
 #[derive(Clone, Debug)]
 pub struct CharNode {
     pub ch: char,                // 字符
-    pub margin: Rect<Dimension>, // margin
+    pub margin_start: f32, // margin
     pub size: (f32, f32),        // 字符大小
     pub pos: (f32, f32),         // 位置
     pub ch_id_or_count: usize,   // 字符id或单词的字符数量
     pub base_width: f32,         // font_size 为32 的字符宽度
 }
+
+impl Default for CharNode {
+	fn default() -> Self {
+		CharNode {
+			ch: char::from(0),
+			margin_start: 0.0,
+			size: (0.0, 0.0),
+			pos: (0.0, 0.0),
+			ch_id_or_count: 0,
+			base_width: 0.0,
+		}
+	}
+}
 #[derive(Clone, Debug)]
 pub struct INode {
     pub(crate) state: INodeState,
-    pub(crate) text: Vec<CharNode>, // 文字节点
+	pub text: Vec<CharNode>, // 文字节点
+	pub char_index: usize, // 如果是图文混排，代表在Vec<CharNode>中的位置
 }
 
 impl INode {
-    pub fn new(value: INodeStateType) -> Self {
+    pub fn new(value: INodeStateType, char_index: usize) -> Self {
         INode {
             state: INodeState::new(value as usize + INodeStateType::ChildrenIndex as usize),
-            text: Vec::new(),
+			text: Vec::new(),
+			char_index: char_index,
         }
     }
 }
@@ -249,12 +266,17 @@ impl Default for INode {
                     + INodeStateType::ChildrenNoAlignSelf as usize
                     + INodeStateType::ChildrenIndex as usize,
             ),
-            text: Vec::new(),
+			text: Vec::new(),
+			char_index: 0,
         }
     }
 }
 
 impl INode {
+	pub fn is_vnode(&mut self) -> bool {
+        self.state.vnode()
+	}
+	
     pub fn set_vnode(&mut self, vnode: bool) {
         if vnode {
             self.state.vnode_true();
@@ -267,6 +289,13 @@ impl INode {
             self.state.line_start_margin_zero_true();
         } else {
             self.state.line_start_margin_zero_false();
+        }
+	}
+	pub fn set_breakline(&mut self, b: bool) {
+        if b {
+            self.state.breakline_true();
+        } else {
+            self.state.breakline_false();
         }
     }
 }
@@ -397,7 +426,8 @@ struct RelNodeInfo {
     align_self: AlignSelf,        // 节点的align_self
     main_d: Dimension,            // 节点主轴大小
     cross_d: Dimension,           // 节点交叉轴大小
-    line_start_margin_zero: bool, // 如果该元素为行首，则margin_start为0
+	line_start_margin_zero: bool, // 如果该元素为行首，则margin_start为0
+	breakline: bool, 			// 强制换行
 }
 
 // 计算时统计的行信息
@@ -660,8 +690,8 @@ impl Cache {
             let r = &text[char_index];
             let (main_d, cross_d) = self.temp.main_cross(r.size.0, r.size.1);
             let margin = self.temp.main_cross(
-                (r.margin.start, r.margin.end),
-                (r.margin.top, r.margin.bottom),
+                (Dimension::Points(r.margin_start), Dimension::Points(0.0)),
+                (Dimension::Points(0.0), Dimension::Points(0.0)),
             );
             let mut info = RelNodeInfo {
                 id,
@@ -677,7 +707,8 @@ impl Cache {
                 align_self: AlignSelf::Auto,
                 main_d: Dimension::Points(main_d),
                 cross_d: Dimension::Points(cross_d),
-                line_start_margin_zero: true,
+				line_start_margin_zero: true,
+				breakline: r.ch == char::from('\n'),
             };
             let start = info.margin_main_start.or_else(0.0);
             let end = info.margin_main_end.or_else(0.0);
@@ -690,7 +721,8 @@ impl Cache {
             };
             info.margin_main = start + end;
             line.main += info.main + line_start + end;
-            self.add_vec(line, 0, info, TempType::CharIndex(char_index));
+			self.add_vec(line, 0, info, TempType::CharIndex(char_index));
+			debug_println!("char_index============={}", char_index);
             // 判断是否为单词容器
             if r.ch == char::from(0) {
                 char_index += r.ch_id_or_count;
@@ -789,7 +821,10 @@ impl Cache {
                     child,
                     children_index,
                     direction,
-                );
+				);
+				if is_notify {
+					notify(notify_arg, id, &layout_map[id]);
+				}
                 continue;
             }
             let order = style.order;
@@ -824,7 +859,8 @@ impl Cache {
                 align_self: style.align_self,
                 main_d: main_d,
                 cross_d: cross_d,
-                line_start_margin_zero: i_node.state.line_start_margin_zero(),
+				line_start_margin_zero: i_node.state.line_start_margin_zero(),
+				breakline: i_node.state.breakline(),
             };
             let temp = if w == Number::Undefined || h == Number::Undefined {
                 // 需要计算子节点大小
@@ -1171,6 +1207,7 @@ impl Temp {
             }
         };
         for item in line.items.iter() {
+			debug_println!("single_line!!, item: {:?}, split: {:?}, pos: {:?}", item, split, pos);
             let (cross_start, cross_end) = self.multi_calc(item.cross, split, &mut pos);
             self.single_line(
                 tree,
@@ -1189,8 +1226,9 @@ impl Temp {
                 cross_end,
                 normal,
             );
-        }
-        let (cross_start, cross_end) = self.multi_calc(line.cross, split, &mut pos);
+		}
+		debug_println!("single_line!!, item: {:?}, split: {:?}, pos: {:?}, cross:{:?}", line.item, split, pos, line.cross);
+        let (cross_start, cross_end) = self.multi_calc(line.item.cross, split, &mut pos);
         self.single_line(
             tree,
             i_nodes,
@@ -1418,8 +1456,9 @@ impl Temp {
 impl LineInfo {
     // 添加到数组中，计算当前行的grow shrink 是否折行及折几行
     fn add(&mut self, main: f32, info: &RelNodeInfo) {
+		debug_println!("add, main: {:?}, {:?}, self.item: {:?}", main, info, self.item);
         // 浮点误差判断是否折行
-        if self.item.main + info.main + info.margin_main > main + EPSILON {
+        if (self.item.count > 0 && self.item.main + info.main + info.margin_main > main + EPSILON) || info.breakline {
             self.cross += self.item.cross;
             let t = replace(&mut self.item, LineItem::default());
             self.items.push(t);
@@ -1978,7 +2017,7 @@ fn layout_node<T>(
         }
         TempType::None => {
             // 确定大小的节点，需要进一步布局
-            let is_text = i_node.text.len() > 0;
+            let is_text = i_node.text.len() > 0 && !state.vnode();
             set_layout(
                 tree,
                 i_nodes,

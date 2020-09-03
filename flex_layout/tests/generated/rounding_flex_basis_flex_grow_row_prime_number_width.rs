@@ -1,6 +1,6 @@
 fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
     *count += 1;
-    println!("result: {:?} {:?} {:?}", *count, id, layout);
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 #[test]
 fn rounding_flex_basis_flex_grow_row_prime_number_width() {
