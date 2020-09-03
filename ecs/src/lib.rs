@@ -13,6 +13,7 @@ extern crate share;
 
 // extern crate im;
 pub extern crate paste;
+pub extern crate platform;
 
 pub extern crate time;
 
@@ -66,9 +67,10 @@ pub trait TypeIds {
     fn type_ids() -> Vec<(TypeId, TypeId)>;
 }
 
+#[derive(Debug)]
 pub struct RunTime {
     pub sys_name: atom::Atom,
-    pub cost_time: std::time::Duration, // 单位ms
+    pub cost_time: f32, // 单位ms
 }
 
 macro_rules! impl_trait {

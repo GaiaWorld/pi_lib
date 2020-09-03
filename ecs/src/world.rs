@@ -29,30 +29,33 @@ pub struct World {
 
 impl World {
     pub fn register_entity<E: 'static>(&mut self) {
-        let id = TypeId::of::<E>();
-        match self
-            .entity
-            .insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new())))
-        {
-            Some(_) => panic!(
-                "duplicate registration, entity: {:?}, id: {:?}",
-                type_name::<E>(),
-                id
-            ),
-            _ => (),
-        }
+		let id = TypeId::of::<E>();
+		self.entity
+            .insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new())));
+        // match self
+        //     .entity
+        //     .insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new())))
+        // {
+        //     Some(_) => panic!(
+        //         "duplicate registration, entity: {:?}, id: {:?}",
+        //         type_name::<E>(),
+        //         id
+        //     ),
+        //     _ => (),
+        // }
     }
     /// 注册单例组件
     pub fn register_single<T: 'static>(&mut self, t: T) {
-        let id = TypeId::of::<T>();
-        match self.single.insert(id, Arc::new(SingleCaseImpl::new(t))) {
-            Some(_) => panic!(
-                "duplicate registration, component: {:?}, id: {:?}",
-                type_name::<T>(),
-                id
-            ),
-            _ => (),
-        }
+		let id = TypeId::of::<T>();
+		self.single.insert(id, Arc::new(SingleCaseImpl::new(t)));
+        // match self.single.insert(id, Arc::new(SingleCaseImpl::new(t))) {
+        //     Some(_) => panic!(
+        //         "duplicate registration, component: {:?}, id: {:?}",
+        //         type_name::<T>(),
+        //         id
+        //     ),
+        //     _ => (),
+        // }
     }
     /// 注册多例组件，必须声明是那种entity上的组件
     pub fn register_multi<E: 'static, C: Component>(&mut self) {
@@ -67,24 +70,25 @@ impl World {
                         let entity = LendMut::lend_mut(&r);
                         let m: Arc<CellMultiCase<E, C>> =
                             Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
-                        entity.register_component(m.clone());
-                        match self.multi.insert((eid, cid), m) {
-                            Some(_) => panic!(
-                                "duplicate registration, entity: {:?}, component: {:?}",
-                                type_name::<E>(),
-                                type_name::<C>()
-                            ),
-                            _ => (),
-                        }
+						entity.register_component(m.clone());
+						self.multi.insert((eid, cid), m);
+                        // match self.multi.insert((eid, cid), m) {
+                        //     Some(_) => panic!(
+                        //         "duplicate registration, entity: {:?}, component: {:?}",
+                        //         type_name::<E>(),
+                        //         type_name::<C>()
+                        //     ),
+                        //     _ => (),
+                        // }
                     }
-                    Err(_) => panic!("downcast err"),
+                    Err(_) => ()/*panic!("downcast err")*/,
                 };
             }
-            _ => panic!(
+            _ => ()/*panic!(
                 "need registration, entity: {:?}, id: {:?}",
                 type_name::<E>(),
                 eid
-            ),
+            )*/,
         }
     }
     pub fn register_system<T: System>(&mut self, name: Atom, sys: T) {
@@ -204,7 +208,7 @@ impl World {
             unsafe { &mut *(self.runtime.as_ref() as *const Vec<RunTime> as *mut Vec<RunTime>) }
                 .iter_mut()
         {
-            r.cost_time = std::time::Duration::from_millis(0);
+            r.cost_time = 0.0/*std::time::Duration::from_millis(0)*/;
         }
         match self.runner.get(name) {
             Some(v) => v.run(),

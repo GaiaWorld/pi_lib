@@ -15,6 +15,7 @@ time = {path="../time"}
 share = {path="../share"}
 paste = "0.1"
 lazy_static = "*"
+platform = {path="../platform"}
 # im = "*"
 
 [features]
