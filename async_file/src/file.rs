@@ -451,13 +451,15 @@ pub async fn remove_file<P, O>(runtime: MultiTaskRuntime<O>, path: P) -> Result<
 /*
 * 文件选项
 */
+#[derive(Clone)]
 pub enum AsyncFileOptions {
-    OnlyRead,
-    OnlyWrite,
-    OnlyAppend,
-    ReadAppend,
-    ReadWrite,
-    TruncateWrite,
+    OnlyRead,           //只读
+    OnlyWrite,          //只写
+    OnlyAppend,         //只追加
+    ReadAppend,         //可读可追加
+    ReadWrite,          //可读可写
+    TruncateWrite,      //只覆写
+    TruncateReadWrite,  //可读可覆写
 }
 
 /*
@@ -476,6 +478,7 @@ pub enum WriteOptions {
 */
 struct InnerFile<O: Default + 'static> {
     runtime:        MultiTaskRuntime<O>,
+    options:        AsyncFileOptions,
     path:           PathBuf,
     inner:          RwLock<File>,
 }
@@ -505,6 +508,11 @@ impl<O: Default + 'static> Clone for AsyncFile<O> {
 * 异步文件的同步方法
 */
 impl<O: Default + 'static> AsyncFile<O> {
+    //获取文件打开选项
+    pub fn get_options(&self) -> AsyncFileOptions {
+        self.0.options.clone()
+    }
+
     //检查是否是符号链接
     pub fn is_symlink(&self) -> bool {
         self.0.inner.read().metadata().ok().unwrap().file_type().is_symlink()
@@ -644,10 +652,12 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> Future for AsyncOpen
             AsyncFileOptions::ReadAppend => (true, false, true, true, false),
             AsyncFileOptions::ReadWrite => (true, true, false, true, false),
             AsyncFileOptions::TruncateWrite => (false, true, false, true, true),
+            AsyncFileOptions::TruncateReadWrite => (true, true, false, true, true),
         };
         let task_id = self.as_ref().runtime.alloc();
         let task_id_copy = task_id.clone();
         let runtime = self.as_ref().runtime.clone();
+        let options = self.as_ref().options.clone();
         let path = self.as_ref().path.as_ref().to_path_buf();
         let result = self.as_ref().result.clone();
         let task = async move {
@@ -666,6 +676,7 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> Future for AsyncOpen
                     //打开文件成功，则设置等待异步打开文件的任务的值
                     *result.0.borrow_mut() = Some(Ok(AsyncFile(Arc::new(InnerFile {
                         runtime: runtime.clone(),
+                        options,
                         path,
                         inner: RwLock::new(file),
                     }))));
@@ -859,10 +870,28 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
         let writed = self.as_ref().writed;
         let result = self.as_ref().result.clone();
         let task = async move {
+            match file.0.options {
+                AsyncFileOptions::TruncateWrite | AsyncFileOptions::TruncateReadWrite => {
+                    //如果使用复写模式，则每次写操作之前将重置文件内容和指针
+                    if let Err(e) = file.0.inner.read().set_len(0) {
+                        //复写文件失败，则立即返回错误原因
+                        *result.0.borrow_mut() = Some(Err(e));
+                        return Default::default();
+                    }
+
+                    if let Err(e) = file.0.inner.write().seek(SeekFrom::Start(0)) {
+                        //重置文件指针失败，则立即返回错误原因
+                        *result.0.borrow_mut() = Some(Err(e));
+                        return Default::default();
+                    }
+                },
+                _ => (),
+            }
+
             #[cfg(any(unix))]
-                let r = file.0.inner.read().write_at(&buf[(buf_pos as usize)..], pos);
+            let r = file.0.inner.read().write_at(&buf[(buf_pos as usize)..], pos);
             #[cfg(any(windows))]
-                let r = file.0.inner.read().seek_write(&buf[(buf_pos as usize)..], pos);
+            let r = file.0.inner.read().seek_write(&buf[(buf_pos as usize)..], pos);
 
             match r {
                 Ok(writed_len) if writed_len < (buf.len() - buf_pos as usize) => {
