@@ -878,12 +878,6 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
                         *result.0.borrow_mut() = Some(Err(e));
                         return Default::default();
                     }
-
-                    if let Err(e) = file.0.inner.write().seek(SeekFrom::Start(0)) {
-                        //重置文件指针失败，则立即返回错误原因
-                        *result.0.borrow_mut() = Some(Err(e));
-                        return Default::default();
-                    }
                 },
                 _ => (),
             }
