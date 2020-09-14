@@ -872,9 +872,9 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
         let task = async move {
             match file.0.options {
                 AsyncFileOptions::TruncateWrite | AsyncFileOptions::TruncateReadWrite => {
-                    //如果使用复写模式，则每次写操作之前将重置文件内容和指针
+                    //如果使用覆写模式，则每次写操作之前将覆写文件
                     if let Err(e) = file.0.inner.read().set_len(0) {
-                        //复写文件失败，则立即返回错误原因
+                        //覆写文件失败，则立即返回错误原因
                         *result.0.borrow_mut() = Some(Err(e));
                         return Default::default();
                     }
