@@ -209,7 +209,7 @@ fn generate_bench(description: &json::JsonValue) -> TokenStream {
     quote!(
         fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
             *count += 1;
-            println!("result: {:?} {:?} {:?}", *count, id, layout);
+            debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
         }
         pub fn compute() {
             let mut layout_tree = layout::tree::LayoutTree::default();
@@ -248,7 +248,7 @@ fn generate_test(name: impl AsRef<str>, description: &json::JsonValue) -> TokenS
     quote!(
         fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
             *count += 1;
-            println!("result: {:?} {:?} {:?}", *count, id, layout);
+            debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
         }
         #[test]
         fn #name() {

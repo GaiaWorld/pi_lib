@@ -1,6 +1,6 @@
 fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
     *count += 1;
-    println!("result: {:?} {:?} {:?}", *count, id, layout);
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 #[test]
 fn wrap_nodes_with_content_sizing_margin_cross() {

@@ -20,13 +20,10 @@ extern crate debug_info;
 extern crate serde;
 
 mod geometry;
-// mod node;
 mod number;
 mod result;
 pub mod style;
 mod tree;
-
-// mod algo;
 mod calc;
 
 
