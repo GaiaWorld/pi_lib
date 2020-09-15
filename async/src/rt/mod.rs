@@ -49,9 +49,9 @@ impl Debug for TaskId {
 * 异步运行时
 */
 pub enum AsyncRuntime<O: Default + 'static> {
-    Local(SingleTaskRuntime<O>),                                //本地运行时
-    Multi(MultiTaskRuntime<O>),                                 //多线程运行时
-    Worker(Arc<AtomicBool>, Arc<(Mutex<bool>, Condvar)>, SingleTaskRuntime<O>),  //工作者运行时
+    Local(SingleTaskRuntime<O>),                                                //本地运行时
+    Multi(MultiTaskRuntime<O>),                                                 //多线程运行时
+    Worker(Arc<AtomicBool>, Arc<(Mutex<bool>, Condvar)>, SingleTaskRuntime<O>), //工作者运行时
 }
 
 unsafe impl<O: Default + 'static> Send for AsyncRuntime<O> {}
