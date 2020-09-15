@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::future::Future;
-use std::task::{Context, Poll};
+use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
@@ -11,6 +11,7 @@ pub mod single_thread;
 pub mod multi_thread;
 
 use futures::{future::BoxFuture, FutureExt};
+use parking_lot::{Mutex, Condvar};
 use crossbeam_channel::{Sender, Receiver, unbounded};
 
 use local_timer::LocalTimer;
@@ -48,8 +49,9 @@ impl Debug for TaskId {
 * 异步运行时
 */
 pub enum AsyncRuntime<O: Default + 'static> {
-    Single(SingleTaskRuntime<O>),   //单线程运行时
-    Multi(MultiTaskRuntime<O>),     //多线程运行时
+    Local(SingleTaskRuntime<O>),                                //本地运行时
+    Multi(MultiTaskRuntime<O>),                                 //多线程运行时
+    Worker(Arc<AtomicBool>, Arc<(Mutex<bool>, Condvar)>, SingleTaskRuntime<O>),  //工作者运行时
 }
 
 unsafe impl<O: Default + 'static> Send for AsyncRuntime<O> {}
@@ -58,8 +60,203 @@ unsafe impl<O: Default + 'static> Sync for AsyncRuntime<O> {}
 impl<O: Default + 'static> Clone for AsyncRuntime<O> {
     fn clone(&self) -> Self {
         match self {
-            AsyncRuntime::Single(rt) => AsyncRuntime::Single(rt.clone()),
+            AsyncRuntime::Local(rt) => AsyncRuntime::Local(rt.clone()),
             AsyncRuntime::Multi(rt) => AsyncRuntime::Multi(rt.clone()),
+            AsyncRuntime::Worker(wroker_status, worker_waker, rt) => AsyncRuntime::Worker(wroker_status.clone(), worker_waker.clone(), rt.clone()),
+        }
+    }
+}
+
+/*
+* 异步运行时同步方法
+*/
+impl<O: Default + 'static> AsyncRuntime<O> {
+    //获取当前异步运行时的唯一id
+    pub fn get_id(&self) -> usize {
+        match self {
+            AsyncRuntime::Local(rt) => rt.get_id(),
+            AsyncRuntime::Multi(rt) => rt.get_id(),
+            AsyncRuntime::Worker(_, _, rt) => rt.get_id(),
+        }
+    }
+
+    //获取当前异步运行时待处理任务数量
+    pub fn wait_len(&self) -> usize {
+        match self {
+            AsyncRuntime::Local(rt) => rt.wait_len(),
+            AsyncRuntime::Multi(rt) => rt.wait_len(),
+            AsyncRuntime::Worker(_, _, rt) => rt.wait_len(),
+        }
+    }
+
+    //获取当前异步运行时任务数量
+    pub fn len(&self) -> usize {
+        match self {
+            AsyncRuntime::Local(rt) => rt.len(),
+            AsyncRuntime::Multi(rt) => rt.len(),
+            AsyncRuntime::Worker(_, _, rt) => rt.len(),
+        }
+    }
+
+    //分配异步任务的唯一id
+    pub fn alloc(&self) -> TaskId {
+        match self {
+            AsyncRuntime::Local(rt) => rt.alloc(),
+            AsyncRuntime::Multi(rt) => rt.alloc(),
+            AsyncRuntime::Worker(_, _, rt) => rt.alloc(),
+        }
+    }
+
+    //派发一个指定的异步任务到异步运行时
+    pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
+        where F: Future<Output = O> + Send + 'static {
+        match self {
+            AsyncRuntime::Local(rt) => rt.spawn(task_id, future),
+            AsyncRuntime::Multi(rt) => rt.spawn(task_id, future),
+            AsyncRuntime::Worker(worker_status, worker_waker, rt) => {
+                if !worker_status.load(Ordering::SeqCst) {
+                    return Err(Error::new(ErrorKind::Other, "Spawn async task failed, reason: worker already closed"));
+                }
+
+                {
+                    let (lock, cvar) = &**worker_waker;
+                    let mut status = lock.lock();
+                    if !*status {
+                        //需要唤醒工作者
+                        *status = true;
+                        cvar.notify_one();
+                    }
+                }
+
+                rt.spawn(task_id, future)
+            },
+        }
+    }
+
+    //派发一个在指定时间后执行的异步任务到异步运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<usize>
+        where F: Future<Output = O> + Send + 'static {
+        match self {
+            AsyncRuntime::Local(rt) => rt.spawn_timing(task_id, future, time),
+            AsyncRuntime::Multi(rt) => {
+                match rt.spawn_timing(task_id, future, time) {
+                    Err(e) => Err(e),
+                    Ok(handle) => Ok(handle as usize),
+                }
+            },
+            AsyncRuntime::Worker(worker_status, worker_waker, rt) => {
+                if !worker_status.load(Ordering::SeqCst) {
+                    return Err(Error::new(ErrorKind::Other, "Spawn timing async task failed, reason: worker already closed"));
+                }
+
+                {
+                    let (lock, cvar) = &**worker_waker;
+                    let mut status = lock.lock();
+                    if !*status {
+                        //需要唤醒工作者
+                        *status = true;
+                        cvar.notify_one();
+                    }
+                }
+
+                rt.spawn_timing(task_id, future, time)
+            },
+        }
+    }
+
+    //取消指定句柄的定时异步任务
+    pub fn cancel_timing(&self, handle: usize) {
+        match self {
+            AsyncRuntime::Local(rt) => rt.cancel_timing(handle),
+            AsyncRuntime::Multi(rt) => rt.cancel_timing(handle as u64),
+            AsyncRuntime::Worker(_, _, rt) => rt.cancel_timing(handle),
+        }
+    }
+
+    //挂起指定唯一id的异步任务
+    pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
+        match self {
+            AsyncRuntime::Local(rt) => rt.pending(task_id, waker),
+            AsyncRuntime::Multi(rt) => rt.pending(task_id, waker),
+            AsyncRuntime::Worker(_, _, rt) => rt.pending(task_id, waker),
+        }
+    }
+
+    //唤醒指定唯一id的异步任务
+    pub fn wakeup(&self, task_id: &TaskId) {
+        match self {
+            AsyncRuntime::Local(rt) => rt.wakeup(task_id),
+            AsyncRuntime::Multi(rt) => rt.wakeup(task_id),
+            AsyncRuntime::Worker(_, _, rt) => rt.wakeup(task_id),
+        }
+    }
+
+    //构建用于派发多个异步任务到指定运行时的映射
+    pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
+        match self {
+            AsyncRuntime::Local(rt) => rt.map(),
+            AsyncRuntime::Multi(rt) => rt.map(),
+            AsyncRuntime::Worker(_, _, rt) => rt.map(),
+        }
+    }
+
+    //关闭异步运行时，返回请求关闭是否成功
+    pub fn close(&self) -> bool {
+        match self {
+            AsyncRuntime::Worker(worker_status, worker_waker, _) => {
+                if worker_status.compare_and_swap(true, false, Ordering::SeqCst) {
+                    //设置工作者状态成功
+                    {
+                        let (lock, cvar) = &**worker_waker;
+                        let mut status = lock.lock();
+                        if !*status {
+                            //需要唤醒工作者
+                            *status = true;
+                            cvar.notify_one();
+                        }
+                    }
+                }
+
+                true
+            },
+            _ => false,
+        }
+    }
+}
+
+/*
+* 异步运行时同步方法
+*/
+impl<O: Default + 'static> AsyncRuntime<O> {
+    //挂起当前异步运行时的当前任务，等待指定的时间后唤醒当前任务
+    pub async fn wait_timeout(&self, timeout: usize) {
+        match self {
+            AsyncRuntime::Local(rt) => rt.wait_timeout(timeout).await,
+            AsyncRuntime::Multi(rt) => rt.wait_timeout(timeout).await,
+            AsyncRuntime::Worker(_, _, rt) => rt.wait_timeout(timeout).await,
+        }
+    }
+
+    //挂起当前异步运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
+    pub async fn wait<R, V, F>(&self, art: AsyncRuntime<R>, future: F) -> Result<V>
+        where R: Default + 'static,
+              V: Send + 'static,
+              F: Future<Output = Result<V>> + Send + 'static {
+        match self {
+            AsyncRuntime::Local(rt) => rt.wait(art, future).await,
+            AsyncRuntime::Multi(rt) => rt.wait(art, future).await,
+            AsyncRuntime::Worker(_, _, rt) => rt.wait(art, future).await,
+        }
+    }
+
+    //挂起当前异步运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
+        where R: Default + 'static,
+              V: Send + 'static  {
+        match self {
+            AsyncRuntime::Local(rt) => rt.wait_any(futures).await,
+            AsyncRuntime::Multi(rt) => rt.wait_any(futures).await,
+            AsyncRuntime::Worker(_, _, rt) => rt.wait_any(futures).await,
         }
     }
 }
@@ -98,12 +295,17 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncValue<O, V> {
         }
 
         match &(&self).rt {
-            AsyncRuntime::Single(rt) => {
+            AsyncRuntime::Local(rt) => {
                 let r = rt.pending(&self.task_id, cx.waker().clone());
                 (&self).status.store(1, Ordering::Relaxed); //将异步值状态设置为就绪
                 r
             },
             AsyncRuntime::Multi(rt) => {
+                let r = rt.pending(&self.task_id, cx.waker().clone());
+                (&self).status.store(1, Ordering::Relaxed); //将异步值状态设置为就绪
+                r
+            },
+            AsyncRuntime::Worker(_, _, rt) => {
                 let r = rt.pending(&self.task_id, cx.waker().clone());
                 (&self).status.store(1, Ordering::Relaxed); //将异步值状态设置为就绪
                 r
@@ -116,10 +318,13 @@ impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
     //构建异步值，默认值为未就绪
     pub fn new(rt: AsyncRuntime<O>) -> Self {
         let task_id = match &rt {
-            AsyncRuntime::Single(rt) => {
+            AsyncRuntime::Local(rt) => {
                 rt.alloc()
             },
             AsyncRuntime::Multi(rt) => {
+                rt.alloc()
+            },
+            AsyncRuntime::Worker(_, _, rt) => {
                 rt.alloc()
             },
         };
@@ -162,10 +367,13 @@ impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
 
         //唤醒异步值
         match &self.rt {
-            AsyncRuntime::Single(rt) => {
+            AsyncRuntime::Local(rt) => {
                 rt.wakeup(&self.task_id)
             },
             AsyncRuntime::Multi(rt) => {
+                rt.wakeup(&self.task_id)
+            },
+            AsyncRuntime::Worker(_, _, rt) => {
                 rt.wakeup(&self.task_id)
             },
         }
@@ -309,12 +517,17 @@ impl<O: Default + 'static> Future for AsyncWaitTimeout<O> {
         }
 
         let (task_id, reply) = match &(&self).rt {
-            AsyncRuntime::Single(wait_rt) => {
+            AsyncRuntime::Local(wait_rt) => {
                 let task_id = wait_rt.alloc();
                 let r = wait_rt.pending(&task_id, cx.waker().clone());
                 (task_id, r)
             },
             AsyncRuntime::Multi(wait_rt) => {
+                let task_id = wait_rt.alloc();
+                let r = wait_rt.pending(&task_id, cx.waker().clone());
+                (task_id, r)
+            },
+            AsyncRuntime::Worker(_, _, wait_rt) => {
                 let task_id = wait_rt.alloc();
                 let r = wait_rt.pending(&task_id, cx.waker().clone());
                 (task_id, r)
@@ -365,8 +578,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 
         //在指定运行时运行指定的任务
         let task_id = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Local(wait_rt) => wait_rt.alloc(),
             AsyncRuntime::Multi(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.alloc(),
         };
         let task_id_ = task_id.clone();
         let wait = (&self).wait.clone();
@@ -378,8 +592,8 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
             let wait_copy = wait.clone();
             let result_copy = result.clone();
             match runner {
-                AsyncRuntime::Single(rt) => {
-                    //将指定任务派发到单线程运行时
+                AsyncRuntime::Local(rt) => {
+                    //将指定任务派发到本地运行时
                     if let Err(e) = rt.spawn(rt.alloc(), async move {
                         if let Some(f) = future {
                             //指定了任务
@@ -390,8 +604,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                         }
 
                         match wait_copy {
-                            AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                             AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                         }
 
                         //返回异步任务的默认值
@@ -400,8 +615,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                         //派发指定的任务失败，则立即唤醒等待的任务
                         *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async Runner Error by Wait, reason: {:?}", e))));
                         match wait {
-                            AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                             AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                         }
                     }
                 },
@@ -417,8 +633,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                         }
 
                         match wait_copy {
-                            AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                             AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                         }
 
                         //返回异步任务的默认值
@@ -427,8 +644,38 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                         //派发指定的任务失败，则立即唤醒等待的任务
                         *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async Runner Error by Wait, reason: {:?}", e))));
                         match wait {
-                            AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                             AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
+                        }
+                    }
+                },
+                AsyncRuntime::Worker(_, _, rt) => {
+                    //将指定任务派发到工作者运行时
+                    if let Err(e) = rt.spawn(rt.alloc(), async move {
+                        if let Some(f) = future {
+                            //指定了任务
+                            *result_copy.0.borrow_mut() = Some(f.await);
+                        } else {
+                            //未指定任务
+                            *result_copy.0.borrow_mut() = Some(Err(Error::new(ErrorKind::NotFound, "invalid future")));
+                        }
+
+                        match wait_copy {
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
+                        }
+
+                        //返回异步任务的默认值
+                        Default::default()
+                    }) {
+                        //派发指定的任务失败，则立即唤醒等待的任务
+                        *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async Runner Error by Wait, reason: {:?}", e))));
+                        match wait {
+                            AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                         }
                     }
                 },
@@ -440,18 +687,25 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 
         //挂起当前异步等待任务，并返回值未就绪，以保证异步等待任务在执行前不会被唤醒
         let reply = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Local(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
             AsyncRuntime::Multi(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
         };
 
         match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => {
+            AsyncRuntime::Local(wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Error, reason: {:?}", e))));
                 }
             },
             AsyncRuntime::Multi(wait_rt) => {
+                if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
+                    //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
+                    return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Error, reason: {:?}", e))));
+                }
+            },
+            AsyncRuntime::Worker(_, _, wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Error, reason: {:?}", e))));
@@ -501,8 +755,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 
         //在指定运行时运行指定的任务
         let task_id = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Local(wait_rt) => wait_rt.alloc(),
             AsyncRuntime::Multi(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.alloc(),
         };
         let task_id_ = task_id.clone();
         let wait = (&self).wait.clone();
@@ -516,8 +771,8 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                 let is_finish_copy = is_finish.clone();
                 let result_copy = result.clone();
                 match runner {
-                    AsyncRuntime::Single(rt) => {
-                        //将指定任务派发到单线程运行时
+                    AsyncRuntime::Local(rt) => {
+                        //将指定任务派发到本地运行时
                         if let Err(e) = rt.spawn(rt.alloc(), async move {
                             if is_finish_copy.load(Ordering::Relaxed) {
                                 //快速检查，当前已有任务执行完成，则忽略，并立即返回
@@ -530,8 +785,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                                 //当前没有任务执行完成，则立即唤醒等待的任务
                                 *result_copy.0.borrow_mut() = Some(r);
                                 match wait_copy {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                                 }
                             }
 
@@ -543,8 +799,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                                 //当前没有任务执行完成，则立即唤醒等待的任务
                                 *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async SingleTask Runner Error, reason: {:?}", e))));
                                 match wait {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                                 }
                             }
                             break;
@@ -564,8 +821,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                                 //当前没有任务执行完成，则立即唤醒等待的任务
                                 *result_copy.0.borrow_mut() = Some(r);
                                 match wait_copy {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                                 }
                             }
 
@@ -577,8 +835,45 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
                                 //当前没有任务执行完成，则立即唤醒等待的任务
                                 *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async MultiTask Runner Error, reason: {:?}", e))));
                                 match wait {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
+                                }
+                            }
+                            break;
+                        }
+                    },
+                    AsyncRuntime::Worker(_, _, rt) => {
+                        //将指定任务派发到工作者运行时
+                        if let Err(e) = rt.spawn(rt.alloc(), async move {
+                            if is_finish_copy.load(Ordering::Relaxed) {
+                                //快速检查，当前已有任务执行完成，则忽略，并立即返回
+                                return Default::default();
+                            }
+
+                            //执行任务，并检查是否由当前任务唤醒等待的任务
+                            let r = future.await;
+                            if !is_finish_copy.compare_and_swap(false, true, Ordering::SeqCst) {
+                                //当前没有任务执行完成，则立即唤醒等待的任务
+                                *result_copy.0.borrow_mut() = Some(r);
+                                match wait_copy {
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                }
+                            }
+
+                            //返回异步任务的默认值
+                            Default::default()
+                        }) {
+                            //派发指定的任务失败，则退出派发循环
+                            if !is_finish.compare_and_swap(false, true, Ordering::SeqCst) {
+                                //当前没有任务执行完成，则立即唤醒等待的任务
+                                *result.0.borrow_mut() = Some(Err(Error::new(ErrorKind::Other, format!("Async SingleTask Runner Error, reason: {:?}", e))));
+                                match wait {
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                                 }
                             }
                             break;
@@ -593,18 +888,25 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 
         //挂起当前异步等待任务，并返回值未就绪，以保证异步等待任务在执行前不会被唤醒
         let reply = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Local(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
             AsyncRuntime::Multi(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
         };
 
         match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => {
+            AsyncRuntime::Local(wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Any Error, reason: {:?}", e))));
                 }
             },
             AsyncRuntime::Multi(wait_rt) => {
+                if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
+                    //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
+                    return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Any Error, reason: {:?}", e))));
+                }
+            },
+            AsyncRuntime::Worker(_, _, wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步等待的任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Wait Any Error, reason: {:?}", e))));
@@ -705,8 +1007,9 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
 
         //在归并任务所在运行时中派发所有异步任务
         let task_id = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Local(wait_rt) => wait_rt.alloc(),
             AsyncRuntime::Multi(wait_rt) => wait_rt.alloc(),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.alloc(),
         };
         let task_id_ = task_id.clone();
         let mut futures = (&mut self).futures.take().unwrap();
@@ -720,15 +1023,16 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                 let count_copy = count.clone();
                 let producor_copy = producor.clone();
                 match runtime {
-                    AsyncRuntime::Single(rt) => {
+                    AsyncRuntime::Local(rt) => {
                         if let Err(e) = rt.spawn(rt.alloc(), async move {
                             let value = future.await;
                             let _ = producor_copy.send((index, value));
                             if count_copy.fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match wait_copy {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                                 }
                             }
 
@@ -740,8 +1044,9 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                             if count.clone().fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match &wait {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                                 }
                             }
                         }
@@ -753,8 +1058,9 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                             if count_copy.fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match wait_copy {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
                                 }
                             }
 
@@ -766,8 +1072,37 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
                             if count.clone().fetch_sub(1, Ordering::SeqCst) == 1 {
                                 //最后一个任务已执行完成，则立即唤醒等待的归并任务
                                 match &wait {
-                                    AsyncRuntime::Single(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
                                     AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
+                                }
+                            }
+                        }
+                    },
+                    AsyncRuntime::Worker(_, _, rt) => {
+                        if let Err(e) = rt.spawn(rt.alloc(), async move {
+                            let value = future.await;
+                            let _ = producor_copy.send((index, value));
+                            if count_copy.fetch_sub(1, Ordering::SeqCst) == 1 {
+                                //最后一个任务已执行完成，则立即唤醒等待的归并任务
+                                match wait_copy {
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_copy),
+                                }
+                            }
+
+                            //返回异步任务的默认值
+                            Default::default()
+                        }) {
+                            //派发异步任务失败，则退出派发循环
+                            let _ = producor.send((index, Err(e)));
+                            if count.clone().fetch_sub(1, Ordering::SeqCst) == 1 {
+                                //最后一个任务已执行完成，则立即唤醒等待的归并任务
+                                match &wait {
+                                    AsyncRuntime::Local(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Multi(wait_rt) => wait_rt.wakeup(&task_id_),
+                                    AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.wakeup(&task_id_),
                                 }
                             }
                         }
@@ -781,18 +1116,25 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
 
         //挂起当前归并任务，并返回值未就绪，以保证归并任务在执行前不会被唤醒
         let reply = match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Local(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
             AsyncRuntime::Multi(wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
+            AsyncRuntime::Worker(_, _, wait_rt) => wait_rt.pending(&task_id, cx.waker().clone()),
         };
 
         match &(&self).wait {
-            AsyncRuntime::Single(wait_rt) => {
+            AsyncRuntime::Local(wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步映射任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Map Error, reason: {:?}", e))));
                 }
             },
             AsyncRuntime::Multi(wait_rt) => {
+                if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
+                    //派发异步映射任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
+                    return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Map Error, reason: {:?}", e))));
+                }
+            },
+            AsyncRuntime::Worker(_, _, wait_rt) => {
                 if let Err(e) = wait_rt.spawn(wait_rt.alloc(), task) {
                     //派发异步映射任务失败，则移除已挂起的异步等待任务，并立即返回错误原因
                     return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Map Error, reason: {:?}", e))));
