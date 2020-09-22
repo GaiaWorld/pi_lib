@@ -68,6 +68,7 @@ pub trait TypeIds {
     fn type_ids() -> Vec<(TypeId, TypeId)>;
 }
 
+#[derive(Debug)]
 pub struct RunTime {
     pub sys_name: atom::Atom,
     pub cost_time: std::time::Duration, // 单位ms

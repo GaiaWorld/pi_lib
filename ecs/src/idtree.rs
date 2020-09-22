@@ -117,7 +117,7 @@ impl IdTree {
                 InsertType::Back => (n.parent, n.layer, brother, n.next),
             },
             _ => panic!("invalid brother: {}", brother),
-        };
+		};
         self.insert_node(id, parent, layer, prev, next, notify)
     }
     /// 如果的节点的layer大于0，表示在树上，则会发出移除事件
@@ -157,9 +157,9 @@ impl IdTree {
     pub fn destroy(&mut self, id: usize, recursive: bool, notify: Option<&NotifyImpl>) {
         let (parent, layer, count, prev, next, mut head) = match self.map.get(id) {
             Some(n) => {
-                if n.parent == 0 && n.layer == 0 {
-                    return;
-                }
+                // if n.parent == 0 {
+                //     return;
+                // }
                 (n.parent, n.layer, n.count, n.prev, n.next, n.children.head)
             }
             _ => {
@@ -388,7 +388,7 @@ impl IdTree {
     }
     // 递归销毁
     fn recursive_destroy(&mut self, parent: usize, mut id: usize) {
-        self.map.remove(parent);
+		self.map.remove(parent);
         while id > 0 {
             let (next, head) = {
                 let n = unsafe { self.map.get_unchecked(id) };
