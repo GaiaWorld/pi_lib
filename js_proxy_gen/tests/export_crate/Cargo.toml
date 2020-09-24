@@ -1,0 +1,8 @@
+[package]
+name = "export_crate"
+version = "0.1.0"
+authors = ["yineng <yineng@foxmail.com>"]
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.11"

@@ -1,0 +1,1470 @@
+use std::fs;
+use std::env;
+use std::ops::BitOr;
+use std::path::{Path, PathBuf};
+use std::io::{Error, Result, ErrorKind};
+
+use toml;
+use serde_derive::{Deserialize, Serialize};
+
+/*
+* 源码目录名
+*/
+pub const SRC_DIR_NAME: &str = "src";
+
+/*
+* 库入口文件名
+*/
+pub const LIB_FILE_NAME: &str = "lib.rs";
+
+/*
+* 构建配置文件名
+*/
+pub const BUILD_FILE_NAME: &str = "Cargo.toml";
+
+/*
+* 检查指定路径是否是库的根路径，如果是则返回库信息和源码路径
+*/
+pub fn check_crate(path: &Path) -> Result<(CrateInfo, PathBuf)> {
+    match fs::read_dir(path) {
+        Err(e) => Err(e),
+        Ok(mut dirs) => {
+            let mut crate_info = None;
+            let mut src_path = None;
+
+            while let Some(entry) = dirs.next() {
+                match entry {
+                    Err(e) => return Err(e),
+                    Ok(e) => {
+                        if let Some(filename) = e.path().file_name() {
+                            match filename.to_str() {
+                                Some(BUILD_FILE_NAME) => {
+                                    //分析库信息
+                                    match fs::read_to_string(e.path()) {
+                                        Err(e) => return Err(e),
+                                        Ok(str) => {
+                                            crate_info = Some(str.into());
+                                        },
+                                    }
+                                },
+                                Some(SRC_DIR_NAME) => {
+                                    //记录源码路径
+                                    src_path = Some(e.path());
+                                },
+                                _ => (),
+                            }
+                        }
+                    },
+                }
+            }
+
+            if let (Some(crate_info), Some(src_path)) = (crate_info, src_path) {
+                Ok((crate_info, src_path))
+            } else {
+                Err(Error::new(ErrorKind::Other, format!("Check crate failed, path: {:?}, reason: invalid crate", path)))
+            }
+        },
+    }
+}
+
+/*
+* 导出的库
+*/
+#[derive(Debug)]
+pub struct Crate {
+    info:   CrateInfo,          //库信息
+    source: Vec<ParseContext>,  //源码信息
+}
+
+unsafe impl Send for Crate {}
+
+impl Crate {
+    //构建导出的库
+    pub fn new(info: CrateInfo, source: Vec<ParseContext>) -> Self {
+        Crate {
+            info,
+            source,
+        }
+    }
+
+    //获取导出库的库信息
+    pub fn get_info(&self) -> &CrateInfo {
+        &self.info
+    }
+
+    //获取导出库的源码信息
+    pub fn get_source(&self) -> &[ParseContext] {
+        self.source.as_slice()
+    }
+}
+
+/*
+* 库信息
+*/
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CrateInfo {
+    package:        PackageInfo,    //包信息
+    dependencies:   toml::Value,    //依赖信息
+}
+
+unsafe impl Send for CrateInfo {}
+
+impl From<&str> for CrateInfo {
+    fn from(src: &str) -> Self {
+        match toml::from_str(src) {
+            Err(e) => panic!("Parse from Cargo.toml to info failed, reason: {:?}", e),
+            Ok(info) => info,
+        }
+    }
+}
+
+impl From<String> for CrateInfo {
+    fn from(src: String) -> Self {
+        match toml::from_str(src.as_str()) {
+            Err(e) => panic!("Parse from Cargo.toml to info failed, reason: {:?}", e),
+            Ok(info) => info,
+        }
+    }
+}
+
+impl From<&CrateInfo> for String {
+    fn from(src: &CrateInfo) -> Self {
+        match toml::to_string(src) {
+            Err(e) => panic!("Parse from info to Cargo.toml failed, reason: {:?}", e),
+            Ok(string) => string,
+        }
+    }
+}
+
+impl From<CrateInfo> for String {
+    fn from(src: CrateInfo) -> Self {
+        match toml::to_string(&src) {
+            Err(e) => panic!("Parse from info to Cargo.toml failed, reason: {:?}", e),
+            Ok(string) => string,
+        }
+    }
+}
+
+impl CrateInfo {
+    //构建库信息
+    pub fn new(name: &str,
+               version: &str,
+               authors: Vec<&str>,
+               edition: &str) -> Self {
+        let package = PackageInfo {
+            name: name.into(),
+            version: version.into(),
+            authors: authors.into(),
+            edition: edition.into(),
+        };
+        let dependencies = toml::Value::Table(toml::value::Table::default());
+
+        CrateInfo {
+            package,
+            dependencies,
+        }
+    }
+
+    //获取包信息的只读引用
+    pub fn get_package(&self) -> &PackageInfo {
+        &self.package
+    }
+
+    //获取包信息的可写引用
+    pub fn get_package_mut(&mut self) -> &mut PackageInfo {
+        &mut self.package
+    }
+
+    //获取依赖信息
+    pub fn get_depends<'a>(&'a self) -> Option<&'a toml::value::Table> {
+        if let toml::Value::Table(table) = &self.dependencies {
+            return Some(table);
+        }
+
+        None
+    }
+
+    //追加指定的依赖
+    pub fn append_depend(&mut self, name: &str, value: toml::Value) {
+        if let toml::Value::Table(table) = &mut self.dependencies {
+            table.insert(name.to_string(), value);
+        }
+    }
+
+    //移除指定的依赖
+    pub fn remove_depend(&mut self, name: &str) -> Option<toml::Value> {
+        if let toml::Value::Table(table) = &mut self.dependencies {
+            return table.remove(name);
+        }
+
+        None
+    }
+}
+
+/*
+* 包信息
+*/
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PackageInfo {
+    name:       toml::Value,    //库名
+    version:    toml::Value,    //版本号
+    authors:    toml::Value,    //作者
+    edition:    toml::Value,    //版本
+}
+
+unsafe impl Send for PackageInfo {}
+
+impl PackageInfo {
+    //获取库名
+    pub fn get_name(&self) -> String {
+        if let toml::Value::String(name) = &self.name {
+            return name.clone();
+        }
+
+        unimplemented!(); //不应该执行此分支
+    }
+
+    //设置库名
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.into();
+    }
+
+    //获取版本号
+    pub fn get_version(&self) -> String{
+        if let toml::Value::String(version) = &self.version {
+            return version.clone();
+        }
+
+        unimplemented!(); //不应该执行此分支
+    }
+
+    //设置版本号
+    pub fn set_version(&mut self, version: &str) {
+        self.version = version.into();
+    }
+
+    //获取作者
+    pub fn get_authors(&self) -> Vec<String> {
+        let mut vec = Vec::new();
+        if let toml::Value::Array(array) = &self.authors {
+            for author in array {
+                if let toml::Value::String(author) = author {
+                    vec.push(author.clone());
+                }
+            }
+        }
+
+        vec
+    }
+
+    //设置作者
+    pub fn set_authors(&mut self, authors: Vec<&str>) {
+        self.authors = authors.into();
+    }
+
+    //获取版本
+    pub fn get_edition(&self) -> String {
+        if let toml::Value::String(edition) = &self.edition {
+            return edition.clone();
+        }
+
+        unimplemented!(); //不应该执行此分支
+    }
+
+    //设置版本
+    pub fn set_edition(&mut self, edition: &str) {
+        self.edition = edition.into();
+    }
+}
+
+/*
+* 解析上下文
+*/
+#[derive(Debug)]
+pub struct ParseContext {
+    origin:     PathBuf,            //上下文的源
+    is_export:  bool,               //正在解析的条目是否需要导出
+    imports:    Vec<ImportItem>,    //导入条目数组
+    exports:    Vec<ExportItem>,    //导出条目数组
+}
+
+unsafe impl Send for ParseContext {}
+
+impl ParseContext {
+    //构建解析上下文
+    pub fn new(origin: &Path) -> Self {
+        ParseContext {
+            origin: origin.to_path_buf(),
+            is_export: false,
+            imports: Vec::new(),
+            exports: Vec::new(),
+        }
+    }
+
+    //获取上下文的源
+    pub fn get_origin(&self) -> &Path {
+        self.origin.as_path()
+    }
+
+    //判断当前正在解析的条目是否需要导出
+    pub fn is_export(&self) -> bool {
+        self.is_export
+    }
+
+    //设置当前正在解析的条目是否需要导出
+    pub fn set_is_export(&mut self, b: bool) {
+        self.is_export = b;
+    }
+
+    //从尾部弹出一个导入条目
+    pub fn pop_import(&mut self) -> Option<ImportItem> {
+        self.imports.pop()
+    }
+
+    //从尾部推入一个导入条目
+    pub fn push_import(&mut self, item: ImportItem) {
+        self.imports.push(item);
+    }
+
+    //获取尾部导入条目的只读引用
+    pub fn get_last_import(&self) -> Option<&ImportItem> {
+        self.imports.last()
+    }
+
+    //获取尾部导入条目的可写引用
+    pub fn get_last_import_mut(&mut self) -> Option<&mut ImportItem> {
+        self.imports.last_mut()
+    }
+
+    //获取导入条目数组的只读引用
+    pub fn get_imports(&self) -> &[ImportItem] {
+        self.imports.as_slice()
+    }
+
+    //从尾部弹出一个导出条目
+    pub fn pop_export(&mut self) -> Option<ExportItem> {
+        self.exports.pop()
+    }
+
+    //向尾部推入一个导出条目
+    pub fn push_export(&mut self, item: ExportItem) {
+        self.exports.push(item);
+    }
+
+    //获取尾部导出条目的只读引用
+    pub fn get_last_export(&self) -> Option<&ExportItem> {
+        self.exports.last()
+    }
+
+    //获取尾部导出条目的可写引用
+    pub fn get_last_export_mut(&mut self) -> Option<&mut ExportItem> {
+        self.exports.last_mut()
+    }
+
+    //获取导出条目数组的只读引用
+    pub fn get_exports(&self) -> &[ExportItem] {
+        self.exports.as_slice()
+    }
+}
+
+/*
+* 导入的条目
+*/
+#[derive(Debug)]
+pub enum ImportItem {
+    Std(LibPath),   //标准库
+    Thrid(LibPath), //第三方库
+}
+
+unsafe impl Send for ImportItem {}
+
+impl ImportItem {
+    //是否是标准库导入
+    pub fn is_std(&self) -> bool {
+        match self {
+            ImportItem::Std(_) => true,
+            _ => false,
+        }
+    }
+
+    //是否是第三方库导入
+    pub fn is_thrid(&self) -> bool {
+        match self {
+            ImportItem::Thrid(_) => true,
+            _ => false,
+        }
+    }
+
+    //获取导入条目的库名
+    pub fn get_crate_name(&self) -> String {
+        match self {
+            ImportItem::Std(lib) => {
+                "std".to_string()
+            },
+            ImportItem::Thrid(lib) => {
+                lib.get_name().clone()
+            },
+        }
+    }
+}
+
+/*
+* 库路径
+*/
+#[derive(Debug)]
+pub struct LibPath {
+    name:   String,                     //路径名
+    alias:  Option<String>,             //别名
+    next:   Option<Box<LibPathNext>>,   //下一个路径
+}
+
+unsafe impl Send for LibPath {}
+
+impl LibPath {
+    //构建Rust库
+    pub fn new(name: String) -> Self {
+        LibPath {
+            name,
+            alias: None,
+            next: None,
+        }
+    }
+
+    //获取路径名
+    pub fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    //获取别名
+    pub fn get_alias(&self) -> Option<&String> {
+        self.alias.as_ref()
+    }
+
+    //设置别名
+    pub fn set_alias(&mut self, alias: String) {
+        self.alias = Some(alias);
+    }
+
+    //获取下一个路径
+    pub fn next(&self) -> Option<&LibPathNext> {
+        if let Some(boxed) = &self.next {
+            Some(&*boxed)
+        } else {
+            None
+        }
+    }
+
+    //增加下一个路径
+    pub fn join(&mut self, next: LibPathNext) {
+        self.next = Some(Box::new(next));
+    }
+}
+
+/*
+* 下一个库路径
+*/
+#[derive(Debug)]
+pub enum LibPathNext {
+    Path(LibPath),
+    Group(Vec<LibPath>),
+}
+
+unsafe impl Send for LibPathNext {}
+
+/*
+* 导出的条目
+*/
+#[derive(Debug)]
+pub enum ExportItem {
+    StructItem(Struct),     //导出的结构体
+    EnumItem(Enum),         //导出的枚举
+    FunctionItem(Function), //导出的函数
+    ConstItem(Const),       //导出的常量
+}
+
+unsafe impl Send for ExportItem {}
+
+impl ExportItem {
+    //获取导出的条目名称
+    pub fn get_name(&self) -> Option<String> {
+        match self {
+            ExportItem::StructItem(s) => s.get_name().cloned(),
+            ExportItem::EnumItem(e) => e.get_name().cloned(),
+            ExportItem::FunctionItem(f) => f.get_name().cloned(),
+            ExportItem::ConstItem(c) => c.get_name().cloned(),
+        }
+    }
+
+    //追加导出条目的文档
+    pub fn append_doc(&mut self, doc: String) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(document) = &mut s.doc {
+                    document.append(doc);
+                } else {
+                    //导出结构体没有文档，则创建
+                    s.doc = Some(Document::new(doc));
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(document) = &mut e.doc {
+                    document.append(doc);
+                } else {
+                    //导出枚举没有文档，则创建
+                    e.doc = Some(Document::new(doc));
+                }
+            },
+            ExportItem::FunctionItem(f) => {
+                if let Some(document) = &mut f.doc {
+                    document.append(doc);
+                } else {
+                    //导出函数没有文档，则创建
+                    f.doc = Some(Document::new(doc));
+                }
+            },
+            ExportItem::ConstItem(c) => {
+                if let Some(document) = &mut c.doc {
+                    document.append(doc);
+                } else {
+                    //导出常量没有文档，则创建
+                    c.doc = Some(Document::new(doc));
+                }
+            }
+        }
+    }
+
+    //追加导出条目泛型名称
+    pub fn append_generic(&mut self, name: String) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(generic) = &mut s.generic {
+                    generic.append_name(name);
+                } else {
+                    //导出结构体没有泛型，则创建
+                    s.generic = Some(Generic::new(name));
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(generic) = &mut e.generic {
+                    generic.append_name(name);
+                } else {
+                    //导出枚举没有泛型，则创建
+                    e.generic = Some(Generic::new(name));
+                }
+            },
+            ExportItem::FunctionItem(f) => {
+                if let Some(generic) = &mut f.generic {
+                    generic.append_name(name);
+                } else {
+                    //导出函数没有泛型，则创建
+                    f.generic = Some(Generic::new(name));
+                }
+            },
+            _ => {
+                //忽略不支持的条目追加泛型名称
+                ()
+            },
+        }
+    }
+
+    //追加导出条目泛型的具体类型名称
+    pub fn append_generic_type(&mut self, r#type: String) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(generic) = &mut s.generic {
+                    generic.append_type(r#type);
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(generic) = &mut e.generic {
+                    generic.append_type(r#type);
+                }
+            },
+            ExportItem::FunctionItem(f) => {
+                if let Some(generic) = &mut f.generic {
+                    generic.append_type(r#type);
+                }
+            },
+            _ => {
+                //忽略不支持的条目追加泛型的具体类型名称
+                ()
+            },
+        }
+    }
+
+    //追加导出条目实现的Trait名称
+    pub fn append_trait_impl(&mut self, name: String) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(trait_impl) = &mut s.trait_impls {
+                    trait_impl.append_name(name);
+                } else {
+                    //导出结构体没有Trait实现，则创建
+                    s.trait_impls = Some(TraitImpls::new(name));
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(trait_impl) = &mut e.trait_impls {
+                    trait_impl.append_name(name);
+                } else {
+                    //导出枚举没有Trait实现，则创建
+                    e.trait_impls = Some(TraitImpls::new(name));
+                }
+            },
+            _ => {
+                //忽略不支持的条目实现的Trait名称
+                ()
+            },
+        }
+    }
+
+    //追加导出条目实现的Trait方法
+    pub fn append_trait_method(&mut self, function: Function) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(trait_impl) = &mut s.trait_impls {
+                    trait_impl.append_method(function);
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(trait_impl) = &mut e.trait_impls {
+                    trait_impl.append_method(function);
+                }
+            },
+            _ => {
+                //忽略不支持的条目追加导出的Trait方法
+                ()
+            },
+        }
+    }
+
+    //追加导出条目实现的方法
+    pub fn append_method(&mut self, function: Function) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(impls) = &mut s.impls {
+                    impls.append_method(function);
+                } else {
+                    //导出结构体没有实现，则创建
+                    s.impls = Some(Impls::new(function));
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(impls) = &mut e.impls {
+                    impls.append_method(function);
+                } else {
+                    //导出枚举没有实现，则创建
+                    e.impls = Some(Impls::new(function));
+                }
+            },
+            _ => {
+                //忽略不支持的条目追加导出的方法
+                ()
+            },
+        }
+    }
+
+    //追加导出条目的常量
+    pub fn append_const(&mut self, c: Const) {
+        match self {
+            ExportItem::StructItem(s) => {
+                if let Some(consts) = &mut s.consts {
+                    consts.append_const(c);
+                } else {
+                    //导出结构体没有常量列表，则创建
+                    s.consts = Some(ConstList::new(c));
+                }
+            },
+            ExportItem::EnumItem(e) => {
+                if let Some(consts) = &mut e.consts {
+                    consts.append_const(c);
+                } else {
+                    //导出枚举没有常量列表，则创建
+                    e.consts = Some(ConstList::new(c));
+                }
+            },
+            _ => {
+                //忽略不支持的条目追加常量的方法
+                ()
+            },
+        }
+    }
+}
+
+/*
+* 结构体
+*/
+#[derive(Debug)]
+pub struct Struct {
+    name:           Option<String>,     //结构体的名称
+    doc:            Option<Document>,   //结构体文档
+    generic:        Option<Generic>,    //结构体泛型
+    trait_impls:    Option<TraitImpls>, //结构体的Trait实现
+    impls:          Option<Impls>,      //结构体的实现
+    consts:         Option<ConstList>,  //结构体的常量列表
+}
+
+unsafe impl Send for Struct {}
+
+impl Struct {
+    //构建结构体
+    pub fn new() -> Self {
+        Struct {
+            name: None,
+            doc: None,
+            generic: None,
+            trait_impls: None,
+            impls: None,
+            consts: None,
+        }
+    }
+
+    //获取结构体名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置结构体名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取结构体文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置结构体文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取结构体泛型
+    pub fn get_generic(&self) -> Option<&Generic> {
+        self.generic.as_ref()
+    }
+
+    //设置结构体泛型
+    pub fn set_generic(&mut self, generic: Generic) {
+        self.generic = Some(generic);
+    }
+
+    //获取结构体的Trait实现
+    pub fn get_trait_impls(&self) -> Option<&TraitImpls> {
+        self.trait_impls.as_ref()
+    }
+
+    //设置结构体的Trait实现
+    pub fn set_trait_impls(&mut self, trait_impl: TraitImpls) {
+        self.trait_impls = Some(trait_impl);
+    }
+
+    //获取结构体的实现
+    pub fn get_impls(&self) -> Option<&Impls> {
+        self.impls.as_ref()
+    }
+
+    //设置结构体的实现
+    pub fn set_impls(&mut self, impls: Impls) {
+        self.impls = Some(impls);
+    }
+
+    //获取结构体的常量列表
+    pub fn get_consts(&self) -> Option<&ConstList> {
+        self.consts.as_ref()
+    }
+
+    //设置结构体的实现
+    pub fn set_consts(&mut self, consts: ConstList) {
+        self.consts = Some(consts);
+    }
+}
+
+/*
+* 枚举
+*/
+#[derive(Debug)]
+pub struct Enum {
+    name:           Option<String>,     //枚举的名称
+    doc:            Option<Document>,   //枚举文档
+    generic:        Option<Generic>,    //枚举泛型
+    trait_impls:    Option<TraitImpls>, //枚举的Trait实现
+    impls:          Option<Impls>,      //枚举的实现
+    consts:         Option<ConstList>,  //枚举的常量列表
+}
+
+unsafe impl Send for Enum {}
+
+impl Enum {
+    //构建枚举
+    pub fn new() -> Self {
+        Enum {
+            name: None,
+            doc: None,
+            generic: None,
+            trait_impls: None,
+            impls: None,
+            consts: None,
+        }
+    }
+
+    //获取枚举名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置枚举名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取枚举文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置枚举文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取枚举泛型
+    pub fn get_generic(&self) -> Option<&Generic> {
+        self.generic.as_ref()
+    }
+
+    //设置枚举泛型
+    pub fn set_generic(&mut self, generic: Generic) {
+        self.generic = Some(generic);
+    }
+
+    //获取枚举的Trait实现
+    pub fn get_trait_impls(&self) -> Option<&TraitImpls> {
+        self.trait_impls.as_ref()
+    }
+
+    //设置枚举的Trait实现
+    pub fn set_trait_impls(&mut self, trait_impl: TraitImpls) {
+        self.trait_impls = Some(trait_impl);
+    }
+
+    //获取枚举的实现
+    pub fn get_impls(&self) -> Option<&Impls> {
+        self.impls.as_ref()
+    }
+
+    //设置枚举的实现
+    pub fn set_impls(&mut self, impls: Impls) {
+        self.impls = Some(impls);
+    }
+
+    //获取枚举的常量列表
+    pub fn get_consts(&self) -> Option<&ConstList> {
+        self.consts.as_ref()
+    }
+
+    //设置枚举的实现
+    pub fn set_consts(&mut self, consts: ConstList) {
+        self.consts = Some(consts);
+    }
+}
+
+/*
+* 函数
+*/
+#[derive(Debug)]
+pub struct Function {
+    is_async:   bool,               //是否是异步函数
+    name:       Option<String>,     //函数的名称
+    doc:        Option<Document>,   //函数的文档
+    generic:    Option<Generic>,    //函数的泛型
+    input:      Option<FunArgs>,    //函数的入参
+    output:     Option<Type>,       //函数的出参
+}
+
+unsafe impl Send for Function {}
+
+impl Function {
+    //构建函数
+    pub fn new() -> Self {
+        Function {
+            is_async: false,
+            name: None,
+            doc: None,
+            generic: None,
+            input: None,
+            output: None,
+        }
+    }
+
+    //是否是异步方法
+    pub fn is_async(&self) -> bool {
+        self.is_async
+    }
+
+    //设置方法为异步方法
+    pub fn set_async(&mut self) {
+        self.is_async = true;
+    }
+
+    //是否是静态方法
+    pub fn is_static(&self) -> bool {
+        if let Some(args) = &self.input {
+            match args.get_ref()[0].0.as_str() {
+                "self" | "&self" | "&mut self" => false,
+                _ => true,
+            }
+        } else {
+            true
+        }
+    }
+
+    //获取函数名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置函数名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取函数文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置函数文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取函数泛型
+    pub fn get_generic(&self) -> Option<&Generic> {
+        self.generic.as_ref()
+    }
+
+    //设置函数泛型
+    pub fn set_generic(&mut self, generic: Generic) {
+        self.generic = Some(generic);
+    }
+
+    //获取函数入参
+    pub fn get_input(&self) -> Option<&FunArgs> {
+        self.input.as_ref()
+    }
+
+    //追加函数的入参
+    pub fn append_input(&mut self, name: String, r#type: Type) {
+        if let Some(input) = &mut self.input {
+            input.append(name, r#type);
+        } else {
+            //导出函数没有函数入参，则创建
+            self.input = Some(FunArgs::new(name, r#type));
+        }
+    }
+
+    //获取函数出参
+    pub fn get_output(&self) -> Option<&Type> {
+        self.output.as_ref()
+    }
+
+    //设置函数出参
+    pub fn set_output(&mut self, output: Type) {
+        self.output = Some(output);
+    }
+}
+
+/*
+* 常量
+*/
+#[derive(Debug)]
+pub struct Const {
+    name:       Option<String>,     //常量的名称
+    doc:        Option<Document>,   //常量的文档
+    ty:         Option<Type>,       //常量的类型
+    value:      Option<ConstValue>, //常量值
+}
+
+unsafe impl Send for Const {}
+
+impl Const {
+    //构建常量
+    pub fn new() -> Self {
+        Const {
+            name: None,
+            doc: None,
+            ty: None,
+            value: None,
+        }
+    }
+
+    //获取常量名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置常量名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取常量文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置常量文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取常量的类型
+    pub fn get_type(&self) -> Option<&Type> {
+        self.ty.as_ref()
+    }
+
+    //设置常量的类型
+    pub fn set_type(&mut self, r#type: Type) {
+        self.ty = Some(r#type);
+    }
+
+    //获取常量值
+    pub fn get_value(&self) -> Option<&ConstValue> {
+        self.value.as_ref()
+    }
+
+    //设置常量值
+    pub fn set_value(&mut self, value: ConstValue) {
+        self.value = Some(value);
+    }
+}
+
+/*
+* 文档
+*/
+#[derive(Debug)]
+pub struct Document(Vec<String>);
+
+unsafe impl Send for Document {}
+
+impl Document {
+    //构建文档
+    pub fn new(doc: String) -> Self {
+        Document(vec![doc])
+    }
+
+    //获取文档的只读引用
+    pub fn get_ref(&self) -> &[String] {
+        self.0.as_slice()
+    }
+
+    //追加文档
+    pub fn append(&mut self, doc: String) {
+        self.0.push(doc);
+    }
+}
+
+/*
+* 泛型，记录了泛型的名称和泛型的具体类型名
+*/
+#[derive(Debug)]
+pub struct Generic(Vec<(String, Vec<TypeName>)>);
+
+unsafe impl Send for Generic {}
+
+impl Generic {
+    //创建泛型
+    pub fn new(name: String) -> Self {
+        Generic(vec![(name, Vec::new())])
+    }
+
+    //获取所有的泛型名称
+    pub fn get_names(&self) -> Vec<String> {
+        self.0.iter().map(|(name, _)| {
+            name.clone()
+        }).collect()
+    }
+
+    //获取泛型的只读引用
+    pub fn get_ref(&self) -> &[(String, Vec<TypeName>)] {
+        self.0.as_slice()
+    }
+
+    //追加指定泛型的名称
+    pub fn append_name(&mut self, name: String) {
+        self.0.push((name, Vec::new()));
+    }
+
+    //追加指定泛型的具体类型名称
+    pub fn append_type(&mut self, type_name: String) {
+        if let Some((_, types)) = self.0.last_mut() {
+            types.push(TypeName::new(type_name));
+        }
+    }
+}
+
+/*
+* 类型，包括：类型名和类型的参数列表
+*/
+#[derive(Debug, Clone)]
+pub struct Type(TypeName, Option<Vec<Type>>);
+
+unsafe impl Send for Type {}
+
+impl ToString for Type {
+    fn to_string(&self) -> String {
+        let mut string = self.0.get_name().clone();
+
+        if let Some(type_args) = &self.1 {
+            string += "<";
+            let mut iterator = type_args.iter();
+            string += iterator.next().unwrap().to_string().as_str();
+            while let Some(type_arg) = iterator.next() {
+                string += ", ";
+                string += type_arg.to_string().as_str();
+            }
+            string += ">";
+        }
+
+        string
+    }
+}
+
+impl Type {
+    //构建类型
+    pub fn new(type_name: String) -> Self {
+        Type(TypeName::new(type_name), None)
+    }
+
+    //获取完整类型名
+    pub fn get_type_name(&self) -> TypeName {
+        if self.0.is_moveable() {
+            TypeName::new(self.to_string())
+        } else if self.0.is_only_read() {
+            TypeName::new("&".to_string() +self.to_string().as_str())
+        } else {
+            TypeName::new("&mut ".to_string() + self.to_string().as_str())
+        }
+    }
+
+    //获取部分类型名
+    pub fn get_part_type_name(&self) -> &TypeName {
+        &self.0
+    }
+
+    //获取类型的参数列表类型名
+    pub fn get_type_arg_names(&self) -> Option<Vec<TypeName>> {
+        if let Some(types) = self.1.as_ref() {
+            let mut vec = Vec::with_capacity(types.len());
+            for ty in types {
+                vec.push(ty.get_type_name());
+            }
+
+            return Some(vec);
+        }
+
+        None
+    }
+
+    //获取类型的参数列表
+    pub fn get_type_args(&self) -> Option<&Vec<Type>> {
+        self.1.as_ref()
+    }
+
+    //追加类型参数
+    pub fn append_type_argument(&mut self, arg: Type) {
+        if let Some(type_args) = &mut self.1 {
+            type_args.push(arg);
+        } else {
+            self.1 = Some(vec![arg]);
+        }
+    }
+}
+
+/*
+* 类型名
+*/
+#[derive(Debug, Clone)]
+pub enum TypeName {
+    Moveable(String),
+    OnlyRead(String),
+    Writable(String),
+}
+
+unsafe impl Send for TypeName {}
+
+impl TypeName {
+    //构建类型名
+    pub fn new(name: String) -> Self {
+        if name.starts_with("&mut") {
+            TypeName::Writable(name.replace("&mut ", ""))
+        } else if name.starts_with("&") {
+            TypeName::OnlyRead(name.replace("&", ""))
+        } else {
+            TypeName::Moveable(name)
+        }
+    }
+
+    //是否可移动
+    pub fn is_moveable(&self) -> bool {
+        if let TypeName::Moveable(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    //是否只读
+    pub fn is_only_read(&self) -> bool {
+        if let TypeName::OnlyRead(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    //是否可写
+    pub fn is_writable(&self) -> bool {
+        if let TypeName::Writable(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    //只获取类型的名称
+    pub fn get_name(&self) -> &String {
+        match self {
+            TypeName::Moveable(str) => &str,
+            TypeName::OnlyRead(str) => &str,
+            TypeName::Writable(str) => &str,
+        }
+    }
+}
+
+/*
+* 函数参数，包括：参数名，参数类型名称和参数类型的类型列表
+*/
+#[derive(Debug)]
+pub struct FunArgs(Vec<(String, Type)>);
+
+unsafe impl Send for FunArgs {}
+
+impl FunArgs {
+    //构建函数参数
+    pub fn new(arg_name: String, arg_type: Type) -> Self {
+        FunArgs(vec![(arg_name, arg_type)])
+    }
+
+    //获了函数参数数量
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    //获取函数参数的只读引用
+    pub fn get_ref(&self) -> &[(String, Type)] {
+        self.0.as_slice()
+    }
+
+    //追加指定的函数参数
+    pub fn append(&mut self, arg_name: String, arg_type: Type) {
+        self.0.push((arg_name, arg_type));
+    }
+}
+
+/*
+* Trait实现
+*/
+#[derive(Debug)]
+pub struct TraitImpls(Vec<(String, Vec<Function>)>);
+
+unsafe impl Send for TraitImpls {}
+
+impl TraitImpls {
+    //构建Trait实现
+    pub fn new(name: String) -> Self {
+        TraitImpls(vec![(name, Vec::new())])
+    }
+
+    //获取所有Trait名称
+    pub fn get_names(&self) -> Vec<String> {
+        self.0.iter().map(|(name, _)| {
+            name.clone()
+        }).collect()
+    }
+
+    //获取Trait实现的只读引用
+    pub fn get_ref(&self) -> &[(String, Vec<Function>)] {
+        self.0.as_slice()
+    }
+
+    //追加Trait名称
+    pub fn append_name(&mut self, name: String) {
+        self.0.push((name, Vec::new()));
+    }
+
+    //追加Trait方法
+    pub fn append_method(&mut self, function: Function) {
+        if let Some((_, methods)) = self.0.last_mut() {
+            methods.push(function);
+        }
+    }
+}
+
+/*
+* 实现
+*/
+#[derive(Debug)]
+pub struct Impls(Vec<Function>);
+
+unsafe impl Send for Impls {}
+
+impl Impls {
+    //构建Trait实现
+    pub fn new(function: Function) -> Self {
+        Impls(vec![function])
+    }
+
+    //获取实现的只读引用
+    pub fn get_ref(&self) -> &[Function] {
+        self.0.as_slice()
+    }
+
+    //追加方法
+    pub fn append_method(&mut self, function: Function) {
+        self.0.push(function);
+    }
+}
+
+/*
+* 常量列表
+*/
+#[derive(Debug)]
+pub struct ConstList(Vec<Const>);
+
+unsafe impl Send for ConstList {}
+
+impl ConstList {
+    //构建常量列表
+    pub fn new(c: Const) -> Self {
+        ConstList(vec![c])
+    }
+
+    //获取常量列表的只读引用
+    pub fn get_ref(&self) -> &[Const] {
+        self.0.as_slice()
+    }
+
+    //追加常量
+    pub fn append_const(&mut self, c: Const) {
+        self.0.push(c);
+    }
+}
+
+/*
+* 常量值
+*/
+#[derive(Debug)]
+pub enum ConstValue {
+    Boolean(bool),  //布尔值
+    Int(i64),       //有符号整数
+    Uint(i64),      //无符号整数
+    Float(f64),     //浮点数
+    Str(String),    //字符串
+}
+
+unsafe impl Send for ConstValue {}
+
+/*
+* 属性词条过滤器
+*/
+#[derive(Debug, Clone)]
+pub enum AttributeTokensFilter {
+    None    = 0,    //不过滤
+    Punct   = 1,    //过滤标识符号
+    Ident   = 2,    //过滤标识符
+    Literal = 4,    //过滤字面量
+    Group   = 8,    //过滤词条数组
+}
+
+impl BitOr for AttributeTokensFilter {
+    type Output = u8;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        if let AttributeTokensFilter::None = self {
+            //任何过滤与不过滤进行或运算，都等于不过滤
+            return AttributeTokensFilter::None as u8;
+        } else if let AttributeTokensFilter::None = rhs {
+            //任何过滤与不过滤进行或运算，都等于不过滤
+            return AttributeTokensFilter::None as u8;
+        } else {
+            (self as u8) | (rhs as u8)
+        }
+    }
+}
+
+impl AttributeTokensFilter {
+    //是否不过滤
+    pub fn is_no(filter: u8) -> bool {
+        filter == 0
+    }
+
+    //是否只过滤标识符号
+    pub fn is_punct(filter: u8) -> bool {
+        (filter & (AttributeTokensFilter::Punct as u8)) != 0
+    }
+
+    //是否只过滤标识符
+    pub fn is_ident(filter: u8) -> bool {
+        (filter & (AttributeTokensFilter::Ident as u8)) != 0
+    }
+
+    //是否只过滤字面量
+    pub fn is_literal(filter: u8) -> bool {
+        (filter & (AttributeTokensFilter::Literal as u8)) != 0
+    }
+
+    //是否只过滤词条数组
+    pub fn is_group(filter: u8) -> bool {
+        (filter & (AttributeTokensFilter::Group as u8)) != 0
+    }
+}
+
+/*
+* 获取指定路径的绝对路径
+*/
+pub fn abs_path(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        //已经是绝对路径，则忽略
+        return Ok(path.to_path_buf());
+    }
+
+    let cwd = env::current_dir()?;
+    match if cfg!(windows) {
+        path.strip_prefix(r#".\"#)
+    } else {
+        path.strip_prefix("./")
+    }{
+        Err(e) => {
+            Ok(cwd.join(path))
+        },
+        Ok(path) => {
+            Ok(cwd.join(path))
+        },
+    }
+}
+
+/*
+* 生成指定层数的tab
+*/
+pub fn create_tab(mut level: isize) -> String {
+    let mut tab = String::new();
+
+    while level > 0 {
+        tab += "\t";
+        level -= 1;
+    }
+
+    tab
+}

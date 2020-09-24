@@ -1,0 +1,246 @@
+File {
+    shebang: None,
+    attrs: [],
+    items: [
+        Use(
+            ItemUse {
+                attrs: [],
+                vis: Inherited,
+                use_token: Use,
+                leading_colon: None,
+                tree: Path(
+                    UsePath {
+                        ident: Ident(
+                            std,
+                        ),
+                        colon2_token: Colon2,
+                        tree: Path(
+                            UsePath {
+                                ident: Ident(
+                                    time,
+                                ),
+                                colon2_token: Colon2,
+                                tree: Name(
+                                    UseName {
+                                        ident: Ident(
+                                            Duration,
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                ),
+                semi_token: Semi,
+            },
+        ),
+        Struct(
+            ItemStruct {
+                attrs: [
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: " 测试用结构体A\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        pi_js_export,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [],
+                    },
+                ],
+                vis: Public(
+                    VisPublic {
+                        pub_token: Pub,
+                    },
+                ),
+                struct_token: Struct,
+                ident: Ident(
+                    A,
+                ),
+                generics: Generics {
+                    lt_token: None,
+                    params: [],
+                    gt_token: None,
+                    where_clause: None,
+                },
+                fields: Named(
+                    FieldsNamed {
+                        brace_token: Brace,
+                        named: [
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        x,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Path(
+                                    TypePath {
+                                        qself: None,
+                                        path: Path {
+                                            leading_colon: None,
+                                            segments: [
+                                                PathSegment {
+                                                    ident: Ident(
+                                                        bool,
+                                                    ),
+                                                    arguments: None,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Comma,
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        y,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Path(
+                                    TypePath {
+                                        qself: None,
+                                        path: Path {
+                                            leading_colon: None,
+                                            segments: [
+                                                PathSegment {
+                                                    ident: Ident(
+                                                        String,
+                                                    ),
+                                                    arguments: None,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Comma,
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        z,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Path(
+                                    TypePath {
+                                        qself: None,
+                                        path: Path {
+                                            leading_colon: None,
+                                            segments: [
+                                                PathSegment {
+                                                    ident: Ident(
+                                                        Duration,
+                                                    ),
+                                                    arguments: None,
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ),
+                            },
+                            Comma,
+                        ],
+                    },
+                ),
+                semi_token: None,
+            },
+        ),
+    ],
+}

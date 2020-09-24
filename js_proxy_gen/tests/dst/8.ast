@@ -1,0 +1,274 @@
+File {
+    shebang: None,
+    attrs: [],
+    items: [
+        Struct(
+            ItemStruct {
+                attrs: [
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: " 测试用结构体A\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        pi_js_export,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [],
+                    },
+                ],
+                vis: Public(
+                    VisPublic {
+                        pub_token: Pub,
+                    },
+                ),
+                struct_token: Struct,
+                ident: Ident(
+                    A,
+                ),
+                generics: Generics {
+                    lt_token: Some(
+                        Lt,
+                    ),
+                    params: [
+                        Lifetime(
+                            LifetimeDef {
+                                attrs: [],
+                                lifetime: Lifetime {
+                                    apostrophe: Span,
+                                    ident: Ident(
+                                        a,
+                                    ),
+                                },
+                                colon_token: None,
+                                bounds: [],
+                            },
+                        ),
+                    ],
+                    gt_token: Some(
+                        Gt,
+                    ),
+                    where_clause: None,
+                },
+                fields: Named(
+                    FieldsNamed {
+                        brace_token: Brace,
+                        named: [
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        x,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Reference(
+                                    TypeReference {
+                                        and_token: And,
+                                        lifetime: Some(
+                                            Lifetime {
+                                                apostrophe: Span,
+                                                ident: Ident(
+                                                    a,
+                                                ),
+                                            },
+                                        ),
+                                        mutability: None,
+                                        elem: Path(
+                                            TypePath {
+                                                qself: None,
+                                                path: Path {
+                                                    leading_colon: None,
+                                                    segments: [
+                                                        PathSegment {
+                                                            ident: Ident(
+                                                                usize,
+                                                            ),
+                                                            arguments: None,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                            Comma,
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        y,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Reference(
+                                    TypeReference {
+                                        and_token: And,
+                                        lifetime: Some(
+                                            Lifetime {
+                                                apostrophe: Span,
+                                                ident: Ident(
+                                                    a,
+                                                ),
+                                            },
+                                        ),
+                                        mutability: None,
+                                        elem: Path(
+                                            TypePath {
+                                                qself: None,
+                                                path: Path {
+                                                    leading_colon: None,
+                                                    segments: [
+                                                        PathSegment {
+                                                            ident: Ident(
+                                                                str,
+                                                            ),
+                                                            arguments: None,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                            Comma,
+                            Field {
+                                attrs: [],
+                                vis: Inherited,
+                                ident: Some(
+                                    Ident(
+                                        z,
+                                    ),
+                                ),
+                                colon_token: Some(
+                                    Colon,
+                                ),
+                                ty: Reference(
+                                    TypeReference {
+                                        and_token: And,
+                                        lifetime: Some(
+                                            Lifetime {
+                                                apostrophe: Span,
+                                                ident: Ident(
+                                                    a,
+                                                ),
+                                            },
+                                        ),
+                                        mutability: None,
+                                        elem: Path(
+                                            TypePath {
+                                                qself: None,
+                                                path: Path {
+                                                    leading_colon: None,
+                                                    segments: [
+                                                        PathSegment {
+                                                            ident: Ident(
+                                                                String,
+                                                            ),
+                                                            arguments: None,
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                ),
+                            },
+                            Comma,
+                        ],
+                    },
+                ),
+                semi_token: None,
+            },
+        ),
+    ],
+}

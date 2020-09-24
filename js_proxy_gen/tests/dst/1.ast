@@ -1,0 +1,128 @@
+File {
+    shebang: None,
+    attrs: [],
+    items: [
+        Struct(
+            ItemStruct {
+                attrs: [
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: " 测试用结构体\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        doc,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [
+                            Punct {
+                                op: '=',
+                                spacing: Alone,
+                            },
+                            Literal {
+                                lit: "\r",
+                            },
+                        ],
+                    },
+                    Attribute {
+                        pound_token: Pound,
+                        style: Outer,
+                        bracket_token: Bracket,
+                        path: Path {
+                            leading_colon: None,
+                            segments: [
+                                PathSegment {
+                                    ident: Ident(
+                                        pi_js_export,
+                                    ),
+                                    arguments: None,
+                                },
+                            ],
+                        },
+                        tokens: TokenStream [],
+                    },
+                ],
+                vis: Public(
+                    VisPublic {
+                        pub_token: Pub,
+                    },
+                ),
+                struct_token: Struct,
+                ident: Ident(
+                    A,
+                ),
+                generics: Generics {
+                    lt_token: None,
+                    params: [],
+                    gt_token: None,
+                    where_clause: None,
+                },
+                fields: Unnamed(
+                    FieldsUnnamed {
+                        paren_token: Paren,
+                        unnamed: [],
+                    },
+                ),
+                semi_token: Some(
+                    Semi,
+                ),
+            },
+        ),
+    ],
+}
