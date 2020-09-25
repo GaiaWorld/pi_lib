@@ -211,7 +211,6 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
 
                                     for stack_frame in stack {
                                         if let WithParseSpecificTypeStackFrame::Type(specific_type) = stack_frame {
-                                            println!("!!!!!!specific_type: {:?}", specific_type.to_string());
                                             //记录泛型参数的具体类型名称
                                             export_item.append_generic_type(specific_type.to_string());
                                         }
