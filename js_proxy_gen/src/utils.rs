@@ -495,6 +495,31 @@ impl ExportItem {
         }
     }
 
+    //获取导出的条目类型名称
+    pub fn get_type_name(&self) -> Option<String> {
+        if let Some(item_name) = self.get_name() {
+            //条目名称存在
+            let mut item_type = Type::new(item_name);
+
+            if let Some(item_generic) = match self {
+                ExportItem::StructItem(s) => s.get_generic(),
+                ExportItem::EnumItem(e) => e.get_generic(),
+                ExportItem::FunctionItem(f) => f.get_generic(),
+                ExportItem::ConstItem(c) => None,
+            } {
+                //有类型参数
+                for (type_arg_name, _) in item_generic.get_ref() {
+                    item_type.append_type_argument(Type::new(type_arg_name.clone()));
+                }
+            }
+
+            Some(item_type.to_string())
+        } else {
+            //条目名称不存在
+            None
+        }
+    }
+
     //追加导出条目的文档
     pub fn append_doc(&mut self, doc: String) {
         match self {
@@ -778,6 +803,100 @@ impl Struct {
     pub fn set_consts(&mut self, consts: ConstList) {
         self.consts = Some(consts);
     }
+
+    //获取有泛型参数的结构体的所有具体类型的组合
+    pub fn get_specific_structs(&self) -> Option<Vec<Struct>> {
+        if let Some(name) = self.get_name() {
+            //有名称
+            if let Some(generic) = self.get_generic() {
+                //结构体有泛型参数
+                let mut specific_types = Vec::new();
+                let mut type_names = Vec::with_capacity(generic.get_ref().len());
+                for (_, vec) in generic.get_ref() {
+                    type_names.push(vec.clone());
+                }
+                combine_generic_args(name, &mut specific_types, None, &mut type_names, 0);
+                // println!("{}", name);
+                // for specific_type in &specific_types {
+                //     println!("\t{}", specific_type.to_string());
+                // }
+
+                let mut specific_structs = Vec::new();
+                for specific_type in specific_types {
+                    //构建具体类型的结构体
+                    let mut specific_struct = Struct::new();
+
+                    //设置具体类型的结构体的文档
+                    if let Some(struct_doc) = self.get_doc() {
+                        specific_struct.set_doc(struct_doc.clone());
+                    }
+
+                    //设置具体类型的结构体的名称
+                    specific_struct.set_name(specific_type.to_string());
+
+                    //设置具体类型的结构体的泛型参数
+                    let mut index = 0;
+                    let mut specific_generic = Generic::empty();
+                    for generic_name in generic.get_names() {
+                        //简化泛型参数，为每个具体类型的结构体的泛型参数设置唯一的具体类型
+                        specific_generic.append_name(generic_name);
+                        specific_generic.append_type(specific_type.get_type_args().unwrap()[index].to_string());
+                        index += 1;
+                    }
+                    specific_struct.set_generic(specific_generic);
+
+                    //设置具体类型的结构体的Trait实现
+                    if let Some(trait_impls) = self.get_trait_impls() {
+                        let mut specific_trait_impls = TraitImpls::empty();
+
+                        for (trait_name, trait_functions) in trait_impls.get_ref() {
+                            specific_trait_impls.append_name(trait_name.clone());
+
+                            for trait_fucntion in trait_functions {
+                                if let Some(specific_functions) = trait_fucntion.get_specific_functions() {
+                                    for specific_function in specific_functions {
+                                        specific_trait_impls.append_method(specific_function);
+                                    }
+                                }
+                            }
+                        }
+
+                        specific_struct.set_trait_impls(specific_trait_impls);
+                    }
+
+                    //设置具体类型的结构体的实现
+                    if let Some(impls) = self.get_impls() {
+                        let mut specific_impls = Impls::empty();
+
+                        for function in impls.get_ref() {
+                            if let Some(specific_functions) = function.get_specific_functions() {
+                                for specific_function in specific_functions {
+                                    specific_impls.append_method(specific_function);
+                                }
+                            }
+                        }
+
+                        specific_struct.set_impls(specific_impls);
+                    }
+
+                    //设置具体类型的结构体的常量
+                    if let Some(consts) = self.get_consts() {
+                        specific_struct.set_consts(consts.clone());
+                    }
+
+                    specific_structs.push(specific_struct);
+                }
+
+                Some(specific_structs)
+            } else {
+                //结构体没有泛型参数
+                None
+            }
+        } else {
+            //无名称
+            None
+        }
+    }
 }
 
 /*
@@ -867,12 +986,106 @@ impl Enum {
     pub fn set_consts(&mut self, consts: ConstList) {
         self.consts = Some(consts);
     }
+
+    //获取有泛型参数的枚举的所有具体类型的组合
+    pub fn get_specific_enums(&self) -> Option<Vec<Enum>> {
+        if let Some(name) = self.get_name() {
+            //有名称
+            if let Some(generic) = self.get_generic() {
+                //枚举有泛型参数
+                let mut specific_types = Vec::new();
+                let mut type_names = Vec::with_capacity(generic.get_ref().len());
+                for (_, vec) in generic.get_ref() {
+                    type_names.push(vec.clone());
+                }
+                combine_generic_args(name, &mut specific_types, None, &mut type_names, 0);
+                // println!("{}", name);
+                // for specific_type in &specific_types {
+                //     println!("\t{}", specific_type.to_string());
+                // }
+
+                let mut specific_enums = Vec::new();
+                for specific_type in specific_types {
+                    //构建具体类型的枚举
+                    let mut specific_enum = Enum::new();
+
+                    //设置具体类型的枚举的文档
+                    if let Some(enum_doc) = self.get_doc() {
+                        specific_enum.set_doc(enum_doc.clone());
+                    }
+
+                    //设置具体类型的枚举的名称
+                    specific_enum.set_name(specific_type.to_string());
+
+                    //设置具体类型的枚举的泛型参数
+                    let mut index = 0;
+                    let mut specific_generic = Generic::empty();
+                    for generic_name in generic.get_names() {
+                        //简化泛型参数，为每个具体类型的枚举的泛型参数设置唯一的具体类型
+                        specific_generic.append_name(generic_name);
+                        specific_generic.append_type(specific_type.get_type_args().unwrap()[index].to_string());
+                        index += 1;
+                    }
+                    specific_enum.set_generic(specific_generic);
+
+                    //设置具体类型的枚举的Trait实现
+                    if let Some(trait_impls) = self.get_trait_impls() {
+                        let mut specific_trait_impls = TraitImpls::empty();
+
+                        for (trait_name, trait_functions) in trait_impls.get_ref() {
+                            specific_trait_impls.append_name(trait_name.clone());
+
+                            for trait_fucntion in trait_functions {
+                                if let Some(specific_functions) = trait_fucntion.get_specific_functions() {
+                                    for specific_function in specific_functions {
+                                        specific_trait_impls.append_method(specific_function);
+                                    }
+                                }
+                            }
+                        }
+
+                        specific_enum.set_trait_impls(specific_trait_impls);
+                    }
+
+                    //设置具体类型的枚举的实现
+                    if let Some(impls) = self.get_impls() {
+                        let mut specific_impls = Impls::empty();
+
+                        for function in impls.get_ref() {
+                            if let Some(specific_functions) = function.get_specific_functions() {
+                                for specific_function in specific_functions {
+                                    specific_impls.append_method(specific_function);
+                                }
+                            }
+                        }
+
+                        specific_enum.set_impls(specific_impls);
+                    }
+
+                    //设置具体类型的枚举的常量
+                    if let Some(consts) = self.get_consts() {
+                        specific_enum.set_consts(consts.clone());
+                    }
+
+                    specific_enums.push(specific_enum);
+                }
+
+                Some(specific_enums)
+            } else {
+                //枚举没有泛型参数
+                None
+            }
+        } else {
+            //无名称
+            None
+        }
+    }
 }
 
 /*
 * 函数
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function {
     is_async:   bool,               //是否是异步函数
     name:       Option<String>,     //函数的名称
@@ -954,6 +1167,11 @@ impl Function {
         self.input.as_ref()
     }
 
+    //设置函数入参
+    pub fn set_input(&mut self, input: FunArgs) {
+        self.input = Some(input);
+    }
+
     //追加函数的入参
     pub fn append_input(&mut self, name: String, r#type: Type) {
         if let Some(input) = &mut self.input {
@@ -973,12 +1191,81 @@ impl Function {
     pub fn set_output(&mut self, output: Type) {
         self.output = Some(output);
     }
+
+    //获取有泛型参数的函数的所有具体类型的组合，可以指定目标对象的泛型参数
+    pub fn get_specific_functions(&self) -> Option<Vec<Function>> {
+        if let Some(name) = &self.name {
+            //有名称
+            if let Some(generic) = &self.generic {
+                //函数有泛型参数
+                let mut specific_types = Vec::new();
+                let mut type_names = Vec::with_capacity(generic.get_ref().len());
+                for (_, vec) in generic.get_ref() {
+                    type_names.push(vec.clone());
+                }
+                combine_generic_args(name, &mut specific_types, None, &mut type_names, 0);
+                // println!("{}", name);
+                // for specific_type in &specific_types {
+                //     println!("\t{}", specific_type.to_string());
+                // }
+
+                let mut specific_functions = Vec::new();
+                for specific_type in specific_types {
+                    let mut specific_function = Function::new();
+
+                    //设置具体类型的函数是否异步
+                    if self.is_async() {
+                        specific_function.set_async();
+                    }
+
+                    //设置具体类型的函数的文档
+                    if let Some(funciton_doc) = self.get_doc() {
+                        specific_function.set_doc(funciton_doc.clone());
+                    }
+
+                    //设置具体类型的函数名
+                    specific_function.set_name(self.get_name().unwrap().clone());
+
+                    //设置具体类型的函数的泛型参数
+                    let mut index = 0;
+                    let mut specific_generic = Generic::empty();
+                    for generic_name in generic.get_names() {
+                        //简化泛型参数，为每个具体类型的结构体的泛型参数设置唯一的具体类型
+                        specific_generic.append_name(generic_name);
+                        specific_generic.append_type(specific_type.get_type_args().unwrap()[index].to_string());
+                        index += 1;
+                    }
+                    specific_function.set_generic(specific_generic);
+
+                    //设置具体类型的函数的入参
+                    if let Some(input) = self.get_input() {
+                        specific_function.set_input(input.clone());
+                    }
+
+                    //设置具体类型的函数的出参
+                    if let Some(output) = self.get_output() {
+                        specific_function.set_output(output.clone());
+                    }
+
+                    specific_functions.push(specific_function);
+                }
+
+                Some(specific_functions)
+            } else {
+                //函数没有泛型参数，则返回原函数
+                Some(vec![self.clone()])
+            }
+        } else {
+            //无名称
+            None
+        }
+    }
 }
 
 /*
 * 常量
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Const {
     name:       Option<String>,     //常量的名称
     doc:        Option<Document>,   //常量的文档
@@ -1040,10 +1327,42 @@ impl Const {
     }
 }
 
+//组合多个泛型参数的具体类型
+fn combine_generic_args(init_item_name: &String,
+                        specific_types: &mut Vec<Type>,
+                        specific_type: Option<Type>,
+                        generics: &Vec<Vec<TypeName>>,
+                        generics_index: usize) {
+    let mut specific_type = if let Some(specific_type) = specific_type {
+        specific_type
+    } else {
+        Type::new(init_item_name.clone())
+    };
+
+    if generics_index < generics.len() {
+        //泛型参数还未分析完，则继续
+        let mut generic = &generics[generics_index]; //获取当前的泛型参数的具体类型列表
+
+        for generic_name in generic {
+            let mut specific_type_copy = specific_type.clone(); //复制具体类型
+            specific_type_copy.append_type_argument(Type::new(generic_name.to_string())); //为具体类型的复制追加当前的泛型参数的一个具体类型
+            combine_generic_args(init_item_name,
+                                 specific_types,
+                                 Some(specific_type_copy),
+                                 generics,
+                                 generics_index + 1);
+        }
+    } else {
+        //已追加所有泛型参数，则记录
+        specific_types.push(specific_type);
+    }
+}
+
+
 /*
 * 文档
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document(Vec<String>);
 
 unsafe impl Send for Document {}
@@ -1068,15 +1387,31 @@ impl Document {
 /*
 * 泛型，记录了泛型的名称和泛型的具体类型名
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Generic(Vec<(String, Vec<TypeName>)>);
 
 unsafe impl Send for Generic {}
 
 impl Generic {
+    //创建空的泛型
+    pub fn empty() -> Self {
+        Generic(vec![])
+    }
+
     //创建泛型
     pub fn new(name: String) -> Self {
         Generic(vec![(name, Vec::new())])
+    }
+
+    //获取所有泛型的组合
+    pub fn combine(&self) -> usize {
+        let mut combine = 1;
+
+        for (_, types) in &self.0 {
+            combine *= types.len();
+        }
+
+        combine
     }
 
     //获取所有的泛型名称
@@ -1194,6 +1529,16 @@ pub enum TypeName {
 
 unsafe impl Send for TypeName {}
 
+impl ToString for TypeName {
+    fn to_string(&self) -> String {
+        match self {
+            TypeName::Moveable(str) => str.clone(),
+            TypeName::OnlyRead(str) => "&".to_string() + str,
+            TypeName::Writable(str) => "&mut ".to_string() + str,
+        }
+    }
+}
+
 impl TypeName {
     //构建类型名
     pub fn new(name: String) -> Self {
@@ -1246,7 +1591,7 @@ impl TypeName {
 /*
 * 函数参数，包括：参数名，参数类型名称和参数类型的类型列表
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunArgs(Vec<(String, Type)>);
 
 unsafe impl Send for FunArgs {}
@@ -1282,6 +1627,11 @@ pub struct TraitImpls(Vec<(String, Vec<Function>)>);
 unsafe impl Send for TraitImpls {}
 
 impl TraitImpls {
+    //构建空的Trait实现
+    pub fn empty() -> Self {
+        TraitImpls(vec![])
+    }
+
     //构建Trait实现
     pub fn new(name: String) -> Self {
         TraitImpls(vec![(name, Vec::new())])
@@ -1321,6 +1671,11 @@ pub struct Impls(Vec<Function>);
 unsafe impl Send for Impls {}
 
 impl Impls {
+    //构建空的实现
+    pub fn empty() -> Self {
+        Impls(vec![])
+    }
+
     //构建Trait实现
     pub fn new(function: Function) -> Self {
         Impls(vec![function])
@@ -1340,7 +1695,7 @@ impl Impls {
 /*
 * 常量列表
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstList(Vec<Const>);
 
 unsafe impl Send for ConstList {}
@@ -1365,7 +1720,7 @@ impl ConstList {
 /*
 * 常量值
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConstValue {
     Boolean(bool),  //布尔值
     Int(i64),       //有符号整数
@@ -1432,6 +1787,15 @@ impl AttributeTokensFilter {
 }
 
 /*
+* 分析具体类型的栈帧
+*/
+#[derive(Debug)]
+pub enum WithParseSpecificTypeStackFrame {
+    Punct(char),    //标点符号
+    Type(Type),     //类型
+}
+
+/*
 * 获取指定路径的绝对路径
 */
 pub fn abs_path(path: &Path) -> Result<PathBuf> {
@@ -1467,4 +1831,13 @@ pub fn create_tab(mut level: isize) -> String {
     }
 
     tab
+}
+
+//获取目标类型的类型名，不包括类型参数
+pub fn get_target_type_name(target_name: &String) -> String {
+    let mut vec: Vec<String> = target_name.split('<').map(|x| {
+        x.to_string()
+    }).collect();
+
+    vec.remove(0)
 }

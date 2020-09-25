@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::io::{Error, Result, ErrorKind};
 
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenTree, Group};
 use syn::{self, spanned::Spanned};
 
 use r#async::{rt::{AsyncRuntime,
@@ -20,7 +20,9 @@ use crate::utils::{ParseContext,
                    ConstValue,
                    Type,
                    AttributeTokensFilter,
+                   WithParseSpecificTypeStackFrame,
                    LibPathNext};
+use syn::export::quote::__private::ext::RepToTokensExt;
 
 /*
 * 导出标识符
@@ -200,16 +202,18 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
                                     export_item.append_generic(id); //记录泛型名称
                                 },
                                 syn::export::quote::__private::TokenTree::Group(group) => {
-                                    for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Ident as u8) {
-                                        //分析泛型的具体类型名称
-                                        if let syn::export::quote::__private::TokenTree::Ident(ident) = token {
-                                            let r#type = ident.to_string();
-                                            if r#type.trim().len() == 0 {
-                                                //忽略无效类型名称
-                                                continue;
-                                            }
+                                    let mut stack = Vec::new();
 
-                                            export_item.append_generic_type(r#type); //记录泛型的具体类型名称
+                                    for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Punct as u8 | AttributeTokensFilter::Ident as u8 | AttributeTokensFilter::Group as u8) {
+                                        //分析泛型参数的具体类型名称
+                                        parse_specific_type(token, &mut stack);
+                                    }
+
+                                    for stack_frame in stack {
+                                        if let WithParseSpecificTypeStackFrame::Type(specific_type) = stack_frame {
+                                            println!("!!!!!!specific_type: {:?}", specific_type.to_string());
+                                            //记录泛型参数的具体类型名称
+                                            export_item.append_generic_type(specific_type.to_string());
                                         }
                                     }
                                 },
@@ -271,11 +275,74 @@ fn get_attribute_tokens(tokens: syn::export::quote::__private::TokenStream,
                 if AttributeTokensFilter::is_no(filter) || AttributeTokensFilter::is_group(filter) {
                     token_list.push(syn::export::quote::__private::TokenTree::Group(group));
                 }
-            }
+            },
         }
     }
 
     token_list
+}
+
+//分析泛型的具体类型
+fn parse_specific_type(token: &TokenTree, stack: &mut Vec<WithParseSpecificTypeStackFrame>) {
+    match token {
+        syn::export::quote::__private::TokenTree::Punct(punct) => {
+            //标点符号
+            match punct.as_char() {
+                p@'<' => {
+                    //记录'<'标识符号
+                    stack.push(WithParseSpecificTypeStackFrame::Punct(p));
+                },
+                '>' => {
+                    //具体类型的所有泛型参数，已经分析完成，则从堆栈中弹出对应的类型参数
+                    let mut type_args = Vec::new();
+                    while let Some(stack_frame) = stack.pop() {
+                        match stack_frame {
+                            WithParseSpecificTypeStackFrame::Punct('<') => break,
+                            WithParseSpecificTypeStackFrame::Type(type_arg) => {
+                                type_args.push(type_arg);
+                            },
+                            _ => continue,
+                        }
+                    }
+
+                    if let Some(WithParseSpecificTypeStackFrame::Type(specific_type)) = stack.last_mut() {
+                        //将类型参数追加到具体类型中
+                        while let Some(type_arg) = type_args.pop() {
+                            specific_type.append_type_argument(type_arg);
+                        }
+                    }
+                },
+                _ => (), //忽略其它标识符号
+            }
+        },
+        syn::export::quote::__private::TokenTree::Ident(ident) => {
+            //标识符
+            let r#type = ident.to_string();
+            if r#type.trim().len() == 0 {
+                //忽略无效类型名称
+                return;
+            }
+
+            //加入一个具体类型到堆栈
+            stack.push(WithParseSpecificTypeStackFrame::Type(Type::new(r#type)));
+        },
+        syn::export::quote::__private::TokenTree::Group(group) => {
+            //词条数组，仅匹配[T]这种类型，T不允许为有泛型参数的类型
+            for token in group.stream() {
+                if let syn::export::quote::__private::TokenTree::Ident(ident) = token {
+                    let r#type = ident.to_string();
+                    if r#type.trim().len() == 0 {
+                        //忽略无效类型名称
+                        return;
+                    }
+
+                    //加入一个具体类型的分片到堆栈
+                    stack.push(WithParseSpecificTypeStackFrame::Type(Type::new("[".to_string() + r#type.as_str() + "]")));
+                }
+            }
+        },
+        _ => (),
+    }
 }
 
 //分析为指定类型名称的Trait实现和实现
@@ -308,7 +375,7 @@ fn parse_impl(context: &mut ParseContext,
                 //有Trait名称，则继续分析导出的Trait方法
                 let target_name = if let Some(last_export_item) = context.get_last_export_mut() {
                     last_export_item.append_trait_impl(trait_name.clone());
-                    last_export_item.get_name().unwrap()
+                    last_export_item.get_type_name().unwrap()
                 } else {
                     //不应该执行当前分支
                     unimplemented!();
@@ -320,7 +387,7 @@ fn parse_impl(context: &mut ParseContext,
             } else {
                 //无Trait名称，则继续分析导出的方法
                 let target_name = if let Some(last_export_item) = context.get_last_export_mut() {
-                    last_export_item.get_name().unwrap()
+                    last_export_item.get_type_name().unwrap()
                 } else {
                     //不应该执行当前分支
                     unimplemented!();

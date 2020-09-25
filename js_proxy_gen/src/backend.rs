@@ -16,7 +16,7 @@ use bytes::{Buf, BufMut};
 use crate::{WORKER_RUNTIME,
             utils::{SRC_DIR_NAME, LIB_FILE_NAME, BUILD_FILE_NAME,
                     Crate, CrateInfo, ParseContext, ExportItem, Function, Generic, Type, TypeName,
-                    abs_path, create_tab}};
+                    abs_path, create_tab, get_target_type_name}};
 
 /*
 * 导出的外部绑定库的默认相对路径的根
@@ -616,57 +616,86 @@ async fn generate_rust_functions(generater: &ProxySourceGenerater,
     for export_item in source.get_exports() {
         match export_item {
             ExportItem::StructItem(struct_item) => {
-                let struct_target = struct_item.get_name();
-                let struct_generic = struct_item.get_generic();
+                let items = struct_item.get_specific_structs();
+                let struct_items = if let Some(specific_struct_item) = &items {
+                    specific_struct_item.iter().collect()
+                } else {
+                    vec![struct_item]
+                };
 
-                //生成导入库的源码文件的结构体实现的所有导出的trait方法
-                for trait_impl in struct_item.get_trait_impls() {
-                    for (trait_name, functions) in trait_impl.get_ref() {
-                        for function in functions {
-                            if let Err(e) = generate_rust_function(generater, struct_target, struct_generic, function, source_content).await {
-                                return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, trait: {}, method: {}, reason: {:?}", struct_item.get_name().unwrap(), trait_name, function.get_name().unwrap(), e)));
+                //生成具体类型的结构体的实现代码
+                for struct_item in struct_items {
+                    let struct_target = struct_item.get_name();
+                    let struct_generic = struct_item.get_generic();
+
+                    //生成导入库的源码文件的结构体实现的所有导出的trait方法
+                    for trait_impl in struct_item.get_trait_impls() {
+                        for (trait_name, functions) in trait_impl.get_ref() {
+                            for function in functions {
+                                if let Err(e) = generate_rust_function(generater, struct_target, struct_generic, function, source_content).await {
+                                    return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, trait: {}, method: {}, reason: {:?}", struct_item.get_name().unwrap(), trait_name, function.get_name().unwrap(), e)));
+                                }
                             }
                         }
                     }
-                }
 
-                //生成导入库的源码文件的结构体实现的所有导出的方法
-                for struct_impl in struct_item.get_impls() {
-                    for function in struct_impl.get_ref() {
-                        if let Err(e) = generate_rust_function(generater, struct_target, struct_generic, function, source_content).await {
-                            return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, method: {}, reason: {:?}", struct_item.get_name().unwrap(), function.get_name().unwrap(), e)));
+                    //生成导入库的源码文件的结构体实现的所有导出的方法
+                    for struct_impl in struct_item.get_impls() {
+                        for function in struct_impl.get_ref() {
+                            if let Err(e) = generate_rust_function(generater, struct_target, struct_generic, function, source_content).await {
+                                return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, method: {}, reason: {:?}", struct_item.get_name().unwrap(), function.get_name().unwrap(), e)));
+                            }
                         }
                     }
                 }
             },
             ExportItem::EnumItem(enum_item) => {
-                let enum_target = enum_item.get_name();
-                let enum_generic = enum_item.get_generic();
+                let items = enum_item.get_specific_enums();
+                let enum_items = if let Some(specific_enum_item) = &items {
+                    specific_enum_item.iter().collect()
+                } else {
+                    vec![enum_item]
+                };
 
-                //生成导入库的源码文件的枚举实现的所有导出的trait方法
-                for trait_impl in enum_item.get_trait_impls() {
-                    for (trait_name, functions) in trait_impl.get_ref() {
-                        for function in functions {
-                            if let Err(e) = generate_rust_function(generater, enum_target, enum_generic, function, source_content).await {
-                                return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, trait: {}, method: {}, reason: {:?}", enum_item.get_name().unwrap(), trait_name, function.get_name().unwrap(), e)));
+                //生成具体类型的枚举的实现代码
+                for enum_item in enum_items {
+                    let enum_target = enum_item.get_name();
+                    let enum_generic = enum_item.get_generic();
+
+                    //生成导入库的源码文件的枚举实现的所有导出的trait方法
+                    for trait_impl in enum_item.get_trait_impls() {
+                        for (trait_name, functions) in trait_impl.get_ref() {
+                            for function in functions {
+                                if let Err(e) = generate_rust_function(generater, enum_target, enum_generic, function, source_content).await {
+                                    return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, struct: {}, trait: {}, method: {}, reason: {:?}", enum_item.get_name().unwrap(), trait_name, function.get_name().unwrap(), e)));
+                                }
                             }
                         }
                     }
-                }
 
-                //生成导入库的源码文件的枚举实现的所有导出的方法
-                for enum_impl in enum_item.get_impls() {
-                    for function in enum_impl.get_ref() {
-                        if let Err(e) = generate_rust_function(generater, enum_target, enum_generic, function, source_content).await {
-                            return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, enum: {}, method: {}, reason: {:?}", enum_item.get_name().unwrap(), function.get_name().unwrap(), e)));
+                    //生成导入库的源码文件的枚举实现的所有导出的方法
+                    for enum_impl in enum_item.get_impls() {
+                        for function in enum_impl.get_ref() {
+                            if let Err(e) = generate_rust_function(generater, enum_target, enum_generic, function, source_content).await {
+                                return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, enum: {}, method: {}, reason: {:?}", enum_item.get_name().unwrap(), function.get_name().unwrap(), e)));
+                            }
                         }
                     }
                 }
             },
             ExportItem::FunctionItem(function) => {
-                //生成导入库的源码文件的所有导出的静态函数
-                if let Err(e) = generate_rust_function(generater, None, None, function, source_content).await {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, static function: {}, reason: {:?}", function.get_name().unwrap(), e)));
+                let items = function.get_specific_functions();
+                let functions = if let Some(specific_function) = &items {
+                    specific_function.iter().collect()
+                } else {
+                    vec![function]
+                };
+
+                //生成具体类型的静态函数的代码
+                for function in functions {
+                    if let Err(e) = generate_rust_function(generater, None, None, function, source_content).await {
+                        return Err(Error::new(ErrorKind::Other, format!("Generate rust proxy function failed, static function: {}, reason: {:?}", function.get_name().unwrap(), e)));
+                    }
                 }
             },
             _ => (),
@@ -1036,7 +1065,8 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &*val;\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut *val;\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = *val;\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
             let next_index = index + 1;
@@ -1062,7 +1092,8 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
             let next_index = index + 1;
@@ -1088,7 +1119,8 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
             let next_index = index + 1;
@@ -1114,7 +1146,8 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
             let next_index = index + 1;
@@ -1411,7 +1444,7 @@ fn generate_call_function(target: Option<&String>,
                 //生成调用指定目标的异步方法代码
                 let mut iterator = arg_names.iter();
 
-                source_content.put_slice((create_tab(level) + "let result = " + target_name + "::" + func_name + "(").as_bytes());
+                source_content.put_slice((create_tab(level) + "let result = " + get_target_type_name(target_name).as_str() + "::" + func_name + "(").as_bytes());
                 if arg_names.len() > 0 {
                     //调用方法有参数
                     let arg_1 = iterator.next().unwrap();
@@ -1432,7 +1465,7 @@ fn generate_call_function(target: Option<&String>,
                 //生成调用指定目录的同步方法代码
                 let mut iterator = arg_names.iter();
 
-                source_content.put_slice((create_tab(level) + "let result = " + target_name + "::" + func_name + "(").as_bytes());
+                source_content.put_slice((create_tab(level) + "let result = " + get_target_type_name(target_name).as_str() + "::" + func_name + "(").as_bytes());
                 if arg_names.len() > 0 {
                     //调用方法有参数
                     let arg_1 = iterator.next().unwrap();
