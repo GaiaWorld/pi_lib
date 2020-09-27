@@ -212,7 +212,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 impl<O: Default + 'static> SingleTaskRuntime<O> {
     //挂起当前单线程运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
-        AsyncWaitTimeout::new(AsyncRuntime::Single(self.clone()), (self.0).2.clone(), timeout).await
+        AsyncWaitTimeout::new(AsyncRuntime::Local(self.clone()), (self.0).2.clone(), timeout).await
     }
 
     //挂起当前单线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
@@ -220,14 +220,14 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         where R: Default + 'static,
               V: Send + 'static,
               F: Future<Output = Result<V>> + Send + 'static {
-        AsyncWait::new(AsyncRuntime::Single(self.clone()), rt, Some(Box::new(future).boxed())).await
+        AsyncWait::new(AsyncRuntime::Local(self.clone()), rt, Some(Box::new(future).boxed())).await
     }
 
     //挂起当前单线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
     pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static  {
-        AsyncWaitAny::new(AsyncRuntime::Single(self.clone()), futures).await
+        AsyncWaitAny::new(AsyncRuntime::Local(self.clone()), futures).await
     }
 }
 

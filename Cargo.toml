@@ -51,5 +51,7 @@ members = [
   "bincode",
   "local_timer",
   "async_file",
-  "flex_layout"
+  "flex_layout",
+  "js_proxy_gen",
+  "js_proxy_gen_macro"
 ]

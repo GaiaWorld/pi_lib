@@ -1014,7 +1014,7 @@ fn test_future_mutex() {
                     (*v).0 += 1;
                 }
 
-                let value = AsyncValue::new(AsyncRuntime::Single(rt_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt_copy.clone()));
                 let value_copy = value.clone();
                 rt_copy.spawn(rt_copy.alloc(), async move {
                     value_copy.set(true);
@@ -1180,7 +1180,7 @@ fn test_futures_mutex() {
                     (*v).0 += 1;
                 }
 
-                let value = AsyncValue::new(AsyncRuntime::Single(rt_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt_copy.clone()));
                 let value_copy = value.clone();
                 rt_copy.spawn(rt_copy.alloc(), async move {
                     value_copy.set(true);
@@ -1246,7 +1246,7 @@ fn test_futures_mutex() {
                 let mut v = shared_.lock().await;
                 (*v).0 += 1;
 
-                let value = AsyncValue::new(AsyncRuntime::Single(rt_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt_copy.clone()));
                 let value_copy = value.clone();
                 rt_copy.spawn(rt_copy.alloc(), async move {
                     value_copy.set(true);
@@ -1995,7 +1995,7 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                let value = AsyncValue::new(AsyncRuntime::Single(rt_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt_copy.clone()));
                 let value_copy = value.clone();
                 rt_copy.spawn(rt_copy.alloc(), async move {
                     value_copy.set(true);
@@ -2065,7 +2065,7 @@ fn test_mutex_lock_bench() {
                 let mut v = shared_.lock().await;
                 (*v).0 += 1;
 
-                let value = AsyncValue::new(AsyncRuntime::Single(rt_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt_copy.clone()));
                 let value_copy = value.clone();
                 rt_copy.spawn(rt_copy.alloc(), async move {
                     value_copy.set(true);
@@ -2133,7 +2133,7 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                rt_copy.wait(AsyncRuntime::Single(rt_copy.clone()), async move {
+                rt_copy.wait(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 }).await;
             });
@@ -2194,7 +2194,7 @@ fn test_mutex_lock_bench() {
                 let mut v = shared_.lock().await;
                 (*v).0 += 1;
 
-                rt_copy.wait(AsyncRuntime::Single(rt_copy.clone()), async move {
+                rt_copy.wait(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 }).await;
             });
@@ -2253,9 +2253,9 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                rt_copy.wait_any(vec![(AsyncRuntime::Single(rt_copy.clone()), Box::new(async move {
+                rt_copy.wait_any(vec![(AsyncRuntime::Local(rt_copy.clone()), Box::new(async move {
                     Ok(true)
-                }).boxed()), (AsyncRuntime::Single(rt_copy.clone()), Box::new(async move {
+                }).boxed()), (AsyncRuntime::Local(rt_copy.clone()), Box::new(async move {
                     Ok(true)
                 }).boxed())]).await;
             });
@@ -2320,9 +2320,9 @@ fn test_mutex_lock_bench() {
                 let mut v = shared_.lock().await;
                 (*v).0 += 1;
 
-                rt_copy.wait_any(vec![(AsyncRuntime::Single(rt_copy.clone()), Box::new(async move {
+                rt_copy.wait_any(vec![(AsyncRuntime::Local(rt_copy.clone()), Box::new(async move {
                     Ok(true)
-                }).boxed()), (AsyncRuntime::Single(rt_copy.clone()), Box::new(async move {
+                }).boxed()), (AsyncRuntime::Local(rt_copy.clone()), Box::new(async move {
                     Ok(true)
                 }).boxed())]).await;
             });
@@ -2386,13 +2386,13 @@ fn test_mutex_lock_bench() {
                 }
 
                 let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Single(rt_copy.clone()), async move {
+                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Single(rt_copy.clone()), async move {
+                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Single(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Local(rt_copy.clone()), true).await;
             });
         }
     });
@@ -2462,13 +2462,13 @@ fn test_mutex_lock_bench() {
                 (*v).0 += 1;
 
                 let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Single(rt_copy.clone()), async move {
+                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Single(rt_copy.clone()), async move {
+                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Single(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Local(rt_copy.clone()), true).await;
             });
         }
     });
@@ -3154,7 +3154,7 @@ fn test_async_value() {
             let rt0_copy = rt0.clone();
             let counter_copy = counter.clone();
             let future = async move {
-                let value = AsyncValue::new(AsyncRuntime::Single(rt0_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt0_copy.clone()));
                 let value_copy = value.clone();
                 rt0_copy.spawn(rt0_copy.alloc(), async move {
                     value_copy.set(true);
@@ -3197,7 +3197,7 @@ fn test_async_value() {
             let rt1_copy = rt1.clone();
             let counter_copy = counter.clone();
             let future = async move {
-                let value = AsyncValue::new(AsyncRuntime::Single(rt0_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Local(rt0_copy.clone()));
                 let value_copy = value.clone();
                 rt1_copy.spawn(rt1_copy.alloc(), async move {
                     value_copy.set(true);
@@ -3286,7 +3286,7 @@ fn test_async_wait() {
         let future = async move {
             let r = rt_copy.clone().wait(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 rt0_copy.wait(AsyncRuntime::Multi(rt1_copy.clone()), async move {
-                    rt1_copy.wait(AsyncRuntime::Single(rt_copy), async move {
+                    rt1_copy.wait(AsyncRuntime::Local(rt_copy), async move {
                         Ok(true)
                     }).await
                 }).await
@@ -3398,7 +3398,7 @@ fn test_async_wait() {
             let future = async move {
                 if let Ok(r) = rt_copy.clone().wait(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     rt0_copy.wait(AsyncRuntime::Multi(rt1_copy.clone()), async move {
-                        rt1_copy.clone().wait(AsyncRuntime::Single(rt_copy), async move {
+                        rt1_copy.clone().wait(AsyncRuntime::Local(rt_copy), async move {
                             Ok(1)
                         }).await
                     }).await
@@ -3740,7 +3740,7 @@ fn test_async_wait_all() {
                 Ok(9)
             });
 
-            println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Single(rt_copy.clone()), false).await);
+            println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Local(rt_copy.clone()), false).await);
 
             let mut map = rt_copy.map();
             map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
@@ -3774,7 +3774,7 @@ fn test_async_wait_all() {
                 Ok(9)
             });
 
-            println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Single(rt_copy), true).await);
+            println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Local(rt_copy), true).await);
         };
         rt.spawn(rt.alloc(), future);
     }

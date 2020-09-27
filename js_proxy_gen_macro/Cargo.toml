@@ -1,9 +1,10 @@
 [package]
-name = "async_file"
+name = "js_proxy_gen_macro"
 version = "0.1.0"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
+[lib]
+proc-macro = true
+
 [dependencies]
-parking_lot = "0.11"
-async = { path = "../async" }
