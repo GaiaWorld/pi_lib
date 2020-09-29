@@ -24,7 +24,6 @@ members = [
   "ucd",
   "util",
   "wcs",
-  "wcs_macro",
   "wheel",
   "wtree",
   "deque",

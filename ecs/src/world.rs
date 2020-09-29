@@ -187,7 +187,7 @@ impl World {
         }
     }
 
-    pub fn fetch_sys<E: 'static, S: System>(&self, name: &Atom) -> Option<Arc<S>> {
+    pub fn fetch_sys<S: System>(&self, name: &Atom) -> Option<Arc<S>> {
         let r = match self.system.get(&name) {
             Some(v) => v.clone(),
             _ => return None,

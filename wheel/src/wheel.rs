@@ -1,8 +1,8 @@
-/// Thread unsafe wheel structure, which supports quick deletion by index, with a precision of 10 milliseconds.
-/// 
-/// 
-///
-/// 
+//! Thread unsafe wheel structure, which supports quick deletion by index, with a precision of 10 milliseconds.
+//! # 线程不安全的定时轮结构
+//! 
+//!
+//!
 use std::cmp::{Ord, Ordering};
 use std::mem::{replace, swap};
 use std::fmt::{Debug, Formatter, Result as FResult};

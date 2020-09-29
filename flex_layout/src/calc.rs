@@ -801,6 +801,7 @@ impl Cache {
             child = node_iter(direction, n);
             let vnode = i_node.state.vnode();
             if vnode {
+				debug_println!("layout vnode===================is_notify:{}", is_notify);
                 // 如果是虚拟节点， 则遍历其子节点， 加入到列表中
                 let node = unsafe { tree.get_unchecked(id) };
                 let child = if direction != Direction::RTL {
@@ -822,9 +823,9 @@ impl Cache {
                     children_index,
                     direction,
 				);
-				if is_notify {
+				// if is_notify {
 					notify(notify_arg, id, &layout_map[id]);
-				}
+				// }
                 continue;
             }
             let order = style.order;

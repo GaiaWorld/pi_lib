@@ -76,13 +76,13 @@ fn impl_component(ast: &DeriveInput, is_deref: bool) -> proc_macro2::TokenStream
         .iter()
         .find(|attr| attr.path.segments[0].ident == "storage")
         .map(|attr| {
-            syn::parse2::<StorageAttribute>(attr.tts.clone())
+            syn::parse2::<StorageAttribute>(attr.tokens.clone())
                 .unwrap()
                 .storage
         })
         .unwrap_or_else(|| parse_quote!(VecMap));
 
-    let write = impl_write(ast, &ast.generics, is_deref);
+    let write: proc_macro2::TokenStream = impl_write(ast, &ast.generics, is_deref).into();
 
     quote! {
         impl #impl_generics Component for #name #ty_generics #where_clause {
@@ -118,7 +118,7 @@ fn impl_write(ast: &DeriveInput, generics: &syn::Generics, is_deref: bool) -> pr
 
 
 fn ident(sym: &str) -> syn::Ident {
-    syn::Ident::new(sym, quote::__rt::Span::call_site())
+    syn::Ident::new(sym, proc_macro2::Span::call_site())
 }
 
 struct SetGetFuncsImpl<'a>(&'a syn::DeriveInput, bool);
