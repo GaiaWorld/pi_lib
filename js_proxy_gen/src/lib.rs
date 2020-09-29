@@ -209,7 +209,7 @@ pub async fn generate_proxy_crate(path: PathBuf,
                             return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_crate_path, e)));
                         },
                         Ok(now) => {
-                            //获取当前系统时间成功，重命名已存在的ts代理文件根目录
+                            //获取当前系统时间成功，则重命名已存在的ts代理文件根目录
                             let proxy_ts_path_rename = PathBuf::from(proxy_ts_path.to_str().unwrap().to_string() + "_" + now.as_millis().to_string().as_str());
 
                             if let Err(e) = rename(WORKER_RUNTIME.clone(), proxy_ts_path.clone(), proxy_ts_path_rename.clone()).await {
