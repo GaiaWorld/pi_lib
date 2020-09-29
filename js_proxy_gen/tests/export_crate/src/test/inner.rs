@@ -260,3 +260,33 @@ pub fn test<'a, 'b, X, Y, Z>(x: &'a X, y: &'b Y, _z: &'a Z) -> Option<TestStruct
           Y: Default + Send + Sync + 'static {
     Some(TestStruct::new(x, y, X::default(), Vec::new()))
 }
+
+///
+/// 测试用简单结构体
+///
+#[pi_js_export(T = type(HashMap<usize, Arc<[u8]>>))]
+pub struct TestSimpleStruct<T: Clone> {
+    inner: T,
+}
+
+impl<T> TestSimpleStruct<T> {
+    ///
+    /// 构造测试用简单结构体
+    ///
+    #[pi_js_export(X = type(HashMap<bool, Vec<u8>>))]
+    pub fn new<X>(inner: &T, x: &X) -> Self {
+        TestSimpleStruct {
+            inner: inner.clone(),
+        }
+    }
+
+    ///
+    /// 异步构造测试用简单结构体
+    ///
+    #[pi_js_export(X = type(HashMap<String, Box<[u8]>>))]
+    pub async fn async_new<X>(inner: &T, x: &mut X) -> Self {
+        TestSimpleStruct {
+            inner: inner.clone(),
+        }
+    }
+}

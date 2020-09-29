@@ -8070,3 +8070,63 @@ pub fn async_call_53(obj: NativeObject, args: NativeObjectArgs, spawner: NativeO
 	spawner(task);
 }
 
+/**
+ * 构造测试用简单结构体
+ */
+pub fn static_call_40(args: NativeObjectArgs) -> Option<Result<NativeObjectValue, String>> {
+	let args = args.get_args().unwrap();
+
+	match &args[0] {
+		NativeObjectValue::NatObj(val) => {
+			let arg_0_arc = val.get_ref::<HashMap<usize, Arc<[u8]>>>().unwrap().upgrade().unwrap();
+			let arg_0 = arg_0_arc.as_ref();
+			match &args[1] {
+				NativeObjectValue::NatObj(val) => {
+					let arg_1_arc = val.get_ref::<HashMap<bool, Vec<u8>>>().unwrap().upgrade().unwrap();
+					let arg_1 = arg_1_arc.as_ref();
+					let result = TestSimpleStruct::new(arg_0, arg_1);
+					let r = result;
+					return Some(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));
+				},
+				_ => {
+					return Some(Err("Invalid type of 1th parameter".to_string()));
+				},
+			}
+		},
+		_ => {
+			return Some(Err("Invalid type of 0th parameter".to_string()));
+		},
+	}
+}
+
+/**
+ * 异步构造测试用简单结构体
+ */
+pub fn async_static_call_27(args: NativeObjectArgs, spawner: NativeObjectAsyncTaskSpawner, reply: NativeObjectAsyncReply) {
+	let task = async move {
+		let args = args.get_args().unwrap();
+
+		match &args[0] {
+			NativeObjectValue::NatObj(val) => {
+				let arg_0_arc = val.get_ref::<HashMap<usize, Arc<[u8]>>>().unwrap().upgrade().unwrap();
+				let arg_0 = arg_0_arc.as_ref();
+				match &args[1] {
+					NativeObjectValue::NatObj(val) => {
+						let arg_1 = val.get_mut::<HashMap<String, Box<[u8]>>>().unwrap();
+						let result = TestSimpleStruct::async_new(arg_0, arg_1).await;
+						let r = result;
+						reply(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));
+					},
+					_ => {
+						reply(Err(NativeObjectValue::Str("Invalid type of 1th parameter".to_string())));
+					},
+				}
+			},
+			_ => {
+				reply(Err(NativeObjectValue::Str("Invalid type of 0th parameter".to_string())));
+			},
+		}
+	}.boxed();
+	spawner(task);
+}
+
