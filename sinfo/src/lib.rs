@@ -15,7 +15,7 @@ use bon::{WriteBuffer, ReadBuffer, Encode, Decode, ReadBonErr};
 /**
 * 自定义对象序列化元信息
 */
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct StructInfo {
 	pub name: Atom,
 	pub name_hash: u32,
@@ -67,7 +67,7 @@ impl Decode for StructInfo{
 }
 
 // 枚举结构体字段的所有类型
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EnumType {
 	Bool,
 	U8,
@@ -162,7 +162,7 @@ impl Decode for EnumType{
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct FieldInfo {
 	pub name: Atom,
 	pub ftype: EnumType,
@@ -197,7 +197,7 @@ impl Decode for FieldInfo{
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct EnumInfo {
 	pub name: Atom,
 	pub name_hash: u32,
