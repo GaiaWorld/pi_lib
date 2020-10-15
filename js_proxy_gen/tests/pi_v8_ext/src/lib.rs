@@ -52,6 +52,7 @@ pub fn register_ext_functions() {
 	register_native_object_static_method(static_call_37);
 	register_native_object_static_method(static_call_38);
 	register_native_object_static_method(static_call_39);
+	register_native_object_static_method(static_call_40);
 
 	//注册异步静态函数和本地对象的异步关联函数
 	register_native_object_async_static_method(async_static_call_0);
@@ -81,6 +82,7 @@ pub fn register_ext_functions() {
 	register_native_object_async_static_method(async_static_call_24);
 	register_native_object_async_static_method(async_static_call_25);
 	register_native_object_async_static_method(async_static_call_26);
+	register_native_object_async_static_method(async_static_call_27);
 
 	//注册本地对象的方法
 	register_native_object_method(call_0);

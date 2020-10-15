@@ -6,7 +6,7 @@ use std::env;
 use std::thread;
 use std::sync::Arc;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::future::Future;
 use std::io::{Error, Result, ErrorKind};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,15 +17,17 @@ use num_cpus;
 use r#async::{rt::{AsyncRuntime,
                    single_thread::{SingleTaskRunner, SingleTaskRuntime},
                    multi_thread::{MultiTaskPool, MultiTaskRuntime}}};
-use async_file::file::{AsyncFileOptions, AsyncFile};
+use async_file::file::{rename, AsyncFileOptions, AsyncFile};
 
 mod frontend;
 mod backend;
+mod rust_backend;
+mod ts_backend;
 mod utils;
 
 use frontend::parse_source;
-use backend::{create_bind_crate, ProxySourceGenerater, generate_crates_proxy_source};
-use utils::{check_crate, Crate, CrateInfo, ParseContext, abs_path};
+use backend::{create_bind_crate, generate_crates_proxy_source};
+use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, CrateInfo, ParseContext, ProxySourceGenerater, abs_path};
 use futures::StreamExt;
 
 /*
@@ -184,31 +186,62 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
 /*
 * 分析声明了导出的库列表，则创建指定路径的代理库，并生成相应的代理文件和代理代码
 */
-pub async fn generate_proxy_crate(path: PathBuf, version: &str, edition: &str, crates: Vec<Crate>) -> Result<()> {
+pub async fn generate_proxy_crate(path: PathBuf,
+                                  ts_proxy_root: PathBuf,
+                                  version: &str,
+                                  edition: &str,
+                                  crates: Vec<Crate>) -> Result<()> {
     match abs_path(path.as_path()) {
         Err(e) => {
-            Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+            Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, crate path: {:?}, reason: {:?}", path, e)))
         },
         Ok(proxy_crate_path) => {
-            let parent_path = if let Some(p) = proxy_crate_path.parent() {
-                p.to_path_buf()
-            } else {
-                return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: not allowed for proxy crate with root path", path)));
-            };
-
-            match create_bind_crate(proxy_crate_path, parent_path, version, edition, crates.as_slice()).await {
+            match abs_path(ts_proxy_root.as_path()) {
                 Err(e) => {
-                    Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                    Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", ts_proxy_root, e)))
                 },
-                Ok(src_path) => {
-                    let generater = ProxySourceGenerater::new();
-                    if let Err(e) = generate_crates_proxy_source(&generater,
-                                                                 crates,
-                                                                 src_path.clone(),
-                                                                 src_path.clone()).await {
-                        Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                Ok(mut proxy_ts_path) => {
+                    proxy_ts_path = proxy_ts_path.join(NATIVE_OBJECT_PROXY_FILE_DIR_NAME); //实际的ts代理文件根路径
+
+                    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                        Err(e) => {
+                            //获取当前系统时间失败，则立即返回错误
+                            return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_crate_path, e)));
+                        },
+                        Ok(now) => {
+                            //获取当前系统时间成功，则重命名已存在的ts代理文件根目录
+                            let proxy_ts_path_rename = PathBuf::from(proxy_ts_path.to_str().unwrap().to_string() + "_" + now.as_millis().to_string().as_str());
+
+                            if let Err(e) = rename(WORKER_RUNTIME.clone(), proxy_ts_path.clone(), proxy_ts_path_rename.clone()).await {
+                                if e.kind() != ErrorKind::NotFound {
+                                    //重命名错误不是没找到ts代理文件根目录的错误，则立即返回错误
+                                    return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, old ts path: {:?}, ts path: {:?}, reason: {:?}", proxy_ts_path_rename, proxy_ts_path, e)));
+                                }
+                            }
+                        },
+                    }
+
+                    let parent_path = if let Some(p) = proxy_crate_path.parent() {
+                        p.to_path_buf()
                     } else {
-                        Ok(())
+                        return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: not allowed for proxy crate with root path", path)));
+                    };
+
+                    match create_bind_crate(proxy_crate_path, parent_path, version, edition, crates.as_slice()).await {
+                        Err(e) => {
+                            Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                        },
+                        Ok(src_path) => {
+                            let generater = ProxySourceGenerater::new();
+                            if let Err(e) = generate_crates_proxy_source(&generater,
+                                                                         crates,
+                                                                         src_path.clone(),
+                                                                         proxy_ts_path.clone()).await {
+                                Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                            } else {
+                                Ok(())
+                            }
+                        },
                     }
                 },
             }
@@ -256,6 +289,7 @@ fn test_create_bind_crate() {
         let path = cwd.join(filename.strip_prefix("./").unwrap());
         let root = PathBuf::from(r#".\tests"#);
         let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)]).await.unwrap();
+        let ts_proxy_root = PathBuf::from(r#".\tests\pi_v8_ext\ts"#);
 
         match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
             Err(e) => {
@@ -263,10 +297,7 @@ fn test_create_bind_crate() {
             },
             Ok(src_path) => {
                 let generater = ProxySourceGenerater::new();
-                if let Err(e) = generate_crates_proxy_source(&generater,
-                                             crates,
-                                             src_path.clone(),
-                                             src_path.clone()).await {
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone()).await {
                     panic!("Test generate proxy file failed, {:?}", e);
                 }
             },

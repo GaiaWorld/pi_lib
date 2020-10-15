@@ -1,11 +1,16 @@
 use std::fs;
 use std::env;
+use std::sync::Arc;
 use std::ops::BitOr;
 use std::path::{Path, PathBuf};
 use std::io::{Error, Result, ErrorKind};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use toml;
 use serde_derive::{Deserialize, Serialize};
+
+use r#async::lock::mutex_lock::Mutex;
+use hash::XHashMap;
 
 /*
 * 源码目录名
@@ -21,6 +26,11 @@ pub const LIB_FILE_NAME: &str = "lib.rs";
 * 构建配置文件名
 */
 pub const BUILD_FILE_NAME: &str = "Cargo.toml";
+
+/*
+* 本地对象代理文件根目录名
+*/
+pub const NATIVE_OBJECT_PROXY_FILE_DIR_NAME: &str = "native";
 
 /*
 * 检查指定路径是否是库的根路径，如果是则返回库信息和源码路径
@@ -719,7 +729,7 @@ impl ExportItem {
 /*
 * 结构体
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Struct {
     name:           Option<String>,     //结构体的名称
     doc:            Option<Document>,   //结构体文档
@@ -902,7 +912,7 @@ impl Struct {
 /*
 * 枚举
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Enum {
     name:           Option<String>,     //枚举的名称
     doc:            Option<Document>,   //枚举文档
@@ -1621,7 +1631,7 @@ impl FunArgs {
 /*
 * Trait实现
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TraitImpls(Vec<(String, Vec<Function>)>);
 
 unsafe impl Send for TraitImpls {}
@@ -1665,7 +1675,7 @@ impl TraitImpls {
 /*
 * 实现
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Impls(Vec<Function>);
 
 unsafe impl Send for Impls {}
@@ -1730,6 +1740,31 @@ pub enum ConstValue {
 }
 
 unsafe impl Send for ConstValue {}
+
+impl ToString for ConstValue {
+    fn to_string(&self) -> String {
+        match self {
+            ConstValue::Boolean(b) => b.to_string(),
+            ConstValue::Int(num) => num.to_string(),
+            ConstValue::Uint(num) => num.to_string(),
+            ConstValue::Float(num) => num.to_string(),
+            ConstValue::Str(str) => "\"".to_string() + str + "\"",
+        }
+    }
+}
+
+impl ConstValue {
+    //获取常量值对应的ts类型名称
+    pub fn get_ts_type_name(&self) -> String {
+        match self {
+            ConstValue::Boolean(_) => "boolean".to_string(),
+            ConstValue::Int(_) => "number".to_string(),
+            ConstValue::Uint(_) => "number".to_string(),
+            ConstValue::Float(_) => "number".to_string(),
+            ConstValue::Str(_) => "string".to_string(),
+        }
+    }
+}
 
 /*
 * 属性词条过滤器
@@ -1796,6 +1831,208 @@ pub enum WithParseSpecificTypeStackFrame {
 }
 
 /*
+* 代理源码生成器
+*/
+#[derive(Clone)]
+pub struct ProxySourceGenerater {
+    static_method_index:        Arc<AtomicUsize>,                               //同步静态代理方法序号
+    async_static_method_index:  Arc<AtomicUsize>,                               //异步静态代理方法序号
+    method_index:               Arc<AtomicUsize>,                               //同步代理方法序号
+    async_method_index:         Arc<AtomicUsize>,                               //异步代理方法序号
+    export_mods:                Arc<Mutex<Vec<String>>>,                        //需要在lib中导出的模块名列表
+    static_methods:             Arc<Mutex<Vec<String>>>,                        //需要注册的同步静态代理方法名列表
+    async_static_methods:       Arc<Mutex<Vec<String>>>,                        //需要注册的异步静态代理方法名列表
+    methods:                    Arc<Mutex<Vec<String>>>,                        //需要注册的同步代理方法名列表
+    async_methods:              Arc<Mutex<Vec<String>>>,                        //需要注册的异步代理方法名列表
+    static_methods_map:         Arc<Mutex<XHashMap<(String, String), usize>>>,  //同步静态代理方法反向映射表
+    async_static_methods_map:   Arc<Mutex<XHashMap<(String, String), usize>>>,  //异步静态代理方法反向映射表
+    methods_map:                Arc<Mutex<XHashMap<(String, String), usize>>>,  //同步代理方法反向映射表
+    async_methods_map:          Arc<Mutex<XHashMap<(String, String), usize>>>,  //异步代理方法反向映射表
+}
+
+unsafe impl Send for ProxySourceGenerater {}
+unsafe impl Sync for ProxySourceGenerater {}
+
+/*
+* 代理源码生成器同步方法
+*/
+impl ProxySourceGenerater {
+    //构建代理源码生成器
+    pub fn new() -> Self {
+        ProxySourceGenerater {
+            static_method_index: Arc::new(AtomicUsize::new(0)),
+            async_static_method_index: Arc::new(AtomicUsize::new(0)),
+            method_index: Arc::new(AtomicUsize::new(0)),
+            async_method_index: Arc::new(AtomicUsize::new(0)),
+            export_mods: Arc::new(Mutex::new(Vec::new())),
+            static_methods: Arc::new(Mutex::new(Vec::new())),
+            async_static_methods: Arc::new(Mutex::new(Vec::new())),
+            methods: Arc::new(Mutex::new(Vec::new())),
+            async_methods: Arc::new(Mutex::new(Vec::new())),
+            static_methods_map: Arc::new(Mutex::new(XHashMap::default())),
+            async_static_methods_map: Arc::new(Mutex::new(XHashMap::default())),
+            methods_map: Arc::new(Mutex::new(XHashMap::default())),
+            async_methods_map: Arc::new(Mutex::new(XHashMap::default())),
+        }
+    }
+}
+
+/*
+* 代理源码生成器异步方法
+*/
+impl ProxySourceGenerater {
+    //获取需要在lib中导出的模块名列表
+    pub async fn take_export_mods(&self) -> Vec<String> {
+        self.export_mods.lock().await.clone()
+    }
+
+    //追加需要在lib中导出的模块名
+    pub async fn append_export_mod(&self, name: String) {
+        self.export_mods.lock().await.push(name);
+    }
+
+    //获取需要注册的同步静态代理方法名列表
+    pub async fn take_static_methods(&self) -> Vec<String> {
+        self.static_methods.lock().await.clone()
+    }
+
+    //追加需要注册的同步静态代理方法名，返回分配的同步静态代理方法序号
+    pub async fn append_static_method(&self,
+                                      target_name: Option<&String>,
+                                      origin_name: String,
+                                      proxy_name: String) -> usize {
+        let mut method_index = usize::max_value();
+
+        {
+            let mut static_methods = self.static_methods.lock().await;
+            method_index = self.static_method_index.fetch_add(1, Ordering::Relaxed);
+            let method_name = proxy_name + method_index.to_string().as_str();
+            static_methods.push(method_name);
+        }
+
+        if let Some(target_name) = target_name {
+            self.static_methods_map.lock().await.insert((target_name.clone(), origin_name), method_index);
+        } else {
+            self.static_methods_map.lock().await.insert(("".to_string(), origin_name), method_index);
+        }
+
+        method_index
+    }
+
+    //获取需要注册的异步静态代理方法名列表
+    pub async fn take_async_static_methods(&self) -> Vec<String> {
+        self.async_static_methods.lock().await.clone()
+    }
+
+    //追加需要注册的异步静态代理方法名，返回分配的异步静态代理方法序号
+    pub async fn append_async_static_method(&self,
+                                            target_name: Option<&String>,
+                                            origin_name: String,
+                                            proxy_name: String) -> usize {
+        let mut method_index = usize::max_value();
+
+        {
+            let mut async_static_methods = self.async_static_methods.lock().await;
+            method_index = self.async_static_method_index.fetch_add(1, Ordering::Relaxed);
+            let method_name = proxy_name + method_index.to_string().as_str();
+            async_static_methods.push(method_name);
+        }
+
+        if let Some(target_name) = target_name {
+            self.async_static_methods_map.lock().await.insert((target_name.clone(), origin_name), method_index);
+        } else {
+            self.async_static_methods_map.lock().await.insert(("".to_string(), origin_name), method_index);
+        }
+
+        method_index
+    }
+
+    //获取需要注册的同步代理方法名列表
+    pub async fn take_methods(&self) -> Vec<String> {
+        self.methods.lock().await.clone()
+    }
+
+    //追加需要注册的同步代理方法名，返回分配的同步代理方法序号
+    pub async fn append_method(&self,
+                               target_name: Option<&String>,
+                               origin_name: String,
+                               proxy_name: String) -> usize {
+        let mut method_index = usize::max_value();
+
+        {
+            let mut methods = self.methods.lock().await;
+            method_index = self.method_index.fetch_add(1, Ordering::Relaxed);
+            let method_name = proxy_name + method_index.to_string().as_str();
+            methods.push(method_name);
+        }
+
+        if let Some(target_name) = target_name {
+            self.methods_map.lock().await.insert((target_name.clone(), origin_name), method_index);
+        } else {
+            self.methods_map.lock().await.insert(("".to_string(), origin_name), method_index);
+        }
+
+        method_index
+    }
+
+    //获取需要注册的异步代理方法名列表
+    pub async fn take_async_methods(&self) -> Vec<String> {
+        self.async_methods.lock().await.clone()
+    }
+
+    //追加需要注册的异步代理方法名，返回分配的异步代理方法序号
+    pub async fn append_async_method(&self,
+                                     target_name: Option<&String>,
+                                     origin_name: String,
+                                     proxy_name: String) -> usize {
+        let mut method_index = usize::max_value();
+
+        {
+            let mut async_methods = self.async_methods.lock().await;
+            method_index = self.async_method_index.fetch_add(1, Ordering::Relaxed);
+            let method_name = proxy_name + method_index.to_string().as_str();
+            async_methods.push(method_name);
+        }
+
+        if let Some(target_name) = target_name {
+            self.async_methods_map.lock().await.insert((target_name.clone(), origin_name), method_index);
+        } else {
+            self.async_methods_map.lock().await.insert(("".to_string(), origin_name), method_index);
+        }
+
+        method_index
+    }
+
+    //获取指定目标对象名称和具体函数名称的同步静态方法序号
+    pub async fn get_static_method_index(&self,
+                                         target_name: String,
+                                         origin_name: String) -> Option<usize> {
+        self.static_methods_map.lock().await.get(&(target_name, origin_name)).cloned()
+    }
+
+    //获取指定目标对象名称和具体函数名称的异步静态方法序号
+    pub async fn get_async_static_method_index(&self,
+                                               target_name: String,
+                                               origin_name: String) -> Option<usize> {
+        self.async_static_methods_map.lock().await.get(&(target_name, origin_name)).cloned()
+    }
+
+    //获取指定目标对象名称和具体函数名称的同步方法序号
+    pub async fn get_method_index(&self,
+                                  target_name: String,
+                                  origin_name: String) -> Option<usize> {
+        self.methods_map.lock().await.get(&(target_name, origin_name)).cloned()
+    }
+
+    //获取指定目标对象名称和具体函数名称的异步方法序号
+    pub async fn get_async_method_index(&self,
+                                        target_name: String,
+                                        origin_name: String) -> Option<usize> {
+        self.async_methods_map.lock().await.get(&(target_name, origin_name)).cloned()
+    }
+}
+
+/*
 * 获取指定路径的绝对路径
 */
 pub fn abs_path(path: &Path) -> Result<PathBuf> {
@@ -1840,4 +2077,35 @@ pub fn get_target_type_name(target_name: &String) -> String {
     }).collect();
 
     vec.remove(0)
+}
+
+//获取具体函数名，如果有泛型参数，则根据泛型参数的具体类型生成具体函数名
+pub fn get_specific_ts_function_name(function: &Function) -> String {
+    let mut function_name = function.get_name().unwrap().clone();
+    if let Some(generic) = function.get_generic() {
+        //有泛型参数
+        for (_, specific_types) in generic.get_ref() {
+            let specific_type = specific_types[0].to_string()
+                .replace("[", "$")
+                .replace("]", "$")
+                .replace("<", "_")
+                .replace(", ", "_")
+                .replace(",", "_")
+                .replace(">", "_");
+            function_name = function_name + "_" + specific_type.as_str();
+        }
+    }
+
+    function_name
+}
+
+//获取具体类名，如果有泛型参数，则根据泛型参数的具体类型生成具体类名
+pub fn get_specific_ts_class_name(class_name: &String) -> String {
+    class_name
+        .replace("[", "$")
+        .replace("]", "$")
+        .replace("<", "_")
+        .replace(", ", "_")
+        .replace(",", "_")
+        .replace(">", "_")
 }
