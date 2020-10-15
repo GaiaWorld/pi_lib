@@ -43,24 +43,22 @@ impl<T> VecMap<T> {
         self.entries.capacity()
     }
 
-    // pub fn reserve(&mut self, additional: usize) {
-    //     if self.capacity() - self.len >= additional {
-    //         return;
-    //     }
-    //     let need_add = self.len + additional - self.entries.len();
-    //     self.entries.reserve(need_add);
-    //     self.vacancy_sign.reserve(need_add/usize_size());
-    // }
+    pub fn reserve(&mut self, additional: usize) {
+        if self.capacity() - self.len >= additional {
+            return;
+        }
+        let need_add = self.len + additional - self.entries.len();
+        self.entries.reserve(need_add);
+    }
 
     
-    // pub fn reserve_exact(&mut self, additional: usize) {
-    //     if self.capacity() - self.len >= additional {
-    //         return;
-    //     }
-    //     let need_add = self.len + additional - self.entries.len();
-    //     self.entries.reserve_exact(need_add);
-    //     self.vacancy_sign.reserve(need_add/usize_size());
-    // }
+    pub fn reserve_exact(&mut self, additional: usize) {
+        if self.capacity() - self.len >= additional {
+            return;
+        }
+        let need_add = self.len + additional - self.entries.len();
+        self.entries.reserve_exact(need_add);
+    }
 
     // pub fn shrink_to_fit(&mut self) {
     //     self.entries.shrink_to_fit();
@@ -125,8 +123,12 @@ impl<T> VecMap<T> {
 
     pub fn insert(&mut self, index:usize, val: T) -> Option<T>{
         let index = index - 1;
-        let len = self.entries.len();
-        if index >= len {
+		let len = self.entries.len();
+		if len == index {
+			self.entries.push(Some(val));
+			self.len += 1;
+            None
+		} else if index >= len {
 			self.entries.extend((0..index - len + 1).map(|_| None));
             self.len += 1;
             replace(&mut self.entries[index], Some(val))
@@ -227,7 +229,11 @@ impl<T> Map for VecMap<T> {
     #[inline]
     fn mem_size(&self) -> usize {
         self.capacity() * std::mem::size_of::<T>()
-    }
+	}
+	
+	fn with_capacity(capacity: usize) -> Self {
+		VecMap::with_capacity(capacity)
+	}
 }
 
 impl<T> Index<usize> for VecMap<T> {

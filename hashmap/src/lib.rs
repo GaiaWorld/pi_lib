@@ -65,7 +65,11 @@ impl<K: Hash + Eq, V> Map for HashMap<K, V>{
     #[inline]
     fn remove(&mut self, key: &Self::Key) -> Option<Self::Val> {
         self.0.remove(key)
-    }
+	}
+	
+	fn with_capacity(_capacity: usize) -> Self {
+		Self::default()
+	}
 }
 
 impl<K: Hash + Eq, V> Default for HashMap<K, V> {

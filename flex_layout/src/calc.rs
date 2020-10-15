@@ -152,7 +152,8 @@ macro_rules! make_impl {
             make_func!(children_abs_rect, ChildrenAbsRect);
             make_func!(children_no_align_self, ChildrenNoAlignSelf);
             make_func!(children_index, ChildrenIndex);
-            make_func!(vnode, VNode);
+			make_func!(vnode, VNode);
+			make_func!(rnode, RNode);
             make_func!(abs, Abs);
             make_func!(abs_rect, AbsRect);
             make_func!(size_defined, SizeDefined);
@@ -215,7 +216,9 @@ pub enum INodeStateType {
     AbsRect = 256, // 是否为绝对区域，完全指定宽高和左上。 否则需要根据父节点的宽度进行计算。
     SizeDefined = 512, // 是否为根据子节点自动计算大小
     LineStartMarginZero = 1024, // 如果该元素为行首，则margin_start为0
-    BreakLine = 2048, // 强制换行
+	BreakLine = 2048, // 强制换行
+	
+	RNode = 4096,// 真实节点
 }
 // TODO max min aspect_ratio， RectStyle也可去掉了. 将start end改为left right。 将数据结构统一到标准结构下， 比如Rect Size Point
 #[derive(Clone, Debug)]
@@ -264,7 +267,8 @@ impl Default for INode {
                 INodeStateType::ChildrenAbs as usize
                     + INodeStateType::ChildrenAbsRect as usize
                     + INodeStateType::ChildrenNoAlignSelf as usize
-                    + INodeStateType::ChildrenIndex as usize,
+					+ INodeStateType::ChildrenIndex as usize
+					+ INodeStateType::RNode as usize,
             ),
 			text: Vec::new(),
 			char_index: 0,
@@ -273,8 +277,13 @@ impl Default for INode {
 }
 
 impl INode {
-	pub fn is_vnode(&mut self) -> bool {
+	pub fn is_vnode(&self) -> bool {
         self.state.vnode()
+	}
+
+	// 是否为真实节点
+	pub fn is_rnode(&self) -> bool {
+        self.state.rnode()
 	}
 	
     pub fn set_vnode(&mut self, vnode: bool) {
@@ -283,7 +292,16 @@ impl INode {
         } else {
             self.state.vnode_false();
         }
-    }
+	}
+	
+	pub fn set_rnode(&mut self, rnode: bool) {
+        if rnode {
+            self.state.rnode_true();
+        } else {
+            self.state.rnode_false();
+        }
+	}
+	
     pub fn set_line_start_margin_zero(&mut self, b: bool) {
         if b {
             self.state.line_start_margin_zero_true();

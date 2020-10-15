@@ -30,6 +30,13 @@ impl<T: Default> IndexMut<usize> for IdTree<T> {
 }
 
 impl<T: Default> IdTree<T> {
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			map: VecMap::with_capacity(capacity),
+    		statistics_count: false,
+		}
+	}
+
     pub fn is_statistics_count(&self) -> bool {
         self.statistics_count
     }

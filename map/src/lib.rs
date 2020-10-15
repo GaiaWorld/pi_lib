@@ -25,7 +25,8 @@ pub mod hashmap;
 pub trait Map{
 	type Key;
 	type Val;
-    fn len(&self) -> usize;
+	fn len(&self) -> usize;
+	fn with_capacity(capacity: usize) -> Self;
     fn capacity(&self) -> usize;
     fn mem_size(&self) -> usize;
     fn contains(&self, key: &Self::Key) -> bool;

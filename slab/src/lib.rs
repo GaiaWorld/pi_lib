@@ -55,7 +55,7 @@ impl<T> Slab<T> {
             entries: Vec::with_capacity(capacity),
             next: 0,
             len: 0,
-            vacancy_sign: Vec::with_capacity(usize_size() << 1),
+            vacancy_sign: Vec::with_capacity(capacity/usize_size()),
         }
     }
 
