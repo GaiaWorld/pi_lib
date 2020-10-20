@@ -3704,6 +3704,38 @@ fn test_async_wait_all() {
     let rt1 = pool.startup(false);
 
     {
+        struct SendableFn(Box<dyn FnOnce(&mut Vec<u8>) -> Vec<u8> + Send + 'static>);
+
+        let rt_copy = rt.clone();
+        let rt0_copy = rt0.clone();
+        rt.spawn(rt.alloc(), async move {
+            let mut map = rt_copy.map::<SendableFn>();
+
+            let cb: SendableFn = SendableFn(Box::new(move |v: &mut Vec<u8>| {
+                v.clone()
+            }));
+            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                Ok(cb)
+            });
+
+            let cb: SendableFn = SendableFn(Box::new(move |v: &mut Vec<u8>| {
+                v.clone()
+            }));
+            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                Ok(cb)
+            });
+
+            let mut vec = vec![0xff, 0xff, 0xff];
+            for r in map.map(AsyncRuntime::Local(rt_copy)).await.unwrap() {
+                if let Ok(cb) = r {
+                    assert_eq!(cb.0(&mut vec), vec);
+                }
+            }
+        });
+    }
+    thread::sleep(Duration::from_millis(1000));
+
+    {
         let rt_copy = rt.clone();
         let rt0_copy = rt0.clone();
         let rt1_copy = rt1.clone();
