@@ -93,15 +93,16 @@ impl<E: 'static, C: Component> IndexMut<usize> for MultiCaseImpl<E, C> {
 }
 
 impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
-    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize) -> StdCell<Self> {
+    pub fn new(entity: Arc<CellEntity<E>>, bit_index: usize, capacity: usize) -> StdCell<Self> {
         StdCell::new(MultiCaseImpl {
-            map: C::Storage::default(),
+            map: C::Storage::with_capacity(capacity),
             notify: NotifyImpl::default(),
             entity: entity,
             bit_index: bit_index,
             marker: PhantomData,
         })
-    }
+	}
+
     pub fn mem_size(&self) -> usize {
         self.map.mem_size() + self.notify.mem_size()
     }

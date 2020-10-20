@@ -18,6 +18,14 @@ impl<T> DenseVecMap<T> {
     #[inline]
     fn len(&self) -> usize {
         self.data.len()
+	}
+	
+	fn new() -> DenseVecMap<T> {
+        DenseVecMap{
+			data_id: VecMap::new(),
+			data: Vec::new(),
+			indexs: Vec::new(),
+		}
     }
 
     fn get(&self, id: usize) -> Option<&T> {
@@ -145,7 +153,10 @@ impl<T> Map for DenseVecMap<T> {
     #[inline]
     fn mem_size(&self) -> usize {
         self.data_id.mem_size() + self.data.capacity() * std::mem::size_of::<T>() + self.indexs.capacity() * std::mem::size_of::<usize>()
-    }
+	}
+	fn with_capacity(_capacity: usize) -> Self {
+		Self::new()
+	}
 }
 
 impl<T> Index<usize> for DenseVecMap<T> {

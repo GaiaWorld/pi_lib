@@ -24,7 +24,8 @@ pub struct World {
     system: XHashMap<Atom, Arc<dyn System>>,
     runner: XHashMap<Atom, Arc<dyn Dispatcher>>,
     // #[cfg(feature = "runtime")]
-    pub runtime: Share<Vec<RunTime>>,
+	pub runtime: Share<Vec<RunTime>>,
+	pub capacity: usize,
 }
 
 impl World {
@@ -32,7 +33,7 @@ impl World {
         let id = TypeId::of::<E>();
         match self
             .entity
-            .insert(id, Arc::new(StdCell::new(EntityImpl::<E>::new())))
+            .insert(id, Arc::new(StdCell::new(EntityImpl::<E>::with_capacity(self.capacity))))
         {
             Some(_) => panic!(
                 "duplicate registration, entity: {:?}, id: {:?}",
@@ -66,7 +67,7 @@ impl World {
                         let rc = r.clone();
                         let entity = LendMut::lend_mut(&r);
                         let m: Arc<CellMultiCase<E, C>> =
-                            Arc::new(MultiCaseImpl::new(rc, entity.get_mask()));
+                            Arc::new(MultiCaseImpl::new(rc, entity.get_mask(), self.capacity));
                         entity.register_component(m.clone());
                         match self.multi.insert((eid, cid), m) {
                             Some(_) => panic!(

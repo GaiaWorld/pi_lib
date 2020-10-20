@@ -54,11 +54,13 @@ impl<T: Clone + PartialEq> Listeners<T> {
 }
 impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
     fn listen(&self, e: &E) {
-        for l in self.0.iter() {
-			// let time = std::time::Instant::now();
-			l.listen(e);
-            // println!("listen time----------{:?}", std::time::Instant::now() - time);
-        }
+		if self.0.len() > 0 {
+			for l in self.0.iter() {
+				// let time = std::time::Instant::now();
+				l.listen(e);
+				// println!("listen time----------{:?}", std::time::Instant::now() - time);
+			}
+		}
     }
 }
 

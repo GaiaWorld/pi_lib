@@ -77,7 +77,16 @@ impl<T> EntityImpl<T> {
             notify: NotifyImpl::default(),
             marker: PhantomData,
         }
-    }
+	}
+	
+	pub fn with_capacity(capacity: usize) -> Self {
+		EntityImpl {
+            slab: Slab::with_capacity(capacity),
+            components: Vec::new(),
+            notify: NotifyImpl::default(),
+            marker: PhantomData,
+        }
+	}
 
     pub fn mem_size(&self) -> usize {
         let mut r = 0;
@@ -115,29 +124,33 @@ impl<T> EntityImpl<T> {
 	}
 	
     pub fn mark(&mut self, id: usize, bit_index: usize) {
-        let mask = self.slab.get_mut(id).unwrap();
-        *mask |= 1 << bit_index;
+        // let mask = self.slab.get_mut(id).unwrap();
+        // *mask |= 1 << bit_index;
     }
     pub fn un_mark(&mut self, id: usize, bit_index: usize) {
-        match self.slab.get_mut(id) {
-            Some(mask) => *mask &= !(1 << bit_index),
-            _ => (),
-        }
+        // match self.slab.get_mut(id) {
+        //     Some(mask) => *mask &= !(1 << bit_index),
+        //     _ => (),
+        // }
     }
     pub fn delete(&mut self, id: usize) {
         let mask = self.slab.remove(id);
         self.notify.modify_event(id, "", 0);
-        if mask == 0 {
-            return;
-        }
-        // 依次删除对应的组件
-        for i in mask.trailing_zeros() as usize
-            ..(size_of::<u64>() << 3) - (mask.leading_zeros() as usize)
-        {
-            if mask & (1 << i) != 0 {
-                self.components[i].delete(id)
-            }
-        }
+        // if mask == 0 {
+        //     return;
+        // }
+        // // 依次删除对应的组件
+        // for i in mask.trailing_zeros() as usize
+        //     ..(size_of::<u64>() << 3) - (mask.leading_zeros() as usize)
+        // {
+        //     if mask & (1 << i) != 0 {
+        //         self.components[i].delete(id)
+        //     }
+		// }
+		for ci in self.components.iter() {
+			ci.delete(id);
+		}
+
         self.notify.delete_event(id);
     }
 
