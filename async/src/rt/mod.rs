@@ -395,6 +395,20 @@ impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
 }
 
 /*
+* 等待异步任务运行的结果集
+*/
+pub struct AsyncWaitResults<V: Send + 'static>(Arc<RefCell<Option<Vec<Result<V>>>>>);
+
+unsafe impl<V: Send + 'static> Send for AsyncWaitResults<V> {}
+unsafe impl<V: Send + 'static> Sync for AsyncWaitResults<V> {}
+
+impl<V: Send + 'static> Clone for AsyncWaitResults<V> {
+    fn clone(&self) -> Self {
+        AsyncWaitResults(self.0.clone())
+    }
+}
+
+/*
 * 等待执行的定时任务
 */
 pub enum WaitRunTask<O: Default + 'static> {
@@ -935,34 +949,40 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWaitAny
 * 异步映射，用于将多个任务派发到多个异步运行时
 */
 pub struct AsyncMap<O: Default + 'static, V: Send + 'static> {
-    count:      usize,                                                          //派发的任务数量
-    futures:    Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>,   //待派发任务
-    producor:   Sender<(usize, Result<V>)>,                                     //异步返回值生成器
-    consumer:   Receiver<(usize, Result<V>)>,                                   //异步返回值接收器
+    count:      usize,                                                  //派发的任务数量
+    futures:    Vec<(AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>,  //待派发任务
+    producor:   Sender<(usize, Result<V>)>,                             //异步返回值生成器
+    consumer:   Receiver<(usize, Result<V>)>,                           //异步返回值接收器
 }
 
 unsafe impl<O: Default + 'static, V: Send + 'static> Send for AsyncMap<O, V> {}
 
 impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
-    pub fn join<F>(&mut self, rt: AsyncRuntime<O>, future: F)
+    //加入需要映射的任务，并返回任务序号
+    pub fn join<F>(&mut self, rt: AsyncRuntime<O>, future: F) -> usize
         where F: Future<Output = Result<V>> + Send + 'static {
-        let count = self.count;
-        self.futures.push((count, rt, Box::new(future).boxed()));
+        let index = self.count;
+        self.futures.push((rt, Box::new(future).boxed()));
         self.count += 1;
+        index
     }
 
     //映射所有任务，并返回指定异步运行时的异步归并
-    pub fn map(self, wait: AsyncRuntime<O>, is_order: bool) -> AsyncReduce<O, V> {
+    pub fn map(self, wait: AsyncRuntime<O>) -> AsyncReduce<O, V> {
         let count = Arc::new(AtomicUsize::new(self.count));
         let producor = self.producor.clone();
         let consumer = self.consumer.clone();
+        let mut result = Vec::with_capacity(self.count);
+        for _ in 0..self.count {
+            result.push(Err(Error::new(ErrorKind::Other, "Unint map")))
+        }
 
         AsyncReduce {
             futures: Some(self.futures),
             producor: Box::new(producor), //通过Box实现Pin
             consumer: Box::new(consumer), //通过Box实现Pin
             wait,
-            is_order,
+            result: AsyncWaitResults(Arc::new(RefCell::new(Some(result)))), //设置结果集初值
             count,
         }
     }
@@ -972,12 +992,12 @@ impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
 * 异步归并，用于归并多个任务的返回值
 */
 pub struct AsyncReduce<O: Default + 'static, V: Send + 'static> {
-    futures:    Option<Vec<(usize, AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>>,   //待派发任务
-    producor:   Box<Sender<(usize, Result<V>)>>,                                        //异步返回值生成器
-    consumer:   Box<Receiver<(usize, Result<V>)>>,                                      //异步返回值接收器
-    wait:       AsyncRuntime<O>,                                                        //等待的异步运行时
-    is_order:   bool,                                                                   //是否对返回的值排序
-    count:      Arc<AtomicUsize>,                                                       //需要归并的异步任务数量
+    futures:    Option<Vec<(AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>>,  //待派发任务
+    producor:   Box<Sender<(usize, Result<V>)>>,                                //异步返回值生成器
+    consumer:   Box<Receiver<(usize, Result<V>)>>,                              //异步返回值接收器
+    wait:       AsyncRuntime<O>,                                                //等待的异步运行时
+    result:     AsyncWaitResults<V>,                                            //需要等待执行的异步任务的结果
+    count:      Arc<AtomicUsize>,                                               //需要归并的异步任务数量
 }
 
 unsafe impl<O: Default + 'static, V: Send + 'static> Send for AsyncReduce<O, V> {}
@@ -989,20 +1009,15 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if (&self).count.load(Ordering::Relaxed) == 0 {
             //任务已完成，则返回
-            let values = if (&self).is_order {
-                //需要对返回值排序
+            if let Some(mut result) = (&self).result.0.borrow_mut().take() {
                 let mut buf = (&self).consumer.try_iter().collect::<Vec<(usize, Result<V>)>>();
-                buf.sort_by(|(x, _), (y, _)| x.cmp(y));
-                let (_, values) = buf.into_iter().unzip::<_, _, Vec<usize>, Vec<Result<V>>>();
-                values
-            } else {
-                //不需要对返回值排序
-                let buf = (&self).consumer.try_iter().collect::<Vec<(usize, Result<V>)>>();
-                let (_, values) = buf.into_iter().unzip::<_, _, Vec<usize>, Vec<Result<V>>>();
-                values
-            };
+                for (idx, r) in buf {
+                    //将归并结果，根据序号填充到结果集中
+                    result[idx] = r;
+                }
 
-            return Poll::Ready(Ok(values));
+                return Poll::Ready(Ok(result));
+            }
         }
 
         //在归并任务所在运行时中派发所有异步任务
@@ -1017,11 +1032,12 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
         let wait = (&self).wait.clone();
         let count = (&self).count.clone();
         let task = async move {
-            while let Some((index, runtime, future)) = futures.pop() {
+            while let Some((runtime, future)) = futures.pop() {
                 let task_id_copy = task_id_.clone();
                 let wait_copy = wait.clone();
                 let count_copy = count.clone();
                 let producor_copy = producor.clone();
+                let index = futures.len();
                 match runtime {
                     AsyncRuntime::Local(rt) => {
                         if let Err(e) = rt.spawn(rt.alloc(), async move {

@@ -2392,7 +2392,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Local(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Local(rt_copy.clone())).await;
             });
         }
     });
@@ -2415,7 +2415,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
             });
         }
     });
@@ -2437,7 +2437,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
             });
         }
     });
@@ -2468,7 +2468,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Local(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Local(rt_copy.clone())).await;
             });
         }
     });
@@ -2489,7 +2489,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
             });
         }
     });
@@ -2509,7 +2509,7 @@ fn test_mutex_lock_bench() {
                 map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone()), true).await;
+                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
             });
         }
     });
@@ -3740,7 +3740,7 @@ fn test_async_wait_all() {
                 Ok(9)
             });
 
-            println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Local(rt_copy.clone()), false).await);
+            println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Local(rt_copy.clone())).await);
 
             let mut map = rt_copy.map();
             map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
@@ -3774,7 +3774,7 @@ fn test_async_wait_all() {
                 Ok(9)
             });
 
-            println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Local(rt_copy), true).await);
+            println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Local(rt_copy)).await);
         };
         rt.spawn(rt.alloc(), future);
     }
@@ -3818,7 +3818,7 @@ fn test_async_wait_all() {
                 map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(9)
                 });
-                map.map(AsyncRuntime::Multi(rt0_copy), true).await;
+                map.map(AsyncRuntime::Multi(rt0_copy)).await;
                 counter_copy.0.fetch_add(1, Ordering::Relaxed);
             };
             rt0.spawn(rt0.alloc(), future);
@@ -3867,7 +3867,7 @@ fn test_async_wait_all() {
                 map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(9)
                 });
-                map.map(AsyncRuntime::Multi(rt0_copy), true).await;
+                map.map(AsyncRuntime::Multi(rt0_copy)).await;
                 counter_copy.0.fetch_add(1, Ordering::Relaxed);
             };
             rt.spawn(rt.alloc(), future);
