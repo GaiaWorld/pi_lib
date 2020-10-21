@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 #![feature(integer_atomics)]
 
 use std::mem::transmute;

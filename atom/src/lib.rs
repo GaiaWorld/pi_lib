@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 #![feature(core_intrinsics)]
 #![feature(nll)]
 #![feature(pattern)]

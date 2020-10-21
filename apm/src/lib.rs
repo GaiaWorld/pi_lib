@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 #![feature(integer_atomics)]
 #![feature(duration_as_u128)]
 
