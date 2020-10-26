@@ -147,7 +147,7 @@ pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerate
         map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
     }
 
-    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), true).await {
+    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
         Err(e) => Err(e),
         Ok(vec) => {
             //异步解析所有导入库中的源码

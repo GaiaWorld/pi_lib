@@ -73,8 +73,16 @@ fn parse_items(context: &mut ParseContext,
         match item {
             syn::Item::Struct(struct_item) => {
                 //结构体定义
-                if let Err(e) = parse_struct(context, struct_item) {
-                    return Err(e);
+                match parse_struct(context, struct_item) {
+                    Err(e) => {
+                        //解析结构体错误，则立即返回错误
+                        return Err(e);
+                    },
+                    Ok(false) => {
+                        //解析结构体成功，但未导出，则忽略
+                        continue;
+                    },
+                    _ => (),
                 }
 
                 //分析所有为当前结构体定义的实现，包括Trait实现和实现
@@ -95,8 +103,16 @@ fn parse_items(context: &mut ParseContext,
             },
             syn::Item::Enum(enum_item) => {
                 //枚举定义
-                if let Err(e) = parse_enum(context, enum_item) {
-                    return Err(e);
+                match parse_enum(context, enum_item) {
+                    Err(e) => {
+                        //解析枚举错误，则立即返回错误
+                        return Err(e);
+                    },
+                    Ok(false) => {
+                        //解析枚举成功，但未导出，则忽略
+                        continue;
+                    },
+                    _ => (),
                 }
 
                 //分析所有为当前枚举定义的实现，包括Trait实现和实现
@@ -117,14 +133,30 @@ fn parse_items(context: &mut ParseContext,
             },
             syn::Item::Fn(func_item) => {
                 //静态函数定义
-                if let Err(e) = parse_function(context, func_item) {
-                    return Err(e);
+                match parse_function(context, func_item) {
+                    Err(e) => {
+                        //解析静态函数错误，则立即返回错误
+                        return Err(e);
+                    },
+                    Ok(false) => {
+                        //解析静态函数成功，但未导出，则忽略
+                        continue;
+                    },
+                    _ => (),
                 }
             },
             syn::Item::Const(const_item) => {
                 //常量定义
-                if let Err(e) = parse_const(context, const_item) {
-                    return Err(e);
+                match parse_const(context, const_item) {
+                    Err(e) => {
+                        //解析常量错误，则立即返回错误
+                        return Err(e);
+                    },
+                    Ok(false) => {
+                        //解析常量成功，但未导出，则忽略
+                        continue;
+                    },
+                    _ => (),
                 }
             },
             syn::Item::Use(use_item) => {
@@ -935,7 +967,7 @@ pub fn get_const_literal(target_name: &String,
 
 //分析结构体
 fn parse_struct(context: &mut ParseContext,
-                struct_item: &syn::ItemStruct) -> Result<()> {
+                struct_item: &syn::ItemStruct) -> Result<bool> {
     //初始化一个导出结构体
     context.set_is_export(false); //将当前导出条目的导出设置为未导出
     let s = Struct::new();
@@ -950,7 +982,7 @@ fn parse_struct(context: &mut ParseContext,
     if !context.is_export() {
         //没有导出定义，则弹出当前正在分析的结构体，并立即退出当前结构体的分析
         let _ = context.pop_export();
-        return Ok(());
+        return Ok(false);
     }
 
     let name = struct_item.ident.to_string();
@@ -990,7 +1022,7 @@ fn parse_struct(context: &mut ParseContext,
             }
         }
 
-        Ok(())
+        Ok(true)
     } else {
         //无效的导出结构体可视性，则立即返回错误
         Err(Error::new(ErrorKind::Other, format!("Parse struct failed, name: {}, reason: invalid visibility", name)))
@@ -999,7 +1031,7 @@ fn parse_struct(context: &mut ParseContext,
 
 //分析枚举
 fn parse_enum(context: &mut ParseContext,
-              enum_item: &syn::ItemEnum) -> Result<()> {
+              enum_item: &syn::ItemEnum) -> Result<bool> {
     //初始化一个导出枚举
     context.set_is_export(false); //将当前导出条目的导出设置为未导出
     let e = Enum::new();
@@ -1014,7 +1046,7 @@ fn parse_enum(context: &mut ParseContext,
     if !context.is_export() {
         //没有导出定义，则弹出当前正在分析的枚举，并立即退出当前枚举的分析
         let _ = context.pop_export();
-        return Ok(());
+        return Ok(false);
     }
 
     let name = enum_item.ident.to_string();
@@ -1054,7 +1086,7 @@ fn parse_enum(context: &mut ParseContext,
             }
         }
 
-        Ok(())
+        Ok(true)
     } else {
         //无效的导出枚举可视性，则立即返回错误
         Err(Error::new(ErrorKind::Other, format!("Parse enum failed, name: {}, reason: invalid visibility", name)))
@@ -1063,7 +1095,7 @@ fn parse_enum(context: &mut ParseContext,
 
 //分析静态函数
 fn parse_function(context: &mut ParseContext,
-                  func_item: &syn::ItemFn) -> Result<()> {
+                  func_item: &syn::ItemFn) -> Result<bool> {
     //初始化一个导出静态函数
     context.set_is_export(false); //将当前导出条目的导出设置为未导出
     let f = Function::new();
@@ -1078,7 +1110,7 @@ fn parse_function(context: &mut ParseContext,
     if !context.is_export() {
         //没有导出定义，则弹出当前正在分析的静态函数，并立即退出当前静态函数的分析
         let _ = context.pop_export();
-        return Ok(());
+        return Ok(false);
     }
 
     let func_name = func_item.sig.ident.to_string();
@@ -1120,7 +1152,7 @@ fn parse_function(context: &mut ParseContext,
             }
         }
 
-        Ok(())
+        Ok(true)
     } else {
         //无效的导出静态函数可视性，则立即返回错误
         Err(Error::new(ErrorKind::Other, format!("Parse static function failed, function: {}, reason: invalid visibility", &func_name)))
@@ -1129,7 +1161,7 @@ fn parse_function(context: &mut ParseContext,
 
 //分析常量
 fn parse_const(context: &mut ParseContext,
-               const_item: &syn::ItemConst) -> Result<()> {
+               const_item: &syn::ItemConst) -> Result<bool> {
     //初始化一个导出常量
     context.set_is_export(false); //将当前导出条目的导出设置为未导出
     let c = Const::new();
@@ -1144,7 +1176,7 @@ fn parse_const(context: &mut ParseContext,
     if !context.is_export() {
         //没有导出定义，则弹出当前正在分析的常量，并立即退出当前常量的分析
         let _ = context.pop_export();
-        return Ok(());
+        return Ok(false);
     }
 
     let const_name = const_item.ident.to_string();
@@ -1174,7 +1206,7 @@ fn parse_const(context: &mut ParseContext,
             }
         }
 
-        Ok(())
+        Ok(true)
     } else {
         //无效的导出常量可视性，则立即返回错误
         Err(Error::new(ErrorKind::Other, format!("Parse const failed, const: {}, reason: invalid visibility", &const_name)))

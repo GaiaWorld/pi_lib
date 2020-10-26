@@ -62,7 +62,7 @@ pub async fn parse_crates(dirs: Vec<PathBuf>) -> Result<Vec<Crate>> {
         map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
     }
 
-    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), true).await {
+    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
         Err(e) => Err(e),
         Ok(vec) => {
             for r in vec {
