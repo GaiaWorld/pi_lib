@@ -1,4 +1,6 @@
 
+#![allow(warnings)]
+
 use std::mem::{size_of, transmute_copy, needs_drop, replace};
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ops::{Index, IndexMut};

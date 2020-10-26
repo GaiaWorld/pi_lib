@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 #![feature(exclusive_range_pattern)]
 
 extern crate heap;
