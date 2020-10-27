@@ -657,54 +657,19 @@ fn generate_ts_function_return(target: Option<&String>,
             },
         };
 
-        if let Some(generic) = generic {
-            //目标对象有泛型参数
-            for (generic_name, specific_types) in generic.get_ref() {
-                if return_type_name.get_name() == generic_name {
-                    //泛型参数名相同，则使用具体类型替换泛型类型
-                    let specific_return_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-
-                    if function.is_async() {
-                        //异步函数
-                        source_content.put_slice((": Promise<".to_string() + specific_return_type_name.as_str() + "> {\n").as_bytes());
-                    } else {
-                        //同步函数
-                        source_content.put_slice((": ".to_string() + specific_return_type_name.as_str() + other_return_type_name.as_str() + " {\n").as_bytes());
-                    }
-
-                    return Ok(Some(specific_return_type_name));
-                }
-            }
-        }
-
-        if let Some(generic) = function.get_generic() {
-            //函数有泛型参数
-            for (generic_name, specific_types) in generic.get_ref() {
-                if return_type_name.get_name() == generic_name {
-                    //泛型参数名相同，则使用具体类型替换泛型类型
-                    let specific_return_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-
-                    if function.is_async() {
-                        //异步函数
-                        source_content.put_slice((": Promise<".to_string() + specific_return_type_name.as_str() + "> {\n").as_bytes());
-                    } else {
-                        //同步函数
-                        source_content.put_slice((": ".to_string() + specific_return_type_name.as_str() + other_return_type_name.as_str() + " {\n").as_bytes());
-                    }
-
-                    return Ok(Some(specific_return_type_name));
-                }
-            }
-        }
-
-        //没有任何泛型参数
         let specific_return_type_name = if let Some(target_name) = target {
             //有目标对象
-            if function.is_static() {
-                //静态函数，则返回目标对象的具体类型名
-                get_specific_ts_class_name(target_name)
+            if filter_type_args(target_name) == filter_type_args(return_type_name.get_name()) {
+                //返回类型为目标对象
+                if function.is_static() {
+                    //静态函数，则返回目标对象的具体类型名
+                    get_specific_ts_class_name(target_name)
+                } else {
+                    //函数，则返回本地对象类型名
+                    get_ts_type_name(return_type_name.get_name().as_str())
+                }
             } else {
-                //函数，则返回本地对象类型名
+                //返回类型为其它类型
                 get_ts_type_name(return_type_name.get_name().as_str())
             }
         } else {
@@ -960,4 +925,10 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
         _ => "object".to_string(),
     }
+}
+
+//过滤指定类型的所有类型参数
+fn filter_type_args(type_name: &str) -> String {
+    let vec: Vec<&str> = type_name.split('<').collect();
+    vec[0].to_string()
 }
