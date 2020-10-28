@@ -12,13 +12,13 @@ use crate::{WORKER_RUNTIME,
 /*
 * 默认的ts本地环境文件名
 */
-const DEFAULT_NATIVE_ENV_FILE_NAME: &str = "native_env.ts";
+const DEFAULT_NATIVE_ENV_FILE_NAME: &str = "native_env.d.ts";
 
 /*
 * 默认的ts本地环境文件内容
 */
 const DEFAULT_NATIVE_ENV_FILE_CONTENT: &str = r#"//本地对象
-export declare var NativeObject: NativeObjectClass;
+declare var NativeObject: NativeObjectClass;
 
 //本地对象同步返回值类型
 type NativeObjectRetType = undefined|boolean|number|string|ArrayBuffer|ArrayBufferView|Error|object;
@@ -42,7 +42,7 @@ declare class NativeObjectRegistry {
 /*
 * 默认代理ts文件导入的类型
 */
-const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"import { NativeObject } from '../native_env';\n\n";
+const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"";
 
 /*
 * 在指定的ts文件根目录中创建本地环境文件
