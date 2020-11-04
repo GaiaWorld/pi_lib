@@ -397,7 +397,9 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
     source_content.put_slice((create_tab(level) + "private constructor(self: object) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = self;\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "if(!NativeObject.registry) {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 2) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     //生成类的释放方法
