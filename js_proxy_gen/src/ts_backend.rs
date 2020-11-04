@@ -402,6 +402,14 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
+    //生成类的获取私有本地对象方法
+    source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " * 获取本地对象方法\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " */\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "pubilc get_self(self: object) {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return this.self;\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
+
     //生成类的释放方法
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 释放本地对象的方法\n").as_bytes());
