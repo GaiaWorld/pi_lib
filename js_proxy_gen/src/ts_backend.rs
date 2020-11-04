@@ -406,7 +406,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 获取本地对象方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "pubilc get_self() {\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "public get_self() {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "return this.self;\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
