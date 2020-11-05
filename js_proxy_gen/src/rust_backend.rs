@@ -469,8 +469,7 @@ fn generate_function_call(target: Option<&String>,
                 match args[0].0.as_str() {
                     "&self" => {
                         //参数是方法接收器的只读引用
-                        source_content.put_slice((create_tab(level) + "let obj_arc = obj.get_ref::<" + target_name.as_str() + ">().unwrap();\n").as_bytes());
-                        source_content.put_slice((create_tab(level) + "let self_obj = obj_arc.as_ref();\n").as_bytes());
+                        source_content.put_slice((create_tab(level) + "let self_obj = obj.get_ref::<" + target_name.as_str() + ">().unwrap();\n").as_bytes());
                     },
                     "&mut self" => {
                         //参数是方法接收器的可写引用
@@ -974,8 +973,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                     other_type.to_string()
                 };
 
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + "_arc = val.get_ref::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = " + arg_name.as_str() + "_arc.as_ref();\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.get_ref::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 let real_other_type = if arg_type.get_type_args().is_some() {
                     arg_type.to_string()
