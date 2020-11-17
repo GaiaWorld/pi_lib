@@ -961,6 +961,355 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
+        "Vec<bool>" => {
+            //生成匹配布尔值数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bool(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val);\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to bool failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
+            //生成匹配有符号整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Int(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
+            //生成匹配无符号整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Uint(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<f32>" | alias@"Vec<f64>" => {
+            //生成匹配浮点数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Float(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<String>" => {
+            //生成匹配字符串数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Str(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.clone());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to String failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Arc<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Arc<[u8]>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Arc::from(val.bytes()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Arc<[u8]> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Box<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Box<[u8]>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Box::new(val.bytes().to_vec()).into_boxed_slice());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Box<[u8]> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Arc<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Arc<Vec<u8>>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Arc::new(val.bytes().to_vec()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Arc<Vec<u8>> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Box<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Box<Vec<u8>>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Box::new(val.bytes().to_vec()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Box<Vec<u8>> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Vec<u8>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Vec<u8>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.bytes().to_vec());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Vec<u8> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
         other_type => {
             //生成匹配其它类型的只读引用的代码，例: &NativeObject
             source_content.put_slice((create_tab(level) + "NativeObjectValue::NatObj(val) => {\n").as_bytes());
@@ -1405,7 +1754,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             let mut current_level = level;
             if let Some(generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<i8>() || r.is::<i16>() || r.is::<i32>() || r.is::<i64>() || r.is::<i128>() || r.is::<isize>() => {\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
             }
 
@@ -1439,7 +1788,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             let mut current_level = level;
             if let Some(generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<u8>() || r.is::<u16>() || r.is::<u32>() || r.is::<u64>() || r.is::<u128>() || r.is::<usize>() => {\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
             }
 
@@ -1473,7 +1822,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             let mut current_level = level;
             if let Some(generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<f32>() || r.is::<f64>() => {\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
             }
 
@@ -1718,7 +2067,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             if function.is_async() {
                 //生成异步返回代码
                 if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(*r))));\n").as_bytes());
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from((*r).into_boxed_slice()))));\n").as_bytes());
                 } else if return_type.is_only_read() {
                     source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(r.to_vec().into_boxed_slice()))));\n").as_bytes());
                 } else if return_type.is_writable() {
@@ -1727,7 +2076,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             } else {
                 //生成同步返回代码
                 if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(*r))));\n").as_bytes());
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from((*r).into_boxed_slice()))));\n").as_bytes());
                 } else if return_type.is_only_read() {
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(r.to_vec().into_boxed_slice()))));\n").as_bytes());
                 } else if return_type.is_writable() {
@@ -1766,6 +2115,396 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(r.to_vec().into_boxed_slice()))));\n").as_bytes());
                 } else if return_type.is_writable() {
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Bin(NativeArrayBuffer::from(r.to_vec().into_boxed_slice()))));\n").as_bytes());
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<bool>" => {
+            //生成匹配布尔值数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<bool>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bool(val));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<bool> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<bool> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<bool> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<bool> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
+            //生成匹配有符号整数数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Int(val));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
+            //生成匹配无符号整数数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Uint(val));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        alias@"Vec<f32>" | alias@"Vec<f64>" => {
+            //生成匹配浮点数数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Float(val));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<String>" => {
+            //生成匹配字符串数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<String>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Str(val));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<String> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<String> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<String> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<String> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<Arc<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Arc<[u8]>>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bin(NativeArrayBuffer::from(val.to_vec().into_boxed_slice())));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Arc<[u8]>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Arc<[u8]>> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Arc<[u8]>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Arc<[u8]>> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<Box<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Box<[u8]>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bin(NativeArrayBuffer::from(val)));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Box<[u8]> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Box<[u8]> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Box<[u8]> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Box<[u8]> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<Arc<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Arc<Vec<u8>>>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bin(NativeArrayBuffer::from(val.to_vec().into_boxed_slice())));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<Box<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Box<Vec<u8>>>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bin(NativeArrayBuffer::from((*val).into_boxed_slice())));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Box<Vec<u8>>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Box<Vec<u8>>> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Arc<Vec<u8>>> type", func_name)));
+                }
+            }
+
+            if generic_type.is_some() {
+                //泛型的具体类型，则生成匹配项结束
+                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+            }
+        },
+        "Vec<Vec<u8>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            let mut current_level = level;
+            if let Some(generic_type) = generic_type {
+                //泛型的具体类型，则生成匹配项开始
+                source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<u8>>>() => {\n").as_bytes());
+                current_level += 1;
+            }
+
+            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
+            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Bin(NativeArrayBuffer::from(val.into_boxed_slice())));\n").as_bytes());
+            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
+
+            if function.is_async() {
+                //生成异步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Vec<u8>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Vec<u8>> type", func_name)));
+                }
+            } else {
+                //生成同步返回代码
+                if return_type.is_moveable() {
+                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
+                } else if return_type.is_only_read() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<Vec<u8>> type", func_name)));
+                } else if return_type.is_writable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<Vec<u8>> type", func_name)));
                 }
             }
 

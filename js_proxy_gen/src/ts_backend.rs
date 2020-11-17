@@ -941,6 +941,10 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" => "number".to_string(),
         "str" | "String" => "string".to_string(),
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
+        "Vec<bool>" => "boolean[]".to_string(),
+        "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u16>" | "Vec<u32>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
+        "Vec<String>" => "string[]".to_string(),
+        "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
         _ => "object".to_string(),
     }
 }
