@@ -414,12 +414,20 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 释放本地对象的方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "public destory() {\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "public destroy() {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "if(this.self == undefined) {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destory\");\n").as_bytes());
+    source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destroy\");\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = undefined;\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "NativeObject.relese(this.self);\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
+
+    //生成类的从指定本地对象构建当前类方法
+    source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " * 从指定本地对象构建当前类方法，此方法是不安全的，使用错误的本地对象将会导致调用时异常\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " */\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "static from(obj: object): " + specific_class_name.as_str() + " {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj);\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     if let Some(trait_impls) = trait_impls {
@@ -804,7 +812,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
         } else {
             //方法，则生成检查代码
             source_content.put_slice((create_tab(level) + "if(this.self == undefined) {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "throw new Error(\"" + get_specific_ts_class_name(target_name).as_str() + " object already destory\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "throw new Error(\"" + get_specific_ts_class_name(target_name).as_str() + " object already destroy\");\n").as_bytes());
             source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
             if function.is_async() {
