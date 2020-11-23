@@ -67,9 +67,9 @@ impl<O: Default + 'static> SingleTask<O> {
 * 单线程任务队列
 */
 pub struct SingleTasks<O: Default + 'static> {
-    id:             usize,                                          //绑定的线程唯一id
+    id:             usize,                                      //绑定的线程唯一id
     consumer:       Arc<RefCell<MpscRecv<Arc<SingleTask<O>>>>>, //任务消费者
-    producer:       Arc<MpscSent<Arc<SingleTask<O>>>>,            //任务生产者
+    producer:       Arc<MpscSent<Arc<SingleTask<O>>>>,          //任务生产者
 }
 
 unsafe impl<O: Default + 'static> Send for SingleTasks<O> {}
