@@ -70,6 +70,8 @@ pub struct SingleTasks<O: Default + 'static> {
     id:             usize,                                      //绑定的线程唯一id
     consumer:       Arc<RefCell<MpscRecv<Arc<SingleTask<O>>>>>, //任务消费者
     producer:       Arc<MpscSent<Arc<SingleTask<O>>>>,          //任务生产者
+    consume_count:  Arc<AtomicUsize>,                           //任务消费计数
+    produce_count:  Arc<AtomicUsize>,                           //任务生产计数
 }
 
 unsafe impl<O: Default + 'static> Send for SingleTasks<O> {}
@@ -81,6 +83,8 @@ impl<O: Default + 'static> Clone for SingleTasks<O> {
             id: self.id,
             consumer: self.consumer.clone(),
             producer: self.producer.clone(),
+            consume_count: self.consume_count.clone(),
+            produce_count: self.produce_count.clone(),
         }
     }
 }
@@ -89,17 +93,23 @@ impl<O: Default + 'static> SingleTasks<O> {
     //获取任务数量
     #[inline]
     pub fn len(&self) -> usize {
-        self.consumer.as_ref().borrow().len()
+        if let Some(len) = self.produce_count.load(Ordering::Relaxed).checked_sub(self.consume_count.load(Ordering::Relaxed)) {
+            len
+        } else {
+            0
+        }
     }
 
     //向单线程任务队列头推入指定的任务
     pub fn push_front(&self, task: Arc<SingleTask<O>>) {
         self.consumer.as_ref().borrow_mut().push_front(task);
+        self.produce_count.fetch_add(1, Ordering::Relaxed);
     }
 
     //向单线程任务队列尾推入指定的任务
     pub fn push_back(&self, task: Arc<SingleTask<O>>) -> Result<()> {
         self.producer.send(task);
+        self.produce_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -134,7 +144,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 
     //获取当前运行时待处理任务数量
     pub fn wait_len(&self) -> usize {
-        (self.0).1.consumer.as_ref().borrow().len()
+        self.len()
     }
 
     //获取当前运行时任务数量
@@ -252,6 +262,8 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             id: (rt_uid << 8) & 0xffff | 1,
             consumer: Arc::new(RefCell::new(consumer)),
             producer: Arc::new(producer),
+            consume_count: Arc::new(AtomicUsize::new(0)),
+            produce_count: Arc::new(AtomicUsize::new(0)),
         });
 
         //构建本地定时器和定时异步任务生产者
@@ -315,6 +327,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
                 return Ok(0);
             },
             Some(task) => {
+                (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
                 run_task(task);
             },
         }
@@ -352,6 +365,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
 
         //执行异步任务
         for task in (self.runtime.0).1.consumer.as_ref().borrow_mut().try_recv_all() {
+            (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
             run_task(task);
         }
 
