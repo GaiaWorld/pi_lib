@@ -945,6 +945,7 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u16>" | "Vec<u32>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
         "Vec<String>" => "string[]".to_string(),
         "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
+        "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),
         _ => "object".to_string(),
     }
 }
