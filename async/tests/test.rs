@@ -673,17 +673,16 @@ fn test_steal_deque() {
         }
     });
 
-    let join4 = thread::spawn(move || {
-        for _ in 0..16000000 {
-            receiver.try_recv();
-        }
-        println!("!!!!!!len: {:?}, time: {:?}", receiver.len(), Instant::now() - start);
-    });
-
     join0.join();
     join1.join();
     join2.join();
     join3.join();
+
+    let join4 = thread::spawn(move || {
+        while let Some(_) = receiver.try_recv() {}
+        println!("!!!!!!len: {:?}, time: {:?}", receiver.len(), Instant::now() - start);
+    });
+
     join4.join();
 }
 
@@ -2551,7 +2550,7 @@ fn test_rw_lock() {
             });
         }
     });
-    thread::sleep(Duration::from_millis(20000));
+    thread::sleep(Duration::from_millis(30000));
 
     let rt0_ = rt0.clone();
     let rt1_ = rt1.clone();
@@ -2586,7 +2585,7 @@ fn test_rw_lock() {
             });
         }
     });
-    thread::sleep(Duration::from_millis(15000));
+    thread::sleep(Duration::from_millis(20000));
 
     let rt0_ = rt0.clone();
     let rt1_ = rt1.clone();
@@ -3187,7 +3186,7 @@ fn test_async_value() {
         }
         println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
     }
-    thread::sleep(Duration::from_millis(10000));
+    thread::sleep(Duration::from_millis(30000));
 
     {
         let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
