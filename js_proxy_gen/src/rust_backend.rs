@@ -741,6 +741,58 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             }
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配有符号整数类型的代码，当浮点数被强制转为有符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = (*val) as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配无符号整数类型的代码，当浮点数被强制转为无符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = (*val) as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
+            }
+
+            let next_index = index + 1;
+            if next_index == args.len() {
+                //实参列表已生成完成，则生成函数调用代码
+                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
+                    return Err(e);
+                }
+            } else {
+                //否则继续生成下一个参数的代码
+                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
+                    return Err(e);
+                }
+            }
+
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         "str" => {
             //生成匹配字符串类型的代码
