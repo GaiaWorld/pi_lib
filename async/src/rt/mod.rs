@@ -807,6 +807,7 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
 */
 pub fn spawn_worker_thread<F0, F1>(thread_name: &str,
                                    thread_stack_size: usize,
+                                   thread_status: Arc<AtomicBool>,
                                    condvar_waker: Arc<(AtomicBool, Mutex<()>, Condvar)>, //用于唤醒运行时所在线程的条件变量
                                    sleep_timeout: u64,                                   //休眠超时时长，单位毫秒
                                    loop_interval: Option<u64>,                           //工作者线程循环的间隔时长，None为无间隔，单位毫秒
@@ -814,15 +815,14 @@ pub fn spawn_worker_thread<F0, F1>(thread_name: &str,
                                    get_queue_len: F1) -> Arc<AtomicBool>
     where F0: Fn() -> (bool, Duration) + Send + 'static,
           F1: Fn() -> usize + Send + 'static {
-    let worker_thread_status = Arc::new(AtomicBool::new(true));
-    let worker_thread_status_copy = worker_thread_status.clone();
+    let thread_status_copy = thread_status.clone();
 
     thread::Builder::new()
         .name(thread_name.to_string())
         .stack_size(thread_stack_size).spawn(move || {
         let mut sleep_count = 0;
 
-        while worker_thread_status.load(Ordering::Relaxed) {
+        while thread_status.load(Ordering::Relaxed) {
             let (is_no_task, run_time) = loop_func();
 
             if is_no_task {
@@ -877,7 +877,7 @@ pub fn spawn_worker_thread<F0, F1>(thread_name: &str,
         }
     });
 
-    worker_thread_status_copy
+    thread_status_copy
 }
 
 //唤醒工作者所在线程，如果线程当前正在运行，则忽略

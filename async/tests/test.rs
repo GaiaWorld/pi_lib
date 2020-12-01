@@ -3912,6 +3912,7 @@ fn test_async_wait_all() {
 
 #[test]
 fn test_worker_runtime() {
+    let thread_status = Arc::new(AtomicBool::new(true));
     let thread_waker: Arc<(AtomicBool, ParkingLotMutex<()>, Condvar)> = Arc::new((AtomicBool::new(false), ParkingLotMutex::new(()), Condvar::new()));
     let runner = SingleTaskRunner::with_thread_waker(Some(thread_waker.clone()));
     let rt = AsyncRuntime::Worker(Arc::new(AtomicBool::new(true)), thread_waker.clone(), runner.startup().unwrap());
@@ -3919,6 +3920,7 @@ fn test_worker_runtime() {
     let rt_copy = rt.clone();
     spawn_worker_thread("Test-Worker-Runtime",
                         1024 * 1024,
+                        thread_status,
                         thread_waker,
                         1000,
                         None,
