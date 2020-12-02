@@ -1,6 +1,7 @@
 use std::slice::Iter;
 
 
+#[derive(Debug)]
 pub struct LayerDirty {
     dirtys: Vec<Vec<usize>>, // 按层放置的脏节点
     count: usize,            // 脏节点数量

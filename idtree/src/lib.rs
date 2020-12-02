@@ -257,6 +257,11 @@ impl<T: Default> IdTree<T> {
         prev: usize,
         next: usize,
     ) -> usize {
+		// 调用该方法，该节点可能已经存在，并且是将该节点插入到原位置
+		// 如果插入到原位置，则无需操作
+		if id == prev || id == next {
+			return layer;
+		}
         let (count, fix_prev, fix_next) = match self.map.get_mut(id) {
             Some(n) => {
                 if n.parent != parent {
@@ -269,19 +274,19 @@ impl<T: Default> IdTree<T> {
                     n.parent = parent;
                     n.layer = layer;
                     n.prev = prev;
-                    n.next = next;
+					n.next = next;
                     (n.count + 1, n.children.head, 0)
                 } else {
                     // 调整
                     let fix_prev = n.prev;
                     let fix_next = n.next;
                     n.prev = prev;
-                    n.next = next;
+					n.next = next;
                     (0, fix_prev, fix_next)
                 }
             }
             _ => panic!("invalid id: {}", id),
-        };
+		};
         // 修改prev和next的节点
         if prev > 0 {
             let node = unsafe { self.map.get_unchecked_mut(prev) };
@@ -318,7 +323,7 @@ impl<T: Default> IdTree<T> {
         }
         let p = {
             // 修改parent的children, count
-            let node = unsafe { self.map.get_unchecked_mut(parent) };
+			let node = unsafe { self.map.get_unchecked_mut(parent) };
             if prev == 0 {
                 node.children.head = id;
             }
@@ -335,7 +340,7 @@ impl<T: Default> IdTree<T> {
         }
         if layer > 0 {
             self.insert_tree(fix_prev, layer + 1);
-        }
+		}
         layer
     }
     // 插入到树上， 就是递归设置每个子节点的layer
@@ -387,11 +392,11 @@ impl<T: Default> IdTree<T> {
         // 修改prev和next的节点
         if prev > 0 {
             let node = unsafe { self.map.get_unchecked_mut(prev) };
-            node.next = next;
+			node.next = next;
         }
         if next > 0 {
             let node = unsafe { self.map.get_unchecked_mut(next) };
-            node.prev = prev;
+			node.prev = prev;
         }
         
             // 修改parent的children, count

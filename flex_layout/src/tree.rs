@@ -49,9 +49,8 @@ pub fn set_display(id: usize, v: Display, dirty: &mut LayerDirty, tree: &IdTree,
 	let parent = n.parent();
 	let state = i_node.state;
 	if v != Display::None {
-		if calc_abs(other_style, i_node) {
-			calc_abs_rect(rect_style, other_style, i_node);
-		}
+		calc_rect(rect_style, other_style, i_node);
+		calc_abs(other_style, i_node);
 		calc_size_defined(rect_style, i_node);
 		set_self_dirty(dirty, id, n, i_node);
 		set_parent(i_nodes, tree, dirty, other_style, state, parent, true)
@@ -61,12 +60,15 @@ pub fn set_display(id: usize, v: Display, dirty: &mut LayerDirty, tree: &IdTree,
 }
 
 pub fn compute<T>(dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output = INode>, rect_styles: &impl Index<usize, Output = RectStyle>, other_styles: &impl Index<usize, Output = OtherStyle>, layouts: &mut impl IndexMut<usize, Output = LayoutR>, notify: fn(&mut T, usize, &LayoutR), notify_arg: &mut T) {
+	if dirty.count() > 0 {
+		debug_println!("compute: {:?}", dirty);
+	}
 	for (id, layer) in dirty.iter() {
 		let (node, i_node) = match tree.get(*id) {
 			Some(n) => (n,  &mut i_nodes[*id]),
 			_ => continue,
 		};
-		debug_println!("    calc: {:?} children_dirty:{:?} self_dirty:{:?} children_abs:{:?} children_abs_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} abs_rect:{:?} size_defined:{:?}, layer:{}", id, i_node.state.children_dirty(), i_node.state.self_dirty(), i_node.state.children_abs(), i_node.state.children_abs_rect(), i_node.state.children_no_align_self(), i_node.state.children_index(), i_node.state.vnode(), i_node.state.abs(), i_node.state.abs_rect(), i_node.state.size_defined(), layer);
+		debug_println!("    calc: {:?} children_dirty:{:?} self_dirty:{:?} children_abs:{:?} children_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} size_defined:{:?}, layer:{}", id, i_node.state.children_dirty(), i_node.state.self_dirty(), i_node.state.children_abs(), i_node.state.children_rect(), i_node.state.children_no_align_self(), i_node.state.children_index(), i_node.state.vnode(), i_node.state.abs(), i_node.state.size_defined(), layer);
 		let state = i_node.state;
 		if !(state.self_dirty() || state.children_dirty()) {
 			continue;
@@ -86,7 +88,7 @@ pub fn compute<T>(dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl Inde
 		let is_text = i_node.text.len() > 0;
 		if state.abs() {
 			// 如果节点是绝对定位， 则重新计算自身的布局数据
-			let (parent_size, flex) = if !i_node.state.abs_rect() {
+			let (parent_size, flex) = if !i_node.state.self_rect() {
 				// 如果节点自身不是绝对区域，则需要获得父容器的内容大小
 				let layout = &mut layouts[node.parent()];
 				let style = &other_styles[node.parent()];
@@ -147,9 +149,10 @@ fn set_parent(
 	let i_node = &mut i_nodes[parent];
     if !state.abs() {
         i_node.state.children_abs_false();
-    } else if !state.abs_rect() {
-        i_node.state.children_abs_rect_false();
     }
+	if !state.self_rect() {
+		i_node.state.children_rect_false();
+	}
     if style.align_self != AlignSelf::Auto {
         i_node.state.children_no_align_self_false();
     }
@@ -217,15 +220,16 @@ pub fn set_rect(
     if is_size {
         calc_size_defined(rect_style, i_node);
 	}
-	debug_println!("set rect dirty=====================");
+	
 	set_self_dirty(dirty, id, n, i_node);
+	let is_rect = calc_rect(rect_style, other_style, i_node);
 	// 如果是绝对定位，则仅设置自身脏
     let mark = if other_style.position_type == PositionType::Absolute {
-        calc_abs_rect(rect_style, other_style, i_node);
         false
     } else {
         true
-    };
+	};
+	debug_println!("set rect dirty=====================, id:{} state:{:?}", id, i_node.state);
     let parent = n.parent();
     let state = i_node.state;
     set_parent(i_nodes, tree, dirty, other_style, state, parent, mark)
@@ -241,7 +245,7 @@ fn calc_abs(style: &OtherStyle, n: &mut INode) -> bool {
     }
 }
 // 计算是否绝对区域
-fn calc_abs_rect(rect_style: &RectStyle, other_style: &OtherStyle, n: &mut INode) -> bool {
+fn calc_rect(rect_style: &RectStyle, other_style: &OtherStyle, n: &mut INode) -> bool {
     if other_style.position.start.is_points()
         && other_style.position.top.is_points()
         && rect_style.margin.start.is_points()
@@ -249,10 +253,10 @@ fn calc_abs_rect(rect_style: &RectStyle, other_style: &OtherStyle, n: &mut INode
         && rect_style.size.width.is_points()
         && rect_style.size.height.is_points()
     {
-        n.state.abs_rect_true();
+        n.state.self_rect_true();
         true
     } else {
-        n.state.abs_rect_false();
+        n.state.self_rect_false();
         false
     }
 }
@@ -268,6 +272,7 @@ fn calc_size_defined(style: &RectStyle, n: &mut INode) -> bool {
 }
 // 设置节点自身脏, 如果节点是size=auto并且不是绝对定位, 则返回父节点id，需要继续设置其父节点脏
 fn set_self_dirty(dirty: &mut LayerDirty, id: usize, n: &Node, i_node: &mut INode) -> usize {
+	debug_println!("set_self_dirty, id: {}, self_dirty:{}, children_dirty:{:?}, layer:{}", id, i_node.state.self_dirty(), i_node.state.children_dirty(), n.layer());
 	if !i_node.state.self_dirty() {
 		i_node.state.self_dirty_true();
 		if n.layer() > 0 {
@@ -304,6 +309,7 @@ pub fn mark_children_dirty(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Out
             break;
 		}
 		let n = &tree[id];
+		debug_println!("mark_children_dirty, id:{}, self_dirty:{}", id, i_node.state.self_dirty());
 		i_node.state.children_dirty_true();
 		if !i_node.state.self_dirty() {
 			dirty.mark(id, n.layer());
