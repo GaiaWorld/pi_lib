@@ -173,10 +173,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         match self {
             AsyncRuntime::Local(rt) => rt.wakeup(task_id),
             AsyncRuntime::Multi(rt) => rt.wakeup(task_id),
-            AsyncRuntime::Worker(_, worker_waker, rt) => {
-                rt.wakeup(task_id);
-                wakeup_worker_thread(worker_waker, rt);
-            },
+            AsyncRuntime::Worker(_, _, rt) => rt.wakeup(task_id),
         }
     }
 
