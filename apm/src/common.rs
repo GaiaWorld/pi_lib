@@ -167,7 +167,7 @@ impl SysStat {
     pub fn processor_count(&self) -> usize {
         self.inner.borrow_mut().refresh_system();
 
-        let count = self.inner.borrow().get_processor_list().len();
+        let count = self.inner.borrow().get_processors().len();
         if count == 1 {
             return 1;
         }
@@ -179,7 +179,7 @@ impl SysStat {
     pub fn cpu_usage(&self) -> f32 {
         self.inner.borrow_mut().refresh_system();
 
-        self.inner.borrow().get_processor_list()[0].get_cpu_usage()
+        self.inner.borrow().get_global_processor_info().get_cpu_usage()
     }
 
     //获取指定逻辑核心的占用率
@@ -187,7 +187,7 @@ impl SysStat {
         self.inner.borrow_mut().refresh_system();
 
         let inner = self.inner.borrow();
-        let array = inner.get_processor_list();
+        let array = inner.get_processors();
         let count = array.len();
         if count == 1 && n == 0 {
             return array[n].get_cpu_usage();
@@ -204,10 +204,10 @@ impl SysStat {
 
         let mut vec: Vec<f32>;
         let inner = self.inner.borrow();
-        let array = inner.get_processor_list();
+        let array = inner.get_processors();
         let count = array.len();
 
-        let cpu_usage = self.inner.borrow().get_processor_list()[0].get_cpu_usage();
+        let cpu_usage = self.cpu_usage();
 
         if count == 1 {
             vec = Vec::with_capacity(count);
@@ -292,11 +292,18 @@ impl SysStat {
 
     //获取网络io当前总流量，单位B
     pub fn net_io_usage(&self) -> (u64, u64) {
-        self.inner.borrow_mut().refresh_network();
+        self.inner.borrow_mut().refresh_networks();
 
+        let mut input = 0;
+        let mut output = 0;
         let inner = self.inner.borrow();
-        let net = inner.get_network();
-        (net.get_income(), net.get_outcome())
+        let net = inner.get_networks();
+        for (_, network) in net {
+            input += network.get_total_received();
+            output += network.get_total_transmitted();
+        }
+
+        (input, output)
     }
 
     //获取系统网络连接数

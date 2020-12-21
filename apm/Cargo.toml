@@ -5,11 +5,11 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 fnv = "1.0"
-sysinfo = "0.9"
+sysinfo = "0.15"
 netstat = "0.7"
 backtrace = "0.3"
-lazy_static = "1.3"
-parking_lot = "0.7"
+lazy_static = "1.4"
+parking_lot = "0.11"
 crossbeam-queue = "0.1"
 atom = { path = "../../pi_lib/atom" }
 
