@@ -1,7 +1,7 @@
 [package]
 name = "file"
 version = "0.1.0"
-authors = ["zmythleo <zmythleo@gmail.com>"]
+authors = ["vmos <vmos@fairblock.io>"]
 
 [dependencies]
 npnc = "*"
