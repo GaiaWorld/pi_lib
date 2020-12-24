@@ -13,7 +13,7 @@ use crate::{WORKER_RUNTIME,
 */
 #[cfg(target_os = "windows")]
 pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = r#"..\..\"#;
-#[cfg(target_os = "unix")]
+#[cfg(target_os = "linux")]
 pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = "../../";
 
 /*
@@ -21,7 +21,7 @@ pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = "../../";
 */
 #[cfg(target_os = "windows")]
 pub(crate) const DEFAULT_DEPEND_CRATE_NAME: &str = r#"pi_v8\vm_builtin"#;
-#[cfg(target_os = "unix")]
+#[cfg(target_os = "linux")]
 pub(crate) const DEFAULT_DEPEND_CRATE_NAME: &str = "pi_v8/vm_builtin";
 
 /*
