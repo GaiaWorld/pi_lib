@@ -265,17 +265,17 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         let queues_len = queues.len();
 
         let _ = THREAD_LOCAL_ID.try_with(move |id| {
-            let thread_id = unsafe { *id.get() };
-            if (self.0).0 == (thread_id >> 8 & 0xff) {
-                //当前派发线程，是当前运行时线程，则派发任务到当前运行时线程的任务队列
-                let queue = &queues[(thread_id & 0xff) - 1];
-                let task = Arc::new(MultiTask::new(task_id, queue.clone(), Some(Box::new(future).boxed())));
-
-                if let Some(last_task) = queue.try_push_back(task) {
-                    //尝试当前队列发送缓冲区尾推送失败，则更换到当前队列的接收队列尾
-                    queue.push_recv_back(last_task);
-                }
-            } else {
+            // let thread_id = unsafe { *id.get() };
+            // if (self.0).0 == (thread_id >> 8 & 0xff) {
+            //     //当前派发线程，是当前运行时线程，则派发任务到当前运行时线程的任务队列
+            //     let queue = &queues[(thread_id & 0xff) - 1];
+            //     let task = Arc::new(MultiTask::new(task_id, queue.clone(), Some(Box::new(future).boxed())));
+            //
+            //     if let Some(last_task) = queue.try_push_back(task) {
+            //         //尝试当前队列发送缓冲区尾推送失败，则更换到当前队列的接收队列尾
+            //         queue.push_recv_back(last_task);
+            //     }
+            // } else {
                 //当前派发线程，不是当前运行时线程，则随机选择派发的任务队列
                 let m = queues_len - 1;
                 let mut index: usize = (self.0).1.fetch_add(1, Ordering::Relaxed) % (self.0).2.len(); //随机选择一个线程的队列
@@ -296,7 +296,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
                         break;
                     }
                 }
-            }
+            // }
         });
 
         Ok(())
