@@ -125,14 +125,56 @@ fn parse_crate_depends(root: PathBuf,
 pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerater,
                                                  import_crates: Vec<Crate>,
                                                  generate_rust_path: PathBuf,
-                                                 generate_ts_path: PathBuf) -> Result<()> {
-    let mut map = WORKER_RUNTIME.map();
+                                                 generate_ts_path: PathBuf,
+                                                 is_concurrent: bool) -> Result<()> {
+    if is_concurrent {
+        //并发解析并生成代理源码，导出函数的序号不保证一致
+        let mut map = WORKER_RUNTIME.map();
 
-    for import_crate in import_crates {
-        let generater_copy = generater.clone();
-        let generate_rust_path_copy = generate_rust_path.clone();
-        let generate_ts_path_copy = generate_ts_path.clone();
-        let future = async move {
+        for import_crate in import_crates {
+            let generater_copy = generater.clone();
+            let generate_rust_path_copy = generate_rust_path.clone();
+            let generate_ts_path_copy = generate_ts_path.clone();
+            let future = async move {
+                if let Err(e) = generate_crate_proxy_source(generater_copy,
+                                                            &import_crate,
+                                                            generate_rust_path_copy.as_path(),
+                                                            generate_ts_path_copy.as_path()).await {
+                    //生成导入库的代理源码失败，则立即返回错误
+                    return Err(Error::new(ErrorKind::Other, format!("Generate proxy source failed, crate: {}, reason: {:?}", import_crate.get_info().get_package().get_name(), e)));
+                }
+
+                Ok(())
+            }.boxed();
+
+            map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+        }
+
+        match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
+            Err(e) => Err(e),
+            Ok(vec) => {
+                //异步解析所有导入库中的源码
+                let mut iter = vec.into_iter();
+                while let Some(Err(e)) = iter.next() {
+                    return Err(e);
+                }
+
+                //完成pi_v8的所有代理文件和所有代理文件的代码的生成，则创建代理库的入口文件，并生成入口文件的代码
+                let lib_path = generate_rust_path.join(LIB_FILE_NAME);
+                if let Err(e) = generate_crate_proxy_lib(generater, lib_path).await {
+                    return Err(e);
+                }
+
+                //完成创建代理和生成代理库入口文件，则创建ts的代理库本地环境文件，并生成本地环境文件的代码
+                generate_public_exports(generate_ts_path.as_path()).await
+            },
+        }
+    } else {
+        //顺序解析并生成代理源码，导出函数的序号保证一致
+        for import_crate in import_crates {
+            let generater_copy = generater.clone();
+            let generate_rust_path_copy = generate_rust_path.clone();
+            let generate_ts_path_copy = generate_ts_path.clone();
             if let Err(e) = generate_crate_proxy_source(generater_copy,
                                                         &import_crate,
                                                         generate_rust_path_copy.as_path(),
@@ -140,31 +182,16 @@ pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerate
                 //生成导入库的代理源码失败，则立即返回错误
                 return Err(Error::new(ErrorKind::Other, format!("Generate proxy source failed, crate: {}, reason: {:?}", import_crate.get_info().get_package().get_name(), e)));
             }
+        }
 
-            Ok(())
-        }.boxed();
+        //完成pi_v8的所有代理文件和所有代理文件的代码的生成，则创建代理库的入口文件，并生成入口文件的代码
+        let lib_path = generate_rust_path.join(LIB_FILE_NAME);
+        if let Err(e) = generate_crate_proxy_lib(generater, lib_path).await {
+            return Err(e);
+        }
 
-        map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
-    }
-
-    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
-        Err(e) => Err(e),
-        Ok(vec) => {
-            //异步解析所有导入库中的源码
-            let mut iter = vec.into_iter();
-            while let Some(Err(e)) = iter.next() {
-                return Err(e);
-            }
-
-            //完成pi_v8的所有代理文件和所有代理文件的代码的生成，则创建代理库的入口文件，并生成入口文件的代码
-            let lib_path = generate_rust_path.join(LIB_FILE_NAME);
-            if let Err(e) = generate_crate_proxy_lib(generater, lib_path).await {
-                return Err(e);
-            }
-
-            //完成创建代理和生成代理库入口文件，则创建ts的代理库本地环境文件，并生成本地环境文件的代码
-            generate_public_exports(generate_ts_path.as_path()).await
-        },
+        //完成创建代理和生成代理库入口文件，则创建ts的代理库本地环境文件，并生成本地环境文件的代码
+        generate_public_exports(generate_ts_path.as_path()).await
     }
 }
 
