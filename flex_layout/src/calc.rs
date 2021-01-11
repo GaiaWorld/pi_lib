@@ -1169,7 +1169,7 @@ impl Temp {
                 }
             }
             _ => {
-                if line.cross > cross + EPSILON {
+                if line.cross - cross > EPSILON {
                     if self.flex.flex_wrap != FlexWrap::WrapReverse {
                         (0.0, 0.0)
                     } else {
@@ -1316,7 +1316,7 @@ impl Temp {
         let end = *start + count;
         let mut pos = if normal { 0.0 } else { main };
         // 浮点误差计算
-        if main > item.main + EPSILON {
+        if main - item.main > EPSILON {
             // 表示需要放大
             if item.grow > 0.0 {
                 // grow 填充
@@ -1367,7 +1367,7 @@ impl Temp {
                 );
                 return;
             }
-        } else if main < item.main - EPSILON {
+        } else if EPSILON < item.main - main {
             if item.shrink > 0.0 {
                 // 表示需要收缩
                 let split = (item.main - main) / item.shrink;
@@ -1477,7 +1477,7 @@ impl LineInfo {
     fn add(&mut self, main: f32, info: &RelNodeInfo) {
 		debug_println!("add, main: {:?}, {:?}, self.item: {:?}", main, info, self.item);
         // 浮点误差判断是否折行
-        if (self.item.count > 0 && self.item.main + info.main + info.margin_main > main + EPSILON) || info.breakline {
+        if (self.item.count > 0 && self.item.main + info.main + info.margin_main - main > EPSILON) || info.breakline {
             self.cross += self.item.cross;
             let t = replace(&mut self.item, LineItem::default());
             self.items.push(t);
