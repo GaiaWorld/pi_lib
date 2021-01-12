@@ -19,6 +19,11 @@ use crate::{AsyncTask,
 use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
 
 /*
+* 默认的运行时空闲休眠时长，单位ms，运行时空闲是指绑定当前运行时的队列为空，且定时器内未到期的任务为空
+*/
+const DEFAULT_RUNTIME_SLEEP_TIME: u64 = 1000;
+
+/*
 * 线程唯一id
 */
 thread_local! {
@@ -265,17 +270,17 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         let queues_len = queues.len();
 
         let _ = THREAD_LOCAL_ID.try_with(move |id| {
-            let thread_id = unsafe { *id.get() };
-            if (self.0).0 == (thread_id >> 8 & 0xff) {
-                //当前派发线程，是当前运行时线程，则派发任务到当前运行时线程的任务队列
-                let queue = &queues[(thread_id & 0xff) - 1];
-                let task = Arc::new(MultiTask::new(task_id, queue.clone(), Some(Box::new(future).boxed())));
-
-                if let Some(last_task) = queue.try_push_back(task) {
-                    //尝试当前队列发送缓冲区尾推送失败，则更换到当前队列的接收队列尾
-                    queue.push_recv_back(last_task);
-                }
-            } else {
+            // let thread_id = unsafe { *id.get() };
+            // if (self.0).0 == (thread_id >> 8 & 0xff) {
+            //     //当前派发线程，是当前运行时线程，则派发任务到当前运行时线程的任务队列
+            //     let queue = &queues[(thread_id & 0xff) - 1];
+            //     let task = Arc::new(MultiTask::new(task_id, queue.clone(), Some(Box::new(future).boxed())));
+            //
+            //     if let Some(last_task) = queue.try_push_back(task) {
+            //         //尝试当前队列发送缓冲区尾推送失败，则更换到当前队列的接收队列尾
+            //         queue.push_recv_back(last_task);
+            //     }
+            // } else {
                 //当前派发线程，不是当前运行时线程，则随机选择派发的任务队列
                 let m = queues_len - 1;
                 let mut index: usize = (self.0).1.fetch_add(1, Ordering::Relaxed) % (self.0).2.len(); //随机选择一个线程的队列
@@ -296,7 +301,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
                         break;
                     }
                 }
-            }
+            // }
         });
 
         Ok(())
@@ -619,12 +624,18 @@ fn timer_work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
 
                 //获取任务失败，则准备休眠
                 let diff_time = run_millis() - last_run_millis;
-                let real_timeout = if diff_time > timeout {
-                    //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
-                    continue;
+                let real_timeout = if timer.lock().len() == 0 {
+                    //当前定时器没有未到期的任务，则休眠默认时长
+                    DEFAULT_RUNTIME_SLEEP_TIME
                 } else {
-                    //定时器内部时间与当前时间差距不大，则休眠差值时间
-                    timeout - diff_time
+                    //当前定时器还有未到期的任务，则计算需要休眠的时长
+                    if diff_time > timeout {
+                        //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
+                        continue;
+                    } else {
+                        //定时器内部时间与当前时间差距不大，则休眠差值时间
+                        timeout - diff_time
+                    }
                 };
                 queue.sleep_worker(); //设置队列工作者的状态为已休眠
                 {

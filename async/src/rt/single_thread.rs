@@ -6,7 +6,7 @@ use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, Condvar};
 use crossbeam_channel::{Sender, unbounded};
 use futures::{future::{FutureExt, BoxFuture}, task::{ArcWake, waker_ref}};
 
@@ -30,6 +30,18 @@ unsafe impl<O: Default + 'static> Sync for SingleTask<O> {}
 impl<O: Default + 'static> ArcWake for SingleTask<O> {
     fn wake_by_ref(arc_self: &Arc<Self>) {
         let _ = arc_self.queue.push_back(arc_self.clone());
+
+        if let Some(waker) = &arc_self.queue.thread_waker {
+            //当前任务队列绑定了所在线程的唤醒器，则快速检查是否需要唤醒所在线程
+            if waker.0.load(Ordering::Relaxed) {
+                let (is_sleep, lock, condvar) = &**waker;
+                let locked = lock.lock();
+                if is_sleep.compare_and_swap(true, false, Ordering::SeqCst) {
+                    //确认需要唤醒，则唤醒
+                    let _ = condvar.notify_one();
+                }
+            }
+        }
     }
 }
 
@@ -68,8 +80,11 @@ impl<O: Default + 'static> SingleTask<O> {
 */
 pub struct SingleTasks<O: Default + 'static> {
     id:             usize,                                          //绑定的线程唯一id
-    consumer:       Arc<RefCell<MpscRecv<Arc<SingleTask<O>>>>>, //任务消费者
-    producer:       Arc<MpscSent<Arc<SingleTask<O>>>>,            //任务生产者
+    consumer:       Arc<RefCell<MpscRecv<Arc<SingleTask<O>>>>>,     //任务消费者
+    producer:       Arc<MpscSent<Arc<SingleTask<O>>>>,              //任务生产者
+    consume_count:  Arc<AtomicUsize>,                               //任务消费计数
+    produce_count:  Arc<AtomicUsize>,                               //任务生产计数
+    thread_waker:   Option<Arc<(AtomicBool, Mutex<()>, Condvar)>>,    //绑定线程的唤醒器
 }
 
 unsafe impl<O: Default + 'static> Send for SingleTasks<O> {}
@@ -81,6 +96,9 @@ impl<O: Default + 'static> Clone for SingleTasks<O> {
             id: self.id,
             consumer: self.consumer.clone(),
             producer: self.producer.clone(),
+            consume_count: self.consume_count.clone(),
+            produce_count: self.produce_count.clone(),
+            thread_waker: self.thread_waker.clone(),
         }
     }
 }
@@ -89,17 +107,23 @@ impl<O: Default + 'static> SingleTasks<O> {
     //获取任务数量
     #[inline]
     pub fn len(&self) -> usize {
-        self.consumer.as_ref().borrow().len()
+        if let Some(len) = self.produce_count.load(Ordering::Relaxed).checked_sub(self.consume_count.load(Ordering::Relaxed)) {
+            len
+        } else {
+            0
+        }
     }
 
     //向单线程任务队列头推入指定的任务
     pub fn push_front(&self, task: Arc<SingleTask<O>>) {
         self.consumer.as_ref().borrow_mut().push_front(task);
+        self.produce_count.fetch_add(1, Ordering::Relaxed);
     }
 
     //向单线程任务队列尾推入指定的任务
     pub fn push_back(&self, task: Arc<SingleTask<O>>) -> Result<()> {
         self.producer.send(task);
+        self.produce_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -134,7 +158,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 
     //获取当前运行时待处理任务数量
     pub fn wait_len(&self) -> usize {
-        (self.0).1.consumer.as_ref().borrow().len()
+        self.len()
     }
 
     //获取当前运行时任务数量
@@ -245,6 +269,11 @@ unsafe impl<O: Default + 'static> Sync for SingleTaskRunner<O> {}
 impl<O: Default + 'static> SingleTaskRunner<O> {
     //构建单线程异步任务执行器
     pub fn new() -> Self {
+        SingleTaskRunner::with_thread_waker(None)
+    }
+
+    //用绑定线程的唤醒器，构建单线程任务队列
+    pub fn with_thread_waker(thread_waker: Option<Arc<(AtomicBool, Mutex<()>, Condvar)>>) -> Self {
         //构建单线程任务队列
         let rt_uid = alloc_rt_uid();
         let (producer, consumer) = mpsc_deque();
@@ -252,6 +281,9 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             id: (rt_uid << 8) & 0xffff | 1,
             consumer: Arc::new(RefCell::new(consumer)),
             producer: Arc::new(producer),
+            consume_count: Arc::new(AtomicUsize::new(0)),
+            produce_count: Arc::new(AtomicUsize::new(0)),
+            thread_waker,
         });
 
         //构建本地定时器和定时异步任务生产者
@@ -315,6 +347,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
                 return Ok(0);
             },
             Some(task) => {
+                (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
                 run_task(task);
             },
         }
@@ -352,6 +385,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
 
         //执行异步任务
         for task in (self.runtime.0).1.consumer.as_ref().borrow_mut().try_recv_all() {
+            (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
             run_task(task);
         }
 

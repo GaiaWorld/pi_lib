@@ -12,13 +12,13 @@ use crate::{WORKER_RUNTIME,
 /*
 * 默认的ts本地环境文件名
 */
-const DEFAULT_NATIVE_ENV_FILE_NAME: &str = "native_env.ts";
+const DEFAULT_NATIVE_ENV_FILE_NAME: &str = "native_env.d.ts";
 
 /*
 * 默认的ts本地环境文件内容
 */
 const DEFAULT_NATIVE_ENV_FILE_CONTENT: &str = r#"//本地对象
-export declare var NativeObject: NativeObjectClass;
+declare var NativeObject: NativeObjectClass;
 
 //本地对象同步返回值类型
 type NativeObjectRetType = undefined|boolean|number|string|ArrayBuffer|ArrayBufferView|Error|object;
@@ -42,7 +42,7 @@ declare class NativeObjectRegistry {
 /*
 * 默认代理ts文件导入的类型
 */
-const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"import { NativeObject } from '../native_env';\n\n";
+const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"";
 
 /*
 * 在指定的ts文件根目录中创建本地环境文件
@@ -397,19 +397,37 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
     source_content.put_slice((create_tab(level) + "private constructor(self: object) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = self;\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "if(NativeObject.registry != undefined) {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 2) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
+
+    //生成类的获取私有本地对象方法
+    source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " * 获取本地对象方法\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " */\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "public get_self() {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return this.self;\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     //生成类的释放方法
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 释放本地对象的方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "public destory() {\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "public destroy() {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "if(this.self == undefined) {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destory\");\n").as_bytes());
+    source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destroy\");\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = undefined;\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "NativeObject.relese(this.self);\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
+
+    //生成类的从指定本地对象构建当前类方法
+    source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " * 从指定本地对象构建当前类方法，此方法是不安全的，使用错误的本地对象将会导致调用时异常\n").as_bytes());
+    source_content.put_slice((create_tab(level) + " */\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "static from(obj: object): " + specific_class_name.as_str() + " {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj);\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     if let Some(trait_impls) = trait_impls {
@@ -657,54 +675,19 @@ fn generate_ts_function_return(target: Option<&String>,
             },
         };
 
-        if let Some(generic) = generic {
-            //目标对象有泛型参数
-            for (generic_name, specific_types) in generic.get_ref() {
-                if return_type_name.get_name() == generic_name {
-                    //泛型参数名相同，则使用具体类型替换泛型类型
-                    let specific_return_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-
-                    if function.is_async() {
-                        //异步函数
-                        source_content.put_slice((": Promise<".to_string() + specific_return_type_name.as_str() + "> {\n").as_bytes());
-                    } else {
-                        //同步函数
-                        source_content.put_slice((": ".to_string() + specific_return_type_name.as_str() + other_return_type_name.as_str() + " {\n").as_bytes());
-                    }
-
-                    return Ok(Some(specific_return_type_name));
-                }
-            }
-        }
-
-        if let Some(generic) = function.get_generic() {
-            //函数有泛型参数
-            for (generic_name, specific_types) in generic.get_ref() {
-                if return_type_name.get_name() == generic_name {
-                    //泛型参数名相同，则使用具体类型替换泛型类型
-                    let specific_return_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-
-                    if function.is_async() {
-                        //异步函数
-                        source_content.put_slice((": Promise<".to_string() + specific_return_type_name.as_str() + "> {\n").as_bytes());
-                    } else {
-                        //同步函数
-                        source_content.put_slice((": ".to_string() + specific_return_type_name.as_str() + other_return_type_name.as_str() + " {\n").as_bytes());
-                    }
-
-                    return Ok(Some(specific_return_type_name));
-                }
-            }
-        }
-
-        //没有任何泛型参数
         let specific_return_type_name = if let Some(target_name) = target {
             //有目标对象
-            if function.is_static() {
-                //静态函数，则返回目标对象的具体类型名
-                get_specific_ts_class_name(target_name)
+            if filter_type_args(target_name) == filter_type_args(return_type_name.get_name()) {
+                //返回类型为目标对象
+                if function.is_static() {
+                    //静态函数，则返回目标对象的具体类型名
+                    get_specific_ts_class_name(target_name)
+                } else {
+                    //函数，则返回本地对象类型名
+                    get_ts_type_name(return_type_name.get_name().as_str())
+                }
             } else {
-                //函数，则返回本地对象类型名
+                //返回类型为其它类型
                 get_ts_type_name(return_type_name.get_name().as_str())
             }
         } else {
@@ -772,10 +755,8 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                             source_content.put_slice((create_tab(level) + "let r: object = await result;\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "if(r instanceof Error) {\n").as_bytes());
                             source_content.put_slice((create_tab(level + 1) + "throw r;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "} else if(r instanceof Object) {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(r);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return;\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(r);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "}\n").as_bytes());
                         } else {
                             //当前异步静态方法，不是当前目标对象的构造方法
@@ -810,10 +791,8 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                             source_content.put_slice(b") as object;\n");
                             source_content.put_slice((create_tab(level) + "if(result instanceof Error) {\n").as_bytes());
                             source_content.put_slice((create_tab(level + 1) + "throw result;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "} else if(result instanceof Object) {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(result);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return;\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(result);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "}\n").as_bytes());
                         } else {
                             //当前同步静态方法，不是当前目标对象的构造方法
@@ -829,7 +808,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
         } else {
             //方法，则生成检查代码
             source_content.put_slice((create_tab(level) + "if(this.self == undefined) {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "throw new Error(\"" + get_specific_ts_class_name(target_name).as_str() + " object already destory\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "throw new Error(\"" + get_specific_ts_class_name(target_name).as_str() + " object already destroy\");\n").as_bytes());
             source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
             if function.is_async() {
@@ -958,6 +937,17 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" => "number".to_string(),
         "str" | "String" => "string".to_string(),
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
+        "Vec<bool>" => "boolean[]".to_string(),
+        "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u16>" | "Vec<u32>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
+        "Vec<String>" => "string[]".to_string(),
+        "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
+        "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),
         _ => "object".to_string(),
     }
+}
+
+//过滤指定类型的所有类型参数
+fn filter_type_args(type_name: &str) -> String {
+    let vec: Vec<&str> = type_name.split('<').collect();
+    vec[0].to_string()
 }

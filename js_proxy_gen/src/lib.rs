@@ -41,43 +41,60 @@ lazy_static! {
 }
 
 /*
-* 递归分析指定库列表下的所有源文件，返回指定库列表中声明了导出的库列表
+* 递归分析指定库列表下的所有源文件，可以指定是否并发分析，返回指定库列表中声明了导出的库列表
 */
-pub async fn parse_crates(dirs: Vec<PathBuf>) -> Result<Vec<Crate>> {
+pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec<Crate>> {
     let mut crates = Vec::new();
 
-    let mut map = WORKER_RUNTIME.map();
-    for path in dirs {
-        let future = async move {
-            match parse_crate(path).await {
-                Err(e) => {
-                    Err(e)
-                },
-                Ok(c) => {
-                    Ok(c)
-                }
-            }
-        }.boxed();
-
-        map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
-    }
-
-    match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), true).await {
-        Err(e) => Err(e),
-        Ok(vec) => {
-            for r in vec {
-                match r {
+    if is_concurrent {
+        //并发递归分析，导出函数的序号不保证一致
+        let mut map = WORKER_RUNTIME.map();
+        for path in dirs {
+            let future = async move {
+                match parse_crate(path).await {
                     Err(e) => {
-                        return Err(e);
+                        Err(e)
                     },
                     Ok(c) => {
-                        crates.push(c);
-                    },
+                        Ok(c)
+                    }
+                }
+            }.boxed();
+
+            map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+        }
+
+        match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
+            Err(e) => Err(e),
+            Ok(vec) => {
+                for r in vec {
+                    match r {
+                        Err(e) => {
+                            return Err(e);
+                        },
+                        Ok(c) => {
+                            crates.push(c);
+                        },
+                    }
+                }
+
+                Ok(crates)
+            },
+        }
+    } else {
+        //顺序递归分析，导出函数的序号保证一致
+        for path in dirs {
+            match parse_crate(path).await {
+                Err(e) => {
+                    return Err(e);
+                },
+                Ok(c) => {
+                    crates.push(c);
                 }
             }
+        }
 
-            Ok(crates)
-        },
+        Ok(crates)
     }
 }
 
@@ -184,12 +201,13 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
 }
 
 /*
-* 分析声明了导出的库列表，则创建指定路径的代理库，并生成相应的代理文件和代理代码
+* 分析声明了导出的库列表，则创建指定路径的代理库，并生成相应的代理文件和代理代码，可以指定是否并发生成
 */
 pub async fn generate_proxy_crate(path: PathBuf,
                                   ts_proxy_root: PathBuf,
                                   version: &str,
                                   edition: &str,
+                                  is_concurrent: bool,
                                   crates: Vec<Crate>) -> Result<()> {
     match abs_path(path.as_path()) {
         Err(e) => {
@@ -236,7 +254,8 @@ pub async fn generate_proxy_crate(path: PathBuf,
                             if let Err(e) = generate_crates_proxy_source(&generater,
                                                                          crates,
                                                                          src_path.clone(),
-                                                                         proxy_ts_path.clone()).await {
+                                                                         proxy_ts_path.clone(),
+                                                                         is_concurrent).await {
                                 Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
                             } else {
                                 Ok(())
@@ -288,7 +307,7 @@ fn test_create_bind_crate() {
         let filename = PathBuf::from(r#".\tests\pi_v8_ext\"#);
         let path = cwd.join(filename.strip_prefix("./").unwrap());
         let root = PathBuf::from(r#".\tests"#);
-        let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)]).await.unwrap();
+        let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)], true).await.unwrap();
         let ts_proxy_root = PathBuf::from(r#".\tests\pi_v8_ext\ts"#);
 
         match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
