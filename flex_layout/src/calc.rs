@@ -946,7 +946,7 @@ impl Cache {
                 let h =
                     calc_content_size(h, border.top, border.bottom, padding.top, padding.bottom);
                 let mut cache = Cache::new(
-                    flex.clone(),
+                    flex,
                     Size {
                         width: w,
                         height: h,
