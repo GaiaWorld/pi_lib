@@ -623,7 +623,7 @@ fn timer_work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
                 }
 
                 //获取任务失败，则准备休眠
-                let diff_time = run_millis() - last_run_millis;
+                let diff_time = run_millis().checked_sub(last_run_millis).unwrap_or(0);
                 let real_timeout = if timer.lock().len() == 0 {
                     //当前定时器没有未到期的任务，则休眠默认时长
                     DEFAULT_RUNTIME_SLEEP_TIME
