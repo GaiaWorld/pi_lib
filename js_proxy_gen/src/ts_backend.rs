@@ -761,7 +761,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         } else {
                             //当前异步静态方法，不是当前目标对象的构造方法
                             source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                            source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
                         }
                     } else {
                         //异步静态函数没有有返回值
@@ -830,7 +830,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     if let Some(specific_return_type_name) = &specific_return_type_name {
                         //异步方法有返回值
                         source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                        source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                        source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
                     } else {
                         //异步方法没有有返回值
                         source_content.put_slice(b");\n")
@@ -884,7 +884,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                 if let Some(specific_return_type_name) = &specific_return_type_name {
                     //异步静态函数有返回值
                     source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                    source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                    source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
                 } else {
                     //异步静态函数没有有返回值
                     source_content.put_slice(b");\n")
