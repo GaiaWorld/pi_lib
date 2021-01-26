@@ -22,7 +22,6 @@ use crate::utils::{ParseContext,
                    AttributeTokensFilter,
                    WithParseSpecificTypeStackFrame,
                    LibPathNext};
-use syn::export::quote::__private::ext::RepToTokensExt;
 
 /*
 * 导出标识符
