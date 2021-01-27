@@ -5,7 +5,6 @@ use std::cell::UnsafeCell;
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::task::{Waker, Context, Poll};
-use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::spin_lock::SpinLock;
 
@@ -37,10 +36,12 @@ impl<T> DerefMut for MutexGuard<T> {
 impl<T> Drop for MutexGuard<T> {
     fn drop(&mut self) {
         if let Some(waker) = {
+            //解锁当前互斥锁
             let mut status = self.guarder.status.lock();
             (&mut status).0 = true;
             status.1.pop_front()
         } {
+            //有异步互斥锁任务等待当前异步互斥锁释放，则唤醒此互斥锁任务
             waker.wake();
         }
     }
@@ -119,6 +120,6 @@ impl<T> Future for FutureMutex<T> {
 
         //尝试获取异步互斥锁失败，则加入锁等待队列
         status.1.push_back(cx.waker().clone());
-        return Poll::Pending;
+        Poll::Pending
     }
 }
