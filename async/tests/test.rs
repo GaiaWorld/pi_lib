@@ -1739,7 +1739,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(15000));
+    thread::sleep(Duration::from_millis(30000));
 
     {
         let start = Instant::now();
@@ -1818,7 +1818,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(5000));
+    thread::sleep(Duration::from_millis(30000));
 
     //锁跨临界区传递，且不需要等待此跨临界区的锁，不会产生deadlock
     {
@@ -1851,7 +1851,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(5000));
+    thread::sleep(Duration::from_millis(30000));
     println!("!!!!!!valid test finish");
 
     //锁跨临界区传递，且需要等待此跨临界区的锁，会产生deadlock
