@@ -1701,7 +1701,7 @@ fn test_mutex_lock() {
             println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
         });
     }
-    thread::sleep(Duration::from_millis(20000));
+    thread::sleep(Duration::from_millis(30000));
 
     {
         let start = Instant::now();
