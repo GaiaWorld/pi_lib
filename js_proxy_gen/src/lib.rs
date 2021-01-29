@@ -316,7 +316,7 @@ fn test_create_bind_crate() {
             },
             Ok(src_path) => {
                 let generater = ProxySourceGenerater::new();
-                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone()).await {
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone(), false).await {
                     panic!("Test generate proxy file failed, {:?}", e);
                 }
             },
