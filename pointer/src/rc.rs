@@ -116,7 +116,7 @@ pub struct A{
 }
 
 #[cfg(test)]
-rc!(RCA, A, _rc_slab);
+rc!(RCA, A, _RC_SLAB);
 
 #[test]
 fn test(){

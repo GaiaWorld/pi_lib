@@ -123,43 +123,43 @@ use std::sync::Arc;
 use std::rc::Rc;
 
 pub trait AsAny: Any {
-    fn as_any(&self) -> &Any;
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<T: Any> AsAny for T {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 }
 
 pub trait AsMutAny: Any {
-    fn as_any_mut(&mut self) -> &mut Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<T: Any> AsMutAny for T {
-    fn as_any_mut(&mut self) -> &mut Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 pub trait BoxAny: AsAny + AsMutAny {
-    fn into_any(self: Box<Self>) -> Box<Any>;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
 }
 
 impl<T: AsAny + AsMutAny> BoxAny for T {
-     fn into_any(self: Box<Self>) -> Box<Any> { self }
+     fn into_any(self: Box<Self>) -> Box<dyn Any> { self }
 }
 
 pub trait RcAny: AsAny + 'static {
-    fn into_any(self: Rc<Self>) -> Rc<Any>;
+    fn into_any(self: Rc<Self>) -> Rc<dyn Any>;
 }
 
 impl<T: AsAny> RcAny for T {
-     fn into_any(self: Rc<Self>) -> Rc<Any> { self }
+     fn into_any(self: Rc<Self>) -> Rc<dyn Any> { self }
 }
 
 pub trait ArcAny: AsAny + 'static + Send + Sync {
-    fn into_any(self: Arc<Self>) -> Arc<Any + 'static + Send + Sync>;
+    fn into_any(self: Arc<Self>) -> Arc<dyn Any + 'static + Send + Sync>;
 }
 
 impl<T: AsAny + 'static + Send + Sync> ArcAny for T {
-     fn into_any(self: Arc<Self>) -> Arc<Any + 'static + Send + Sync> { self }
+     fn into_any(self: Arc<Self>) -> Arc<dyn Any + 'static + Send + Sync> { self }
 }
 
 

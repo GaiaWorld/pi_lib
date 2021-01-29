@@ -2,6 +2,7 @@
 extern crate rand;
 
 extern crate flame;
+#[allow(unused_imports)]
 #[macro_use]
 extern crate flamer;
 
@@ -23,7 +24,7 @@ use std::fmt;
 use std::ptr::NonNull;
 
 use rand::prelude::*;
-use rand::{Rng, SeedableRng};
+use rand::{Rng};
 use rand::rngs::SmallRng;
 
 use timer::{Timer, Runer};
@@ -43,13 +44,13 @@ pub struct TaskPool<T: Debug + 'static>{
 
     delay_queue: Timer<DelayTask<T>>,
 
-    handler: Arc<Fn(QueueType, usize)>,
+    handler: Arc<dyn Fn(QueueType, usize)>,
     count: AtomicUsize,
     rng: Arc<Mutex<SmallRng>>,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
-    pub fn new(timer: Timer<DelayTask<T>>, handler: Arc<Fn(QueueType, usize)>) -> Self {
+    pub fn new(timer: Timer<DelayTask<T>>, handler: Arc<dyn Fn(QueueType, usize)>) -> Self {
         // let timer = Timer::new(10);
         // timer.run();
         TaskPool {
@@ -665,7 +666,7 @@ pub enum DelayTask<T: 'static> {
         index: usize,
         async_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>)>)>,
         task:  NonNull<T>,
-        handler: Arc<Fn(QueueType, usize)>,
+        handler: Arc<dyn Fn(QueueType, usize)>,
     },//异步任务
     Sync{
         queue_id: usize,
@@ -673,7 +674,7 @@ pub enum DelayTask<T: 'static> {
         direc: Direction,
         sync_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>)>)>,
         task:  NonNull<T>,
-        handler: Arc<Fn(QueueType, usize)>,
+        handler: Arc<dyn Fn(QueueType, usize)>,
     }//同步任务Sync(队列id, push方向)
 }
 
@@ -789,7 +790,7 @@ use time::run_millis;
 
 #[test]
 fn test(){
-    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Arc::new(|ty, n| {}));
+    let task_pool: TaskPool<u32> = TaskPool::new(Timer::new(10), Arc::new(|_ty, _n| {}));
 
     let queue1 = task_pool.create_dyn_queue(1);
     let queue2 = task_pool.create_dyn_queue(2);
@@ -900,7 +901,7 @@ fn test(){
 
 #[test]
 fn test_effect(){
-    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|ty, n| {}));
+    let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|_ty, _n| {}));
 
     let time = run_millis();
     for i in 1..100001 {

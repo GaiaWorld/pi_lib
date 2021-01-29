@@ -57,7 +57,7 @@ impl<T: 'static> SyncPool<T>{
     #[inline]
     pub fn is_locked(&self, id: usize) -> bool {
         match self.slab.try_load(id) {
-            Some(i) => {
+            Some(_i) => {
                 let class = self.slab.get_class(id).clone();
                 match class {
                     IndexType::HalfLockQueue => true,
@@ -156,7 +156,7 @@ impl<T: 'static> SyncPool<T>{
             },
             IndexType::HalfLockQueue => {
                 let (id, weight)  = {
-                    let mut q = unsafe { self.slab.get_unchecked_mut(queue_id) };
+                    let q = unsafe { self.slab.get_unchecked_mut(queue_id) };
                     let id = q.2.push_back((task, index));
                     (id, q.2.get_weight())
                 };
@@ -167,7 +167,7 @@ impl<T: 'static> SyncPool<T>{
             },
             IndexType::Queue => {
                 let (index, weight, q_i) = {
-                    let mut q = unsafe{self.slab.get_unchecked_mut(queue_id)};
+                    let q = unsafe{self.slab.get_unchecked_mut(queue_id)};
                     let index = q.2.push_back((task, index));
                     (index, q.2.get_weight(), q.0)
                 };
@@ -192,7 +192,7 @@ impl<T: 'static> SyncPool<T>{
             },
             IndexType::HalfLockQueue => {
                 let (id, weight)  = {
-                    let mut q = unsafe { self.slab.get_unchecked_mut(queue_id) };
+                    let q = unsafe { self.slab.get_unchecked_mut(queue_id) };
                     let id = q.2.push_front((task, index));
                     (id, q.2.get_weight())
                 };
@@ -202,7 +202,7 @@ impl<T: 'static> SyncPool<T>{
             },
             IndexType::Queue => {
                 let (index, weight, q_i) = {
-                    let mut q = unsafe { self.slab.get_unchecked_mut(queue_id) };
+                    let q = unsafe { self.slab.get_unchecked_mut(queue_id) };
                     let index = q.2.push_front((task, index));
                     (index, q.2.get_weight(), q.0)
                 };

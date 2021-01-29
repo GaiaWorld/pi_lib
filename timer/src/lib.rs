@@ -107,7 +107,7 @@ impl<T: 'static + Send + Runer> Timer<T>{
 
 pub struct TimerImpl<T: Send + Runer>{
 	wheel: Wheel<T>,
-	statistics: Statistics,
+	_statistics: Statistics,
 	clock_ms: u64,
 }
 
@@ -118,10 +118,10 @@ impl<T: Send + Runer> TimerImpl<T>{
         }
 		TimerImpl{
 			wheel: Wheel::new(), 
-			statistics: Statistics::new(),
+			_statistics: Statistics::new(),
 			clock_ms: clock_ms,
 		}
-	}
+    }
 
     pub fn clear(&mut self){
         self.wheel.clear();
@@ -131,14 +131,14 @@ impl<T: Send + Runer> TimerImpl<T>{
 pub struct FuncRuner(usize, usize);
 
 impl FuncRuner{
-    pub fn new(f: Box<FnOnce()>) -> Self {
+    pub fn new(f: Box<dyn FnOnce()>) -> Self {
         unsafe { transmute(f) }
     }
 }
 
 impl Runer for FuncRuner {
     fn run(self, _index: usize){
-        let func: Box<FnOnce()> = unsafe { transmute((self.0, self.1)) };
+        let func: Box<dyn FnOnce()> = unsafe { transmute((self.0, self.1)) };
         func();
     }
 }
@@ -200,7 +200,7 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>){
 }
 
 //执行任务，返回任务执行完的时间
-fn run_task<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>){
+fn run_task<T: Send + Runer>(_timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>){
     let start = TIMER_RUN_TIME.start();
 	let mut j = r.len();
 	TIMER_RUN_COUNT.sum(r.len());

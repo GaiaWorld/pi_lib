@@ -23,7 +23,6 @@ members = [
   "timer",
   "ucd",
   "util",
-  "wcs",
   "wheel",
   "wtree",
   "deque",

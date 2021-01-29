@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Instant, Duration};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crossbeam_channel::{Sender, Receiver, unbounded};
+use crossbeam_channel::{unbounded};
 
 use local_timer::LocalTimer;
 

@@ -6,7 +6,7 @@ extern crate ecs_derive;
 
 use ecs::component::{ Component};
 use map::vecmap::VecMap;
-use hashmap::HashMap;
+// use hashmap::HashMap;
 
 #[derive(Component)]
 pub struct Position{

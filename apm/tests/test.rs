@@ -16,7 +16,7 @@ use apm::linux::{LinuxSysStat, current_tid};
 
 use apm::allocator::{CounterSystemAllocator, alloced_size};
 use apm::trace::StackTracer;
-use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter};
+use apm::counter::{GLOBAL_PREF_COLLECT};
 
 #[global_allocator]
 static ALLOCATOR: CounterSystemAllocator = CounterSystemAllocator;
@@ -550,7 +550,7 @@ fn test_counter() {
         println!("{}", n);
         let mut count = 0;
         let mut dyn_iter = GLOBAL_PREF_COLLECT.dynamic_iter();
-        while let Some((cid, counter)) = dyn_iter.next() {
+        while let Some((_cid, _counter)) = dyn_iter.next() {
             count += 1;
 //            println!("\t{}: {}", cid, counter.load(Ordering::Relaxed));
         }

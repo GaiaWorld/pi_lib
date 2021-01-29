@@ -123,18 +123,19 @@ impl<T> EntityImpl<T> {
         id
 	}
 	
-    pub fn mark(&mut self, id: usize, bit_index: usize) {
+    pub fn mark(&mut self, _id: usize, _bit_index: usize) {
         // let mask = self.slab.get_mut(id).unwrap();
         // *mask |= 1 << bit_index;
     }
-    pub fn un_mark(&mut self, id: usize, bit_index: usize) {
+    pub fn un_mark(&mut self, _id: usize, _bit_index: usize) {
         // match self.slab.get_mut(id) {
         //     Some(mask) => *mask &= !(1 << bit_index),
         //     _ => (),
         // }
     }
     pub fn delete(&mut self, id: usize) {
-        let mask = self.slab.remove(id);
+        // let _mask = self.slab.remove(id);
+        self.slab.remove(id);
         self.notify.modify_event(id, "", 0);
         // if mask == 0 {
         //     return;

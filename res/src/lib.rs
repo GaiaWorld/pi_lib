@@ -1,4 +1,3 @@
-#![feature(weak_counts)]
 
 extern crate deque;
 extern crate hash;

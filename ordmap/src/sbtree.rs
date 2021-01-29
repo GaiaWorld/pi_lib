@@ -9,7 +9,7 @@ macro_rules! custom_ref { ($x:ident) => (
 use std::cmp::{Ord, Ordering};
 //use std::ops::{Generator, GeneratorState};
 use std::marker::PhantomData;
-use std::mem::{uninitialized};
+use std::mem::zeroed;
 use std::ops::Deref;
 
 //use std::fmt::{Debug};
@@ -735,7 +735,7 @@ impl<'a, K: 'a + Clone + Ord, V: 'a + Clone> Iter<'a> for Tree<K, V>{
 	type IterType = IterTree<'a, K, V>;
 	fn iter(&self, key: Option<&K>, descending: bool) -> Self::IterType{
 		let mut it = IterTree{
-			arr: unsafe{uninitialized()},
+			arr: unsafe{zeroed()},
 			len: 0,
 			next_fn: IterTree::next_ascending,
 			marker: PhantomData
@@ -765,7 +765,7 @@ impl<'a, K: 'a + Clone + Ord, V: 'a + Clone> Iter<'a> for Tree<K, V>{
 	}
 } 
 
-fn creat_node<K: Ord + Clone, V: Clone>(arr: &mut Vec<Entry<K, V>>, start: usize, len: usize) -> (Node<K, V>){
+fn creat_node<K: Ord + Clone, V: Clone>(arr: &mut Vec<Entry<K, V>>, start: usize, len: usize) -> Node<K, V>{
 	let r_size = (len-1)/2;
 	let l_size = len - r_size - 1;
 	let index = start + l_size;

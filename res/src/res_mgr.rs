@@ -394,20 +394,20 @@ pub fn test() {
     let blend_state = res_mgr.fetch_map::<R6>(0).unwrap();
     let sampler_res = res_mgr.fetch_map::<R4>(0).unwrap();
     let u_color_ubo = res_mgr.fetch_map::<R9>(0).unwrap();
-    let MsdfStrokeUbo = res_mgr.fetch_map::<R11>(0).unwrap();
-    let CanvasTextStrokeColorUbo = res_mgr.fetch_map::<R12>(0).unwrap();
-    let GeometryRes = res_mgr.fetch_map::<R2>(0).unwrap();
+    let msdf_stroke_ubo = res_mgr.fetch_map::<R11>(0).unwrap();
+    let canvas_text_stroke_color_ubo = res_mgr.fetch_map::<R12>(0).unwrap();
+    let geometry_res = res_mgr.fetch_map::<R2>(0).unwrap();
 
     let texture = unsafe { &mut *(&*texture as *const ResMap<R1> as *mut ResMap<R1>) };
     let buffer = unsafe { &mut *(&*buffer as *const ResMap<R3> as *mut ResMap<R3>) };
     let blend_state = unsafe { &mut *(&*blend_state as *const ResMap<R6> as *mut ResMap<R6>) };
     let sampler_res = unsafe { &mut *(&*sampler_res as *const ResMap<R4> as *mut ResMap<R4>) };
     let u_color_ubo = unsafe { &mut *(&*u_color_ubo as *const ResMap<R9> as *mut ResMap<R9>) };
-    let MsdfStrokeUbo =
-        unsafe { &mut *(&*MsdfStrokeUbo as *const ResMap<R11> as *mut ResMap<R11>) };
-    let CanvasTextStrokeColorUbo =
-        unsafe { &mut *(&*CanvasTextStrokeColorUbo as *const ResMap<R12> as *mut ResMap<R12>) };
-    let GeometryRes = unsafe { &mut *(&*GeometryRes as *const ResMap<R2> as *mut ResMap<R2>) };
+    let msdf_stroke_ubo =
+        unsafe { &mut *(&*msdf_stroke_ubo as *const ResMap<R11> as *mut ResMap<R11>) };
+    let canvas_text_stroke_color_ubo =
+        unsafe { &mut *(&*canvas_text_stroke_color_ubo as *const ResMap<R12> as *mut ResMap<R12>) };
+    let geometry_res = unsafe { &mut *(&*geometry_res as *const ResMap<R2> as *mut ResMap<R2>) };
 
     texture.create(Atom::from("__$text"), R1 {}, 262144, 0);
     buffer.create(3902250154, R3 {}, 32, 0);
@@ -417,8 +417,8 @@ pub fn test() {
     sampler_res.create(308248423, R4 {}, 0, 0);
     sampler_res.create(2591543091, R4 {}, 0, 0);
     u_color_ubo.create(2106312588, R9 {}, 0, 0);
-    MsdfStrokeUbo.create(3879787636, R11 {}, 0, 0);
-    CanvasTextStrokeColorUbo.create(1145791972, R12 {}, 0, 0);
+    msdf_stroke_ubo.create(3879787636, R11 {}, 0, 0);
+    canvas_text_stroke_color_ubo.create(1145791972, R12 {}, 0, 0);
     u_color_ubo.create(796366362, R9 {}, 0, 0);
 
     res_mgr.collect(0);
@@ -433,60 +433,60 @@ pub fn test() {
     texture.create(Atom::from("3"), R1 {}, 1572864, 0);
 
     buffer.create(1156469915, R3 {}, 32, 0);
-    GeometryRes.create(940515885, R2 {}, 0, 0);
+    geometry_res.create(940515885, R2 {}, 0, 0);
     buffer.create(2294013149, R3 {}, 32, 0);
-    GeometryRes.create(1197965350, R2 {}, 0, 0);
+    geometry_res.create(1197965350, R2 {}, 0, 0);
     buffer.create(2418548769, R3 {}, 32, 0);
-    GeometryRes.create(203047359, R2 {}, 0, 0);
+    geometry_res.create(203047359, R2 {}, 0, 0);
 
     texture.create(Atom::from("4"), R1 {}, 4194304, 0);
 
     buffer.create(2402797892, R3 {}, 32, 0);
-    GeometryRes.create(1733445847, R2 {}, 0, 0);
+    geometry_res.create(1733445847, R2 {}, 0, 0);
     texture.create(Atom::from("4"), R1 {}, 4194304, 0);
     texture.create(Atom::from("5"), R1 {}, 4194304, 0);
 
     buffer.create(1, R3 {}, 32, 0);
-    GeometryRes.create(1, R2 {}, 0, 0);
+    geometry_res.create(1, R2 {}, 0, 0);
     buffer.create(2, R3 {}, 32, 0);
-    GeometryRes.create(2, R2 {}, 0, 0);
+    geometry_res.create(2, R2 {}, 0, 0);
     res_mgr.collect(2000);
 
     texture.create(Atom::from("6"), R1 {}, 1048576, 0);
 
     buffer.create(3, R3 {}, 32, 0);
-    GeometryRes.create(3, R2 {}, 0, 0);
+    geometry_res.create(3, R2 {}, 0, 0);
     buffer.create(4, R3 {}, 32, 0);
-    GeometryRes.create(4, R2 {}, 0, 0);
+    geometry_res.create(4, R2 {}, 0, 0);
     u_color_ubo.create(1009613414, R9 {}, 0, 0);
     buffer.create(5, R3 {}, 32, 0);
-    GeometryRes.create(5, R2 {}, 0, 0);
+    geometry_res.create(5, R2 {}, 0, 0);
     buffer.create(6, R3 {}, 32, 0);
-    GeometryRes.create(6, R2 {}, 0, 0);
+    geometry_res.create(6, R2 {}, 0, 0);
     buffer.create(7, R3 {}, 32, 0);
-    GeometryRes.create(7, R2 {}, 0, 0);
+    geometry_res.create(7, R2 {}, 0, 0);
     buffer.create(8, R3 {}, 32, 0);
-    GeometryRes.create(8, R2 {}, 0, 0);
+    geometry_res.create(8, R2 {}, 0, 0);
     buffer.create(9, R3 {}, 32, 0);
-    GeometryRes.create(9, R2 {}, 0, 0);
+    geometry_res.create(9, R2 {}, 0, 0);
     u_color_ubo.create(4173812235, R9 {}, 0, 0);
     texture.create(Atom::from("7"), R1 {}, 1572864, 0);
     texture.create(Atom::from("8"), R1 {}, 65536, 0);
     buffer.create(10, R3 {}, 32, 0);
-    GeometryRes.create(10, R2 {}, 0, 0);
+    geometry_res.create(10, R2 {}, 0, 0);
     texture.create(Atom::from("16"), R1 {}, 1048576, 0);
     texture.create(Atom::from("9"), R1 {}, 2097152, 0);
     texture.create(Atom::from("10"), R1 {}, 1048576, 0);
     texture.create(Atom::from("11"), R1 {}, 2097152, 0);
     texture.create(Atom::from("12"), R1 {}, 2097152, 0);
     buffer.create(11, R3 {}, 32, 0);
-    GeometryRes.create(11, R2 {}, 0, 0);
+    geometry_res.create(11, R2 {}, 0, 0);
     buffer.create(12, R3 {}, 32, 0);
-    GeometryRes.create(12, R2 {}, 0, 0);
+    geometry_res.create(12, R2 {}, 0, 0);
     buffer.create(13, R3 {}, 32, 0);
-    GeometryRes.create(13, R2 {}, 0, 0);
+    geometry_res.create(13, R2 {}, 0, 0);
     buffer.create(14, R3 {}, 32, 0);
-    GeometryRes.create(14, R2 {}, 0, 0);
+    geometry_res.create(14, R2 {}, 0, 0);
 
     texture.create(Atom::from("13"), R1 {}, 2097152, 0);
 

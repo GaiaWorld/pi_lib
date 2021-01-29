@@ -241,7 +241,7 @@ fn deserializing_errors() {
     enum Test {
         One,
         Two,
-    };
+    }
 
     match *deserialize::<Test>(&vec![0, 0, 0, 5][..]).unwrap_err() {
         // Error message comes from serde

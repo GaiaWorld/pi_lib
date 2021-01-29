@@ -1,13 +1,19 @@
+
+
 #![feature(prelude_import)]
 #![no_std]
 #![feature(proc_macro_hygiene)]
 #![feature(stmt_expr_attributes)]
+
+#[allow(unused_imports)]
 #[prelude_import]
 use std::prelude::v1::*;
+
 #[macro_use]
 extern crate std;
 
 ///一个基本的例子， 定义组件， 实体， 系统， 已经如何实例化World并运行（TODO）
+#[allow(unused_imports)]
 #[macro_use]
 extern crate ecs;
 extern crate atom;
@@ -89,7 +95,7 @@ impl<'a> MultiCaseListener<'a, Node, Position, CreateEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = ();
 
-    fn listen(&mut self, event: &CreateEvent, read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("listen Position create. id:{}, position: {:?}", event.id, read.get(event.id));
     }
 }
@@ -98,7 +104,7 @@ impl<'a> MultiCaseListener<'a, Node, Position, ModifyEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = ();
 
-    fn listen(&mut self, event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("listen Position modity. id:{}, position: {:?}", event.id, read.get(event.id));
     }
 }
@@ -107,7 +113,7 @@ impl<'a> MultiCaseListener<'a, Node, Position, DeleteEvent> for SystemDemo {
     type ReadData = &'a MultiCaseImpl<Node, Position>;
     type WriteData = ();
 
-    fn listen(&mut self, event: &DeleteEvent, read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("listen Position delete. id:{}, position: {:?}", event.id, read.get(event.id));
     }
 }
@@ -117,7 +123,7 @@ impl<'a> SingleCaseListener<'a, View, ModifyEvent> for SystemDemo {
     type ReadData = &'a SingleCaseImpl<View>;
     type WriteData = ();
 
-    fn listen(&mut self, _event: &ModifyEvent, read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &ModifyEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("slisten View modify. view: {:?}", &read.value);
     }
 }
@@ -127,7 +133,7 @@ impl<'a> EntityListener<'a, Node, CreateEvent> for SystemDemo {
     type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn listen(&mut self, event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &CreateEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("elisten Node create. node: {:?}", event.id);
     }
 }
@@ -136,7 +142,7 @@ impl<'a> EntityListener<'a, Node, DeleteEvent> for SystemDemo {
     type ReadData = ();
     type WriteData = &'a mut MultiCaseImpl<Node, Position>;
 
-    fn listen(&mut self, event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
+    fn listen(&mut self, _event: &DeleteEvent, _read: Self::ReadData, _write: Self::WriteData) {
         // println!("elisten Node delete. node: {:?}", event.id);
     }
 }
@@ -274,7 +280,7 @@ impl ::ecs::system::System for CellSystemDemo {
     }
     fn setup(
         &mut self,
-        me: std::sync::Arc<::ecs::system::System>,
+        me: std::sync::Arc<dyn ecs::system::System>,
         world: &::ecs::world::World,
         name: &Atom,
     ) {
@@ -494,7 +500,7 @@ impl ::ecs::system::System for CellSystemDemo {
             cost_time: std::time::Duration::from_millis(0),
         });
         self.run_fn = Some(::ecs::monitor::FnListener(share::Share::new(
-            move |e: &()| {
+            move |_e: &()| {
                 let runtime_ref = unsafe {
                     &mut *(runtime.as_ref() as *const Vec<::ecs::RunTime>
                         as *mut Vec<::ecs::RunTime>)
@@ -509,37 +515,37 @@ impl ::ecs::system::System for CellSystemDemo {
         self.dispose_listener_fn = Some(::ecs::monitor::FnListener(share::Share::new(
             move |world: &::ecs::world::World| {
                 let setup_target = world.fetch_multi::<Node, Position>().unwrap();
-                let r: Box<Fn(&CreateEvent)> =
+                let r: Box<dyn Fn(&CreateEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0]).clone()) };
                 let r: ::ecs::monitor::FnListener<CreateEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });
                 ::ecs::monitor::Notify::remove_create(&*setup_target, &r);
                 let setup_target = world.fetch_multi::<Node, Position>().unwrap();
-                let r: Box<Fn(&DeleteEvent)> =
+                let r: Box<dyn Fn(&DeleteEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0 + 1]).clone()) };
                 let r: ::ecs::monitor::FnListener<DeleteEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });
                 ::ecs::monitor::Notify::remove_delete(&*setup_target, &r);
                 let setup_target = world.fetch_multi::<Node, Position>().unwrap();
-                let r: Box<Fn(&ModifyEvent)> =
+                let r: Box<dyn Fn(&ModifyEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0 + 1 + 1]).clone()) };
                 let r: ::ecs::monitor::FnListener<ModifyEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });
                 ::ecs::monitor::Notify::remove_modify(&*setup_target, &r);
                 let setup_target = world.fetch_single::<View>().unwrap();
-                let r: Box<Fn(&ModifyEvent)> =
+                let r: Box<dyn Fn(&ModifyEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0 + 1 + 1 + 1]).clone()) };
                 let r: ::ecs::monitor::FnListener<ModifyEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });
                 ::ecs::monitor::Notify::remove_modify(&*setup_target, &r);
                 let setup_target = world.fetch_entity::<Node>().unwrap();
-                let r: Box<Fn(&CreateEvent)> =
+                let r: Box<dyn Fn(&CreateEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0 + 1 + 1 + 1 + 1]).clone()) };
                 let r: ::ecs::monitor::FnListener<CreateEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });
                 ::ecs::monitor::Notify::remove_create(&*setup_target, &r);
                 let setup_target = world.fetch_entity::<Node>().unwrap();
-                let r: Box<Fn(&DeleteEvent)> =
+                let r: Box<dyn Fn(&DeleteEvent)> =
                     unsafe { std::mem::transmute((&listen_arr[0 + 1 + 1 + 1 + 1 + 1]).clone()) };
                 let r: ::ecs::monitor::FnListener<DeleteEvent> =
                     ::ecs::monitor::FnListener(unsafe { share::Share::from_raw(Box::into_raw(r)) });

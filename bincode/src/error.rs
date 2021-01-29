@@ -40,25 +40,28 @@ pub enum ErrorKind {
 }
 
 impl StdError for ErrorKind {
-    fn description(&self) -> &str {
-        match *self {
-            ErrorKind::Io(ref err) => error::Error::description(err),
-            ErrorKind::InvalidUtf8Encoding(_) => "string is not valid utf8",
-            ErrorKind::InvalidBoolEncoding(_) => "invalid u8 while decoding bool",
-            ErrorKind::InvalidCharEncoding => "char is not valid",
-            ErrorKind::InvalidTagEncoding(_) => "tag for enum is not valid",
-            ErrorKind::SequenceMustHaveLength => {
-                "Bincode can only encode sequences and maps that have a knowable size ahead of time"
-            }
-            ErrorKind::DeserializeAnyNotSupported => {
-                "Bincode doesn't support serde::Deserializer::deserialize_any"
-            }
-            ErrorKind::SizeLimit => "the size limit has been reached",
-            ErrorKind::Custom(ref msg) => msg,
-        }
-    }
+    // fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    //     write!(f, "({}, {})", self.x, self.y)
+    // }
+    // fn description(&self) -> &str {
+    //     match *self {
+    //         ErrorKind::Io(ref err) => &err.to_string(),
+    //         ErrorKind::InvalidUtf8Encoding(_) => "string is not valid utf8",
+    //         ErrorKind::InvalidBoolEncoding(_) => "invalid u8 while decoding bool",
+    //         ErrorKind::InvalidCharEncoding => "char is not valid",
+    //         ErrorKind::InvalidTagEncoding(_) => "tag for enum is not valid",
+    //         ErrorKind::SequenceMustHaveLength => {
+    //             "Bincode can only encode sequences and maps that have a knowable size ahead of time"
+    //         }
+    //         ErrorKind::DeserializeAnyNotSupported => {
+    //             "Bincode doesn't support serde::Deserializer::deserialize_any"
+    //         }
+    //         ErrorKind::SizeLimit => "the size limit has been reached",
+    //         ErrorKind::Custom(ref msg) => msg,
+    //     }
+    // }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             ErrorKind::Io(ref err) => Some(err),
             ErrorKind::InvalidUtf8Encoding(_) => None,
@@ -83,16 +86,16 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ErrorKind::Io(ref ioerr) => write!(fmt, "io error: {}", ioerr),
-            ErrorKind::InvalidUtf8Encoding(ref e) => write!(fmt, "{}: {}", self.description(), e),
+            ErrorKind::InvalidUtf8Encoding(ref e) => write!(fmt, "string is not valid utf8: {}", e),
             ErrorKind::InvalidBoolEncoding(b) => {
-                write!(fmt, "{}, expected 0 or 1, found {}", self.description(), b)
+                write!(fmt, "{}, expected 0 or 1, found {}", "invalid u8 while decoding bool", b)
             }
-            ErrorKind::InvalidCharEncoding => write!(fmt, "{}", self.description()),
+            ErrorKind::InvalidCharEncoding => write!(fmt, "char is not valid"),
             ErrorKind::InvalidTagEncoding(tag) => {
-                write!(fmt, "{}, found {}", self.description(), tag)
+                write!(fmt, "tag for enum is not valid, found {}", tag)
             }
-            ErrorKind::SequenceMustHaveLength => write!(fmt, "{}", self.description()),
-            ErrorKind::SizeLimit => write!(fmt, "{}", self.description()),
+            ErrorKind::SequenceMustHaveLength => write!(fmt, "Bincode can only encode sequences and maps that have a knowable size ahead of time"),
+            ErrorKind::SizeLimit => write!(fmt, "the size limit has been reached"),
             ErrorKind::DeserializeAnyNotSupported => write!(
                 fmt,
                 "Bincode does not support the serde::Deserializer::deserialize_any method"
