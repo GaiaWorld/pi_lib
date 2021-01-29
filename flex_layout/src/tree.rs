@@ -222,7 +222,7 @@ pub fn set_rect(
 	}
 	
 	set_self_dirty(dirty, id, n, i_node);
-	let is_rect = calc_rect(rect_style, other_style, i_node);
+	let _is_rect = calc_rect(rect_style, other_style, i_node);
 	// 如果是绝对定位，则仅设置自身脏
     let mark = if other_style.position_type == PositionType::Absolute {
         false

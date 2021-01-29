@@ -61,7 +61,7 @@ impl Task {
         self.priority = priority;
     }
 
-    pub fn set_func(&mut self, func: Option<Box<FnOnce(Option<isize>)>>) {
+    pub fn set_func(&mut self, func: Option<Box<dyn FnOnce(Option<isize>)>>) {
         match func {
             Some(f) => {
                 let (x, y): (usize, usize) = unsafe { transmute(f) };
@@ -90,7 +90,7 @@ impl Task {
         if self.func == (0, 0) {
             return;
         }
-        let func: Box<FnOnce(Option<isize>)> = unsafe { transmute(self.func) };
+        let func: Box<dyn FnOnce(Option<isize>)> = unsafe { transmute(self.func) };
         func(lock);
     }
 }

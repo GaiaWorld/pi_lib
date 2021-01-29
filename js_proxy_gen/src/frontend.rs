@@ -1,12 +1,8 @@
-use std::path::Path;
 use std::io::{Error, Result, ErrorKind};
 
-use proc_macro2::{Span, TokenTree, TokenStream, Group};
-use syn::{self, spanned::Spanned};
+use proc_macro2::{TokenTree, TokenStream};
+use syn::{self};
 
-use r#async::{rt::{AsyncRuntime,
-                   single_thread::SingleTaskRuntime,
-                   multi_thread::MultiTaskRuntime}};
 use hash::XHashMap;
 
 use crate::utils::{ParseContext,
@@ -38,12 +34,12 @@ const TYPE_DEFINED_IDENT: &str = "type";
 */
 const DOCUMENT_ATTR_PATH_IDENT: &str = "doc";
 
-/*
-* 分析指定的Rust库
-*/
-pub fn parse_crate(path: &Path) -> Result<()> {
-    Ok(())
-}
+// /*
+// * 分析指定的Rust库
+// */
+// pub fn parse_crate(path: &Path) -> Result<()> {
+//     Ok(())
+// }
 
 /*
 * 分析指定的Rust源码

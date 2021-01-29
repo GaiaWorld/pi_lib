@@ -1,22 +1,21 @@
 use std::fs;
 use std::sync::Arc;
-use std::str::FromStr;
 use std::io::{Error, Result, ErrorKind};
 use std::path::{Path, PathBuf, Component};
 
-use futures::future::{FutureExt, BoxFuture};
+use futures::future::FutureExt;
 use toml;
 
 use r#async::rt::AsyncRuntime;
 use async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
-use bytes::{Buf, BufMut};
+use bytes::{BufMut};
 
 use crate::{WORKER_RUNTIME,
             rust_backend::{DEFAULT_DEPEND_CRATE_NAME, DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME, DEFAULT_PROXY_FUNCTION_BLOCK_END, DEFAULT_PROXY_LIB_FILE_USED, create_proxy_rust_file, generate_rust_import, generate_rust_functions},
             ts_backend::{generate_public_exports, create_proxy_ts_file, generate_ts_import, generate_ts_impls},
             utils::{SRC_DIR_NAME, LIB_FILE_NAME, BUILD_FILE_NAME,
-                    Crate, CrateInfo, ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater,
-                    abs_path, create_tab, get_target_type_name}};
+                    Crate, CrateInfo, ParseContext, ProxySourceGenerater,
+                    abs_path, create_tab}};
 
 /*
 * 异步创建指定名称、版本号和版本的pi_v8外部绑定库，初始化并返回库的源码路径

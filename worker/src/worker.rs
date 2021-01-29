@@ -1,7 +1,5 @@
-use std::panic;
-use std::thread;
 use std::thread::park_timeout;
-use std::time::{Instant, Duration};
+use std::time::Duration;
 use std::sync::{Arc, Mutex, Condvar};
 use std::fmt::{Display, Formatter, Result};
 use std::sync::atomic::{Ordering, AtomicUsize};
@@ -262,52 +260,52 @@ impl Worker {
     }
 }
 
-fn check_slow_task(worker: &Worker, task: &mut Task, base_task: BaseTask<Task>) {
-    let mut lock = None;
-    match base_task {
-        BaseTask::Async(t) => {
-            //填充异步任务
-            worker.static_async.sum(1);
+fn check_slow_task(_worker: &Worker, _task: &mut Task, _base_task: BaseTask<Task>) {
+    // let mut lock = None;
+    // match base_task {
+    //     BaseTask::Async(t) => {
+    //         //填充异步任务
+    //         worker.static_async.sum(1);
 
-            t.copy_to(task);
-        },
-        BaseTask::Sync(t, q) => {
-            //填充同步任务
-            if q < 0 {
-                worker.static_sync.sum(1);
-            } else {
-                worker.dynamic_sync.sum(1);
-            }
+    //         t.copy_to(task);
+    //     },
+    //     BaseTask::Sync(t, q) => {
+    //         //填充同步任务
+    //         if q < 0 {
+    //             worker.static_sync.sum(1);
+    //         } else {
+    //             worker.dynamic_sync.sum(1);
+    //         }
 
-            t.copy_to(task);
-            lock = Some(q);
-        }
-    }
+    //         t.copy_to(task);
+    //         lock = Some(q);
+    //     }
+    // }
     
-    let time = worker.slow_timer.start();
-    if let Err(e) = panic::catch_unwind(|| { task.run(lock); }) {
-        //执行任务异常
-        worker.panic_counter.sum(1);
+    // let time = worker.slow_timer.start();
+    // if let Err(e) = panic::catch_unwind(|| { task.run(lock); }) {
+    //     //执行任务异常
+    //     worker.panic_counter.sum(1);
 
-        let reason = match e.downcast_ref::<&str>() {
-            Some(str) => Some(str.to_string()),
-            None => {
-                match e.downcast_ref::<String>() {
-                    Some(string) => Some(string.to_string()),
-                    None => None,
-                }
-            },
-        };
-        warn!("!!!> {} Run Error, time: {:?}, thread: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task, reason);
-    } else {
-        //执行任务成功
-        let elapsed = time.elapsed();
-        if time.elapsed() >= worker.slow {
-            //记录慢任务
-            worker.slow_counter.sum(1);
-            worker.slow_timer.timing(time);
+    //     let reason = match e.downcast_ref::<&str>() {
+    //         Some(str) => Some(str.to_string()),
+    //         None => {
+    //             match e.downcast_ref::<String>() {
+    //                 Some(string) => Some(string.to_string()),
+    //                 None => None,
+    //             }
+    //         },
+    //     };
+    //     warn!("!!!> {} Run Error, time: {:?}, thread: {:?}, task: {}, e: {:?}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task, reason);
+    // } else {
+    //     //执行任务成功
+    //     let elapsed = time.elapsed();
+    //     if time.elapsed() >= worker.slow {
+    //         //记录慢任务
+    //         worker.slow_counter.sum(1);
+    //         worker.slow_timer.timing(time);
 
-            info!("===> Slow {}, time: {:?}, thread: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task);
-        }
-    }
+    //         info!("===> Slow {}, time: {:?}, thread: {:?}, task: {}", worker.worker_type.to_string(), Instant::now() - time, thread::current(), task);
+    //     }
+    // }
 }

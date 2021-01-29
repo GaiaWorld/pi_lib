@@ -6,7 +6,6 @@
 #![feature(slice_internals)]
 #![feature(integer_atomics)]
 #![feature(proc_macro_hygiene)]
-#![feature(wait_timeout_until)]
 
 extern crate fnv;
 extern crate rand;
@@ -15,6 +14,7 @@ extern crate threadpool;
 #[macro_use]
 extern crate lazy_static;
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 

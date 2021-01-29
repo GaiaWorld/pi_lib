@@ -1,20 +1,20 @@
 use std::path::{Path, PathBuf, Component};
 use std::io::{Error, Result, ErrorKind};
 
-use bytes::{Buf, BufMut};
+use bytes::{BufMut};
 
-use async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
+use async_file::file::{AsyncFileOptions, AsyncFile};
 
 use crate::{WORKER_RUNTIME,
-            utils::{SRC_DIR_NAME, LIB_FILE_NAME, BUILD_FILE_NAME,Crate, CrateInfo, ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, abs_path, create_tab, get_target_type_name, get_specific_ts_function_name}};
+            utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, get_target_type_name, get_specific_ts_function_name}};
 
-/*
-* 导出的外部绑定库的默认相对路径的根
-*/
-#[cfg(target_os = "windows")]
-pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = r#"..\..\"#;
-#[cfg(target_os = "linux")]
-pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = "../../";
+// /*
+// * 导出的外部绑定库的默认相对路径的根
+// */
+// #[cfg(target_os = "windows")]
+// pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = r#"..\..\"#;
+// #[cfg(target_os = "linux")]
+// pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = "../../";
 
 /*
 * 默认的依赖库名
@@ -173,7 +173,7 @@ pub(crate) async fn create_proxy_rust_file(generater: &ProxySourceGenerater,
 
 //生成Rust文件的导入
 pub(crate) fn generate_rust_import(mut path_buf: PathBuf,
-                                   source: &ParseContext) -> Vec<u8> {
+                                   _source: &ParseContext) -> Vec<u8> {
     let mut source_content = Vec::from(DEFAULT_PROXY_RUST_FILE_USED);
 
     path_buf.set_extension(""); //移除文件扩展名
@@ -330,7 +330,7 @@ fn generate_rust_function_comment(function: &Function,
         source_content.put_slice(b"/**\n");   //写入起始注释
         for comment in doc.get_ref() {
             //写入注释内容
-            let comment_str = (" *".to_string() + comment.replace(r#"""#, "").replace(r#"\r"#, "").as_str() + "\n");
+            let comment_str = " *".to_string() + comment.replace(r#"""#, "").replace(r#"\r"#, "").as_str() + "\n";
             source_content.put_slice(comment_str.as_bytes());
         }
         source_content.put_slice(b" */\n");   //写入结尾注释
@@ -1770,7 +1770,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "bool" => {
             //生成匹配布尔值类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<bool>() => {\n").as_bytes());
                 current_level += 1;
@@ -1804,7 +1804,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"i8" | alias@"i16" | alias@"i32" | alias@"i64" | alias@"i128" | alias@"isize" => {
             //生成匹配有符号整数类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -1838,7 +1838,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"u8" | alias@"u16" | alias@"u32" | alias@"u64" | alias@"u128" | alias@"usize" => {
             //生成匹配无符号整数类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -1872,7 +1872,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"f32" | alias@"f64" => {
             //生成匹配浮点数类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -1906,7 +1906,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "str" => {
             //生成匹配字符串类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<&str>() => {\n").as_bytes());
                 current_level += 1;
@@ -1940,7 +1940,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "String" => {
             //生成匹配字符串类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<String>() => {\n").as_bytes());
                 current_level += 1;
@@ -1974,7 +1974,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "[u8]" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<&[u8]>() => {\n").as_bytes());
                 current_level += 1;
@@ -2008,7 +2008,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Arc<[u8]>" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<Arc<[u8]>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2042,7 +2042,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Box<[u8]>" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<Box<[u8]>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2076,7 +2076,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Arc<Vec<u8>>" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<Arc<Vec<u8>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2110,7 +2110,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Box<Vec<u8>>" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<Box<Vec<u8>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2144,7 +2144,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<u8>" => {
             //生成匹配二进制缓冲区类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(level) + "r if r.is::<Vec<u8>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2178,7 +2178,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<bool>" => {
             //生成匹配布尔值数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<bool>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2217,7 +2217,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
             //生成匹配有符号整数数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -2256,7 +2256,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
             //生成匹配无符号整数数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -2295,7 +2295,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         alias@"Vec<f32>" | alias@"Vec<f64>" => {
             //生成匹配浮点数数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
                 current_level += 1;
@@ -2334,7 +2334,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<String>" => {
             //生成匹配字符串数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<String>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2373,7 +2373,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Arc<[u8]>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Arc<[u8]>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2412,7 +2412,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Box<[u8]>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Box<[u8]>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2451,7 +2451,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Arc<Vec<u8>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Arc<Vec<u8>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2490,7 +2490,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Box<Vec<u8>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Box<Vec<u8>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2529,7 +2529,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<u8>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<u8>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2568,7 +2568,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<Arc<[u8]>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<Arc<[u8]>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2611,7 +2611,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<Box<[u8]>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<Box<[u8]>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2654,7 +2654,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<Arc<Vec<u8>>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<Arc<Vec<u8>>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2697,7 +2697,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<Box<Vec<u8>>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<Box<Vec<u8>>>>>() => {\n").as_bytes());
                 current_level += 1;
@@ -2740,7 +2740,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         "Vec<Vec<Vec<u8>>>" => {
             //生成匹配二进制缓冲区数组类型的代码
             let mut current_level = level;
-            if let Some(generic_type) = generic_type {
+            if let Some(_generic_type) = generic_type {
                 //泛型的具体类型，则生成匹配项开始
                 source_content.put_slice((create_tab(current_level) + "r if r.is::<Vec<Vec<Vec<u8>>>>() => {\n").as_bytes());
                 current_level += 1;

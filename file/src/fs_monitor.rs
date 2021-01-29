@@ -37,7 +37,7 @@ pub enum FSChangeEvent {
 * 监听者
 */
 #[derive(Clone)]
-pub struct FSListener(pub Arc<Fn(FSChangeEvent)>);
+pub struct FSListener(pub Arc<dyn Fn(FSChangeEvent)>);
 
 unsafe impl Send for FSListener {}
 

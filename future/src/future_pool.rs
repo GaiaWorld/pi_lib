@@ -20,7 +20,7 @@ const FUTURE_ASYNC_TASK_PRIORITY: usize = 100;
 #[derive(Debug)]
 pub struct FutTaskPool {
     counter:    AtomicUsize,                                                                            //未来任务计数器
-    executor:   fn(TaskType, usize, Option<isize>, Box<FnOnce(Option<isize>)>, Atom) -> Option<isize>,   //未来任务执行器
+    executor:   fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>,   //未来任务执行器
 }
 
 impl Clone for FutTaskPool {
@@ -34,7 +34,7 @@ impl Clone for FutTaskPool {
 
 impl FutTaskPool {
     //构建一个未来任务池
-    pub fn new(executor: fn(TaskType, usize, Option<isize>, Box<FnOnce(Option<isize>)>, Atom) -> Option<isize>) -> Self {
+    pub fn new(executor: fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>) -> Self {
         FutTaskPool {
             counter: AtomicUsize::new(0),
             executor: executor,
@@ -48,7 +48,7 @@ impl FutTaskPool {
 
     //分派一个未来任务
     pub fn spawn<T, E>(&self,
-        callback: Box<FnOnce(fn(TaskType, usize, Option<isize>, Box<FnOnce(Option<isize>)>, Atom) -> Option<isize>, Arc<Producer<Result<T, E>>>, Arc<Consumer<Task>>, usize)>,
+        callback: Box<dyn FnOnce(fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>, Arc<Producer<Result<T, E>>>, Arc<Consumer<Task>>, usize)>,
         timeout: u32) -> FutTask<T, E> where T: Send + 'static, E: Send + 'static {
             let uid = self.counter.fetch_add(1, Ordering::Relaxed);
             let (p0, c0) = npnc_channel(1);

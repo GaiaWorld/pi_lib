@@ -1,4 +1,3 @@
-#![feature(async_await)]
 
 extern crate futures;
 extern crate crossbeam_channel;
@@ -7,6 +6,7 @@ extern crate dashmap;
 extern crate tokio;
 extern crate r#async;
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate env_logger;
 

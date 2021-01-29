@@ -2,21 +2,16 @@
 extern crate lazy_static;
 
 use std::fs;
-use std::env;
-use std::thread;
-use std::sync::Arc;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 use std::future::Future;
 use std::io::{Error, Result, ErrorKind};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::future::{FutureExt, BoxFuture};
 use num_cpus;
 
-use r#async::{rt::{AsyncRuntime,
-                   single_thread::{SingleTaskRunner, SingleTaskRuntime},
-                   multi_thread::{MultiTaskPool, MultiTaskRuntime}}};
+use r#async::rt::{AsyncRuntime,
+                   multi_thread::{MultiTaskPool, MultiTaskRuntime}};
 use async_file::file::{rename, AsyncFileOptions, AsyncFile};
 
 mod frontend;
@@ -27,8 +22,7 @@ mod utils;
 
 use frontend::parse_source;
 use backend::{create_bind_crate, generate_crates_proxy_source};
-use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, CrateInfo, ParseContext, ProxySourceGenerater, abs_path};
-use futures::StreamExt;
+use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, ParseContext, ProxySourceGenerater, abs_path};
 
 /*
 * 初始化异步运行时
@@ -274,7 +268,7 @@ pub async fn generate_proxy_crate(path: PathBuf,
 pub fn spawn(task: impl Future<Output = ()> + Send + 'static) {
     WORKER_RUNTIME.spawn(WORKER_RUNTIME.alloc(), async move {
         task.await;
-    });
+    }).unwrap();
 }
 
 #[test]
@@ -298,9 +292,9 @@ fn test_front_end() {
 
 #[test]
 fn test_create_bind_crate() {
-    use std::fs;
     use std::env;
     use std::path::PathBuf;
+    use std::time::Duration;
 
     WORKER_RUNTIME.spawn(WORKER_RUNTIME.alloc(), async move {
         let cwd = env::current_dir().unwrap();
@@ -321,7 +315,7 @@ fn test_create_bind_crate() {
                 }
             },
         }
-    });
+    }).unwrap();
 
-    thread::sleep(Duration::from_millis(1000000000));
+    std::thread::sleep(Duration::from_millis(1000000000));
 }

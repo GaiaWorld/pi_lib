@@ -408,7 +408,7 @@ impl ImportItem {
     //获取导入条目的库名
     pub fn get_crate_name(&self) -> String {
         match self {
-            ImportItem::Std(lib) => {
+            ImportItem::Std(_lib) => {
                 "std".to_string()
             },
             ImportItem::Thrid(lib) => {
@@ -515,7 +515,7 @@ impl ExportItem {
                 ExportItem::StructItem(s) => s.get_generic(),
                 ExportItem::EnumItem(e) => e.get_generic(),
                 ExportItem::FunctionItem(f) => f.get_generic(),
-                ExportItem::ConstItem(c) => None,
+                ExportItem::ConstItem(_c) => None,
             } {
                 //有类型参数
                 for (type_arg_name, _) in item_generic.get_ref() {
@@ -1343,7 +1343,7 @@ fn combine_generic_args(init_item_name: &String,
                         specific_type: Option<Type>,
                         generics: &Vec<Vec<TypeName>>,
                         generics_index: usize) {
-    let mut specific_type = if let Some(specific_type) = specific_type {
+    let specific_type = if let Some(specific_type) = specific_type {
         specific_type
     } else {
         Type::new(init_item_name.clone())
@@ -1351,7 +1351,7 @@ fn combine_generic_args(init_item_name: &String,
 
     if generics_index < generics.len() {
         //泛型参数还未分析完，则继续
-        let mut generic = &generics[generics_index]; //获取当前的泛型参数的具体类型列表
+        let generic = &generics[generics_index]; //获取当前的泛型参数的具体类型列表
 
         for generic_name in generic {
             let mut specific_type_copy = specific_type.clone(); //复制具体类型
@@ -1771,7 +1771,7 @@ impl ConstValue {
 */
 #[derive(Debug, Clone)]
 pub enum AttributeTokensFilter {
-    None    = 0,    //不过滤
+    _None    = 0,    //不过滤
     Punct   = 1,    //过滤标识符号
     Ident   = 2,    //过滤标识符
     Literal = 4,    //过滤字面量
@@ -1782,12 +1782,12 @@ impl BitOr for AttributeTokensFilter {
     type Output = u8;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        if let AttributeTokensFilter::None = self {
+        if let AttributeTokensFilter::_None = self {
             //任何过滤与不过滤进行或运算，都等于不过滤
-            return AttributeTokensFilter::None as u8;
-        } else if let AttributeTokensFilter::None = rhs {
+            return AttributeTokensFilter::_None as u8;
+        } else if let AttributeTokensFilter::_None = rhs {
             //任何过滤与不过滤进行或运算，都等于不过滤
-            return AttributeTokensFilter::None as u8;
+            return AttributeTokensFilter::_None as u8;
         } else {
             (self as u8) | (rhs as u8)
         }
@@ -1901,7 +1901,7 @@ impl ProxySourceGenerater {
                                       target_name: Option<&String>,
                                       origin_name: String,
                                       proxy_name: String) -> usize {
-        let mut method_index = usize::max_value();
+        let method_index;
 
         {
             let mut static_methods = self.static_methods.lock().await;
@@ -1929,7 +1929,7 @@ impl ProxySourceGenerater {
                                             target_name: Option<&String>,
                                             origin_name: String,
                                             proxy_name: String) -> usize {
-        let mut method_index = usize::max_value();
+        let method_index;
 
         {
             let mut async_static_methods = self.async_static_methods.lock().await;
@@ -1957,7 +1957,7 @@ impl ProxySourceGenerater {
                                target_name: Option<&String>,
                                origin_name: String,
                                proxy_name: String) -> usize {
-        let mut method_index = usize::max_value();
+        let method_index;
 
         {
             let mut methods = self.methods.lock().await;
@@ -1985,7 +1985,7 @@ impl ProxySourceGenerater {
                                      target_name: Option<&String>,
                                      origin_name: String,
                                      proxy_name: String) -> usize {
-        let mut method_index = usize::max_value();
+        let method_index;
 
         {
             let mut async_methods = self.async_methods.lock().await;
@@ -2047,7 +2047,7 @@ pub fn abs_path(path: &Path) -> Result<PathBuf> {
     } else {
         path.strip_prefix("./")
     }{
-        Err(e) => {
+        Err(_e) => {
             Ok(cwd.join(path))
         },
         Ok(path) => {

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration};
-use std::sync::atomic::{AtomicUsize, Ordering, AtomicU64};
+use std::sync::atomic::{AtomicUsize, AtomicU64};
 use std::mem::{transmute};
 use std::marker::Send;
 use std::fmt::{Debug, Formatter, Result as FResult};
@@ -228,6 +228,8 @@ fn test(){
 
 #[cfg(test)]
 extern crate rand;
+#[cfg(test)]
+use std::sync::atomic::Ordering;
 
 // 测试定时任务弹出数量是否和插入数量保持一致
 #[test]

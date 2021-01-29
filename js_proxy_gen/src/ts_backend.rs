@@ -7,7 +7,7 @@ use bytes::BufMut;
 use async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
 
 use crate::{WORKER_RUNTIME,
-            utils::{ParseContext, ExportItem, Struct, Enum, Const, Function, Document, Generic, ConstList, TraitImpls, Impls, Type, TypeName, ProxySourceGenerater, create_tab, get_specific_ts_function_name, get_specific_ts_class_name}};
+            utils::{ParseContext, ExportItem, Const, Function, Document, Generic, ConstList, TraitImpls, Impls, TypeName, ProxySourceGenerater, create_tab, get_specific_ts_function_name, get_specific_ts_class_name}};
 
 /*
 * 默认的ts本地环境文件名
@@ -81,7 +81,7 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
     let mut components = source_path.components();
 
     let mut b = false;
-    let mut dir_path = generate_ts_path.join(crate_name);
+    let dir_path = generate_ts_path.join(crate_name);
     let mut file_path = PathBuf::new();
     while let Some(c) = components.next() {
         match c {
@@ -129,8 +129,8 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
 }
 
 //生成ts文件的导入
-pub(crate) fn generate_ts_import(mut path_buf: PathBuf) -> Vec<u8> {
-    let mut source_content = Vec::from(DEFAULT_PROXY_TS_FILE_USED);
+pub(crate) fn generate_ts_import(mut _path_buf: PathBuf) -> Vec<u8> {
+    let source_content = Vec::from(DEFAULT_PROXY_TS_FILE_USED);
     source_content
 }
 
@@ -172,8 +172,8 @@ pub(crate) async fn generate_ts_impls(generater: &ProxySourceGenerater,
 }
 
 //生成ts文件的外部模块常量
-fn generate_ts_consts(generater: &ProxySourceGenerater,
-                      source: &ParseContext,
+fn generate_ts_consts(_generater: &ProxySourceGenerater,
+                      _source: &ParseContext,
                       const_items: Vec<&Const>,
                       source_content: &mut Vec<u8>) -> Result<()> {
     for const_item in const_items {
@@ -190,7 +190,7 @@ fn generate_ts_consts(generater: &ProxySourceGenerater,
             //生成常量名称
             source_content.put_slice(("export const ".to_string() + const_name + ": ").as_bytes());
 
-            if let Some(const_type) = const_item.get_type() {
+            if let Some(_const_type) = const_item.get_type() {
                 if let Some(const_value) = const_item.get_value() {
                     //生成常量类型
                     source_content.put_slice((const_value.get_ts_type_name() + " = ").as_bytes());
@@ -355,7 +355,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     let specific_class_name = get_specific_ts_class_name(class_name.unwrap());
     source_content.put_slice(("export class ".to_string() + specific_class_name.as_str() + " {\n").as_bytes());
 
-    let mut level = 1; //默认的生成具体类实现的代码层数
+    let level = 1; //默认的生成具体类实现的代码层数
 
     if let Some(const_items) = consts {
         //生成具体类的常量
@@ -373,7 +373,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
                 //生成常量名称
                 source_content.put_slice((create_tab(level) + "static readonly " + const_name + ": ").as_bytes());
 
-                if let Some(const_type) = const_item.get_type() {
+                if let Some(_const_type) = const_item.get_type() {
                     if let Some(const_value) = const_item.get_value() {
                         //生成常量类型
                         source_content.put_slice((const_value.get_ts_type_name() + " = ").as_bytes());
@@ -532,7 +532,7 @@ async fn generate_ts_specific_class_method(generater: &ProxySourceGenerater,
 
 //生成ts文件的函数或方法的入参
 fn generate_ts_function_args(generic: Option<&Generic>,
-                             source: &ParseContext,
+                             _source: &ParseContext,
                              function: &Function,
                              source_content: &mut Vec<u8>) -> Result<Vec<String>> {
     let mut specific_arg_names = Vec::new(); //具体参数名称列表
@@ -621,8 +621,8 @@ fn generate_ts_function_args(generic: Option<&Generic>,
 
 //生成ts文件的函数或方法的出参
 fn generate_ts_function_return(target: Option<&String>,
-                               generic: Option<&Generic>,
-                               source: &ParseContext,
+                               _generic: Option<&Generic>,
+                               _source: &ParseContext,
                                function: &Function,
                                source_content: &mut Vec<u8>) -> Result<Option<String>> {
     if let Some(return_type) = function.get_output() {
@@ -721,8 +721,8 @@ fn generate_ts_function_return(target: Option<&String>,
 //生成函数体
 async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                                          target: Option<&String>,
-                                         generic: Option<&Generic>,
-                                         source: &ParseContext,
+                                         _generic: Option<&Generic>,
+                                         _source: &ParseContext,
                                          function: &Function,
                                          specific_function_name: String,
                                          specific_arg_names: Vec<String>,

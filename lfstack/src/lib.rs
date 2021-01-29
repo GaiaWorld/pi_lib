@@ -325,7 +325,7 @@ impl<T: 'static> LFStack<T> {
     
                                             self.high.fetch_sub(1, Ordering::Relaxed); //减少栈高度
     
-                                            self.wait_sent.send(frame); //放入待清理缓冲区
+                                            self.wait_sent.send(frame).unwrap(); //放入待清理缓冲区
                                         },
                                         CollectResult::Continue(false) => {
                                             //忽略当前栈帧，并继续整理
@@ -369,7 +369,7 @@ impl<T: 'static> LFStack<T> {
     
                                             self.high.fetch_sub(1, Ordering::Relaxed); //减少栈高度
     
-                                            self.wait_sent.send(frame); //放入待清理缓冲区
+                                            self.wait_sent.send(frame).unwrap(); //放入待清理缓冲区
     
                                             self.lock.store(false, Ordering::SeqCst); //释放原子锁
                                             return;
@@ -450,7 +450,7 @@ impl<T: 'static> LFStack<T> {
     
                                             self.high.fetch_sub(1, Ordering::Relaxed); //减少栈高度
     
-                                            self.wait_sent.send(frame); //放入待清理缓冲区
+                                            self.wait_sent.send(frame).unwrap(); //放入待清理缓冲区
                                         },
                                         CollectResult::Continue(false) => {
                                             //忽略当前栈帧，并继续整理
@@ -494,7 +494,7 @@ impl<T: 'static> LFStack<T> {
     
                                             self.high.fetch_sub(1, Ordering::Relaxed); //减少栈高度
     
-                                            self.wait_sent.send(frame); //放入待清理缓冲区
+                                            self.wait_sent.send(frame).unwrap(); //放入待清理缓冲区
     
                                             self.lock.store(false, Ordering::SeqCst); //释放原子锁
                                             return;
@@ -518,6 +518,6 @@ impl<T: 'static> LFStack<T> {
 
     //清空待清理的栈帧
     pub fn clear(&self) {
-        self.wait_recv.try_iter().collect::<Vec<Box<LFStackFrame<T>>>>();
+        let _ = self.wait_recv.try_iter().collect::<Vec<Box<LFStackFrame<T>>>>();
     }
 }

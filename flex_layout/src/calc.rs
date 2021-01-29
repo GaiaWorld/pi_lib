@@ -1,4 +1,3 @@
-#![feature(cmp_min_max_by)]
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 use core::mem::replace;
@@ -1984,7 +1983,7 @@ fn min_max_calc(mut value: f32, min_value: Number, max_value: Number) -> f32 {
     value
 }
 
-fn max_calc(mut value: Number, max_value: Number) -> Number {
+fn max_calc(value: Number, max_value: Number) -> Number {
 	match (value, max_value) {
 		(Number::Undefined, Number::Defined(_r)) => max_value,
 		_ => value,
@@ -2185,7 +2184,7 @@ fn calc_rect(
     margin_start: Dimension,
 	margin_end: Dimension,
     parent: f32,
-    children_abs: bool,
+    _children_abs: bool,
     align: isize,
 ) -> (Number, f32) {
     let r = match size {
