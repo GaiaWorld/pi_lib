@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::io::{Error, Result, ErrorKind};
 
-use proc_macro2::{Span, TokenTree, Group};
+use proc_macro2::{Span, TokenTree, TokenStream, Group};
 use syn::{self, spanned::Spanned};
 
 use r#async::{rt::{AsyncRuntime,
@@ -22,7 +22,6 @@ use crate::utils::{ParseContext,
                    AttributeTokensFilter,
                    WithParseSpecificTypeStackFrame,
                    LibPathNext};
-use syn::export::quote::__private::ext::RepToTokensExt;
 
 /*
 * 导出标识符
@@ -220,10 +219,10 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
             if let Some(export_item) = context.get_last_export_mut() {
                 for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Group as u8) {
                     //在导出属性中定义了泛型的具体类型，则继续分析
-                    if let syn::export::quote::__private::TokenTree::Group(group) = token {
+                    if let TokenTree::Group(group) = token {
                         for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Ident | AttributeTokensFilter::Group) {
                             match token {
-                                syn::export::quote::__private::TokenTree::Ident(ident) => {
+                                TokenTree::Ident(ident) => {
                                     //分析泛型名称
                                     let id = ident.to_string();
                                     if id.as_str() == TYPE_DEFINED_IDENT {
@@ -233,7 +232,7 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
 
                                     export_item.append_generic(id); //记录泛型名称
                                 },
-                                syn::export::quote::__private::TokenTree::Group(group) => {
+                                TokenTree::Group(group) => {
                                     let mut stack = Vec::new();
 
                                     for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Punct as u8 | AttributeTokensFilter::Ident as u8 | AttributeTokensFilter::Group as u8) {
@@ -259,7 +258,7 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
             //使用了文档属性，则记录文档属性的有效词条
             if let Some(export_item) = context.get_last_export_mut() {
                 for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Literal as u8) {
-                    if let syn::export::quote::__private::TokenTree::Literal(lit) = token {
+                    if let TokenTree::Literal(lit) = token {
                         if lit.to_string().trim().len() < 5 {
                             //忽略无效文档，忽略"\\\r"
                             return;
@@ -277,34 +276,34 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
 }
 
 //获取属性词条流中的词条
-fn get_attribute_tokens(tokens: syn::export::quote::__private::TokenStream,
-                        filter: u8) -> Vec<syn::export::quote::__private::TokenTree> {
+fn get_attribute_tokens(tokens: TokenStream,
+                        filter: u8) -> Vec<TokenTree> {
     let mut token_list = Vec::new();
 
     for token in tokens {
         match token {
-            syn::export::quote::__private::TokenTree::Punct(punct) => {
+            TokenTree::Punct(punct) => {
                 //标点符号
                 if AttributeTokensFilter::is_no(filter) || AttributeTokensFilter::is_punct(filter) {
-                    token_list.push(syn::export::quote::__private::TokenTree::Punct(punct));
+                    token_list.push(TokenTree::Punct(punct));
                 }
             },
-            syn::export::quote::__private::TokenTree::Ident(ident) => {
+            TokenTree::Ident(ident) => {
                 //标识符
                 if AttributeTokensFilter::is_no(filter) || AttributeTokensFilter::is_ident(filter) {
-                    token_list.push(syn::export::quote::__private::TokenTree::Ident(ident));
+                    token_list.push(TokenTree::Ident(ident));
                 }
             },
-            syn::export::quote::__private::TokenTree::Literal(literal) => {
+            TokenTree::Literal(literal) => {
                 //字面量
                 if AttributeTokensFilter::is_no(filter) || AttributeTokensFilter::is_literal(filter) {
-                    token_list.push(syn::export::quote::__private::TokenTree::Literal(literal));
+                    token_list.push(TokenTree::Literal(literal));
                 }
             },
-            syn::export::quote::__private::TokenTree::Group(group) => {
+            TokenTree::Group(group) => {
                 //词条数组
                 if AttributeTokensFilter::is_no(filter) || AttributeTokensFilter::is_group(filter) {
-                    token_list.push(syn::export::quote::__private::TokenTree::Group(group));
+                    token_list.push(TokenTree::Group(group));
                 }
             },
         }
@@ -316,7 +315,7 @@ fn get_attribute_tokens(tokens: syn::export::quote::__private::TokenStream,
 //分析泛型的具体类型
 fn parse_specific_type(token: &TokenTree, stack: &mut Vec<WithParseSpecificTypeStackFrame>) {
     match token {
-        syn::export::quote::__private::TokenTree::Punct(punct) => {
+        TokenTree::Punct(punct) => {
             //标点符号
             match punct.as_char() {
                 p@'<' => {
@@ -346,7 +345,7 @@ fn parse_specific_type(token: &TokenTree, stack: &mut Vec<WithParseSpecificTypeS
                 _ => (), //忽略其它标识符号
             }
         },
-        syn::export::quote::__private::TokenTree::Ident(ident) => {
+        TokenTree::Ident(ident) => {
             //标识符
             let r#type = ident.to_string();
             if r#type.trim().len() == 0 {
@@ -357,10 +356,10 @@ fn parse_specific_type(token: &TokenTree, stack: &mut Vec<WithParseSpecificTypeS
             //加入一个具体类型到堆栈
             stack.push(WithParseSpecificTypeStackFrame::Type(Type::new(r#type)));
         },
-        syn::export::quote::__private::TokenTree::Group(group) => {
+        TokenTree::Group(group) => {
             //词条数组，仅匹配[T]这种类型，T不允许为有泛型参数的类型
             for token in group.stream() {
-                if let syn::export::quote::__private::TokenTree::Ident(ident) = token {
+                if let TokenTree::Ident(ident) = token {
                     let r#type = ident.to_string();
                     if r#type.trim().len() == 0 {
                         //忽略无效类型名称
