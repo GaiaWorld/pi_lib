@@ -187,7 +187,10 @@ pub type ShareEntity<T> = Arc<CellEntity<T>>;
 
 impl<T: 'static> Fetch for ShareEntity<T> {
     fn fetch(world: &World) -> Self {
-        world.fetch_entity::<T>().unwrap()
+		match world.fetch_entity::<T>() {
+			Some(r) => r,
+			None => std::panic!("fetch_multi fail:{:?}",  std::any::type_name::<T>()),
+		}
     }
 }
 

@@ -178,7 +178,10 @@ pub type ShareMultiCase<E, C> = Arc<CellMultiCase<E, C>>;
 
 impl<E: 'static, C: Component> Fetch for ShareMultiCase<E, C> {
     fn fetch(world: &World) -> Self {
-        world.fetch_multi::<E, C>().unwrap()
+		match world.fetch_multi::<E, C>() {
+			Some(r) => r,
+			None => std::panic!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<E>(), std::any::type_name::<C>()),
+		}
     }
 }
 

@@ -33,6 +33,7 @@ pub use monitor::{CreateEvent, DeleteEvent, ModifyEvent, Write};
 pub use single::{CellSingleCase, SingleCaseImpl};
 pub use system::{EntityListener, MultiCaseListener, Runner, SingleCaseListener, System};
 pub use world::World;
+pub use cell::StdCell;
 
 use std::any::TypeId;
 

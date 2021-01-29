@@ -102,13 +102,22 @@ macro_rules! impl_system {
 
     // fetch_single fetch_multi fetch_entry
     (@setup_target_ty $setup_target:ident, $w:ident, SingleCaseListener, $c:ty, $ev:ty) => {
-        let $setup_target = $w.fetch_single::<$c>().unwrap();
+        let $setup_target = match $w.fetch_single::<$c>() {
+			Some(r) => r,
+			None => std::panic!("fetch_single fail:{:?}",  std::any::type_name::<$c>()),
+		};
     };
     (@setup_target_ty $setup_target:ident, $w:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
-        let $setup_target = $w.fetch_multi::<$e, $c>().unwrap();
+        let $setup_target = match $w.fetch_multi::<$e, $c>(){
+			Some(r) => r,
+			None => std::panic!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<$e>(), std::any::type_name::<$c>()),
+		};
     };
     (@setup_target_ty $setup_target:ident, $w:ident, EntityListener, $e:ty, $ev:ty) => {
-        let $setup_target = $w.fetch_entity::<$e>().unwrap();
+        let $setup_target = match $w.fetch_entity::<$e>(){
+			Some(r) => r,
+			None => std::panic!("fetch_entity fail:{:?}",  std::any::type_name::<$e>()),
+		};
     };
 
     //
