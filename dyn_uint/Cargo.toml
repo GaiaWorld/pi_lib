@@ -5,3 +5,6 @@ authors = ["suncy <suncy@gmail.com>"]
 
 [dependencies]
 slab = {path="../slab"}
+
+[[example]]
+name = "basic"
