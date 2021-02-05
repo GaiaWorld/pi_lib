@@ -31,7 +31,7 @@ declare class NativeObjectClass {
     async_static_call(index: number, ...anyArgs: any[]): AsyncNativeObjectRetType; //本地对象静态异步调用
     call(index: number, self: object, ...anyArgs: any[]): NativeObjectRetType; //本地对象同步调用
     async_call(index: number, self: object, ...anyArgs: any[]): AsyncNativeObjectRetType; //本地对象异步调用
-    release(self: object): void; //释放指定的本地对象
+    release(cid: number, self: object): void; //释放指定的本地对象
 }
 
 declare class NativeObjectRegistry {
@@ -419,7 +419,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destroy\");\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = undefined;\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(this.self);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(_$cid, this.self);\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     //生成类的从指定本地对象构建当前类方法
