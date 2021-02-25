@@ -129,61 +129,66 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
                 Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
             },
             Ok(mut dir) => {
-                let mut vec = Vec::new();
-
+                let mut child_paths = Vec::new();
                 while let Some(entry) = dir.next() {
                     if let Ok(e) = entry {
                         let child_path = e.path();
-                        if child_path.is_dir() {
-                            //子目录
-                            match parse_source_dir(child_path).await {
-                                Err(e) => {
-                                    //分析子目录失败，则立即返回错误
-                                    return Err(e);
-                                },
-                                Ok(child_vec) => {
-                                    //分析子目录成功，则记录分析的子目录上下文列表，并继续
-                                    for context in child_vec {
-                                        vec.push(context);
-                                    }
-                                    continue;
-                                },
-                            }
-                        } else if child_path.is_file() {
-                            //文件
-                            match AsyncFile::open(WORKER_RUNTIME.clone(), child_path.clone(), AsyncFileOptions::OnlyRead).await {
-                                Err(e) => {
-                                    //打开文件失败，则立即返回错误
-                                    return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
-                                },
-                                Ok(file) => {
-                                    //打开文件成功，则继续分析源码
-                                    match file.read(0, file.get_size() as usize).await {
-                                        Err(e) => {
-                                            //读文件失败，则立即返回错误
-                                            return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
-                                        },
-                                        Ok(bin) => {
-                                            let mut context = ParseContext::new(child_path.as_path());
-                                            match String::from_utf8(bin) {
-                                                Err(e) => {
-                                                    //将源码转换为UTF8字符串失败，则立即返回错误
-                                                    return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
-                                                },
-                                                Ok(source) => {
-                                                    if let Err(e) = parse_source(&mut context, source.as_str()) {
-                                                        //分析源码失败，则立即返回错误
-                                                        return Err(e);
-                                                    }
+                        child_paths.push(child_path);
+                    }
+                }
+                child_paths.sort(); //对当前目录下所有的同级路径进行排序
 
-                                                    //分析源码成功，则记录当前上下文
-                                                    vec.push(context);
-                                                },
-                                            }
-                                        },
-                                    }
-                                },
-                            }
+                let mut vec = Vec::new();
+                for child_path in child_paths {
+                    if child_path.is_dir() {
+                        //子目录
+                        match parse_source_dir(child_path).await {
+                            Err(e) => {
+                                //分析子目录失败，则立即返回错误
+                                return Err(e);
+                            },
+                            Ok(child_vec) => {
+                                //分析子目录成功，则记录分析的子目录上下文列表，并继续
+                                for context in child_vec {
+                                    vec.push(context);
+                                }
+                                continue;
+                            },
+                        }
+                    } else if child_path.is_file() {
+                        //文件
+                        match AsyncFile::open(WORKER_RUNTIME.clone(), child_path.clone(), AsyncFileOptions::OnlyRead).await {
+                            Err(e) => {
+                                //打开文件失败，则立即返回错误
+                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                            },
+                            Ok(file) => {
+                                //打开文件成功，则继续分析源码
+                                match file.read(0, file.get_size() as usize).await {
+                                    Err(e) => {
+                                        //读文件失败，则立即返回错误
+                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                                    },
+                                    Ok(bin) => {
+                                        let mut context = ParseContext::new(child_path.as_path());
+                                        match String::from_utf8(bin) {
+                                            Err(e) => {
+                                                //将源码转换为UTF8字符串失败，则立即返回错误
+                                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                                            },
+                                            Ok(source) => {
+                                                if let Err(e) = parse_source(&mut context, source.as_str()) {
+                                                    //分析源码失败，则立即返回错误
+                                                    return Err(e);
+                                                }
+
+                                                //分析源码成功，则记录当前上下文
+                                                vec.push(context);
+                                            },
+                                        }
+                                    },
+                                }
+                            },
                         }
                     }
                 }
