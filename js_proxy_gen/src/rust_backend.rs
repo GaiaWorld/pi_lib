@@ -8,14 +8,6 @@ use async_file::file::{AsyncFileOptions, AsyncFile};
 use crate::{WORKER_RUNTIME,
             utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, get_target_type_name, get_specific_ts_function_name}};
 
-// /*
-// * 导出的外部绑定库的默认相对路径的根
-// */
-// #[cfg(target_os = "windows")]
-// pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = r#"..\..\"#;
-// #[cfg(target_os = "linux")]
-// pub(crate) const DEFAULT_EXPORT_CRATES_PATH_ROOT: &str = "../../";
-
 /*
 * 默认的依赖库名
 */

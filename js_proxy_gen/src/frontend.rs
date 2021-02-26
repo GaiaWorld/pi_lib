@@ -34,13 +34,6 @@ const TYPE_DEFINED_IDENT: &str = "type";
 */
 const DOCUMENT_ATTR_PATH_IDENT: &str = "doc";
 
-// /*
-// * 分析指定的Rust库
-// */
-// pub fn parse_crate(path: &Path) -> Result<()> {
-//     Ok(())
-// }
-
 /*
 * 分析指定的Rust源码
 */
