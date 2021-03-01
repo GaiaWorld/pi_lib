@@ -663,7 +663,7 @@ impl<'a> ReadBuffer<'a> {
                 Ok(EnumValue::Bin(self.read_bin()?))
             }
             _ => {
-                panic!("other type TODO");
+                panic!("other type TODO ReadBuffer::read");
             }
         }
     }
@@ -1955,7 +1955,7 @@ pub fn base_type_len(bb: &ReadBuffer, t: u8) -> usize {
         109 | 178 => bb.bytes.get_lu32(bb.head + 1) as usize + 5,
         110 | 179 => bb.bytes.get_lu32(bb.head + 1) as usize + 7,
         _ => {
-            panic!("other type TODO");
+            panic!("other type TODO base_type_len");
         }
     }
 }
