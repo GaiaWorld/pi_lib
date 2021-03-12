@@ -1,3 +1,6 @@
+//! 写时复制的列表
+//! TODO (最初是atom库需要，后面atom库内部实现了一个简单的cowlist，本库就此闲置，未完全实现)
+
 #![feature(core_intrinsics)] 
 
 use std::sync::Arc;
@@ -24,6 +27,7 @@ impl<T> CowList<T>{
 			value: Arc::new(ele)
 		}
 	}
+
 
 	pub fn push(&mut self, ele: T) -> CowList<T> {
 		CowList{
