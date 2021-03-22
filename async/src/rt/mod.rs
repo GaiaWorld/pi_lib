@@ -1,3 +1,6 @@
+//! # 提供了通用的异步运行时
+//!
+
 use std::thread;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -28,16 +31,16 @@ use crate::lock::spin;
 */
 static RUNTIME_UID_GEN: AtomicUsize = AtomicUsize::new(1);
 
-/*
-* 分配异步运行时唯一id
-*/
+///
+/// 分配异步运行时唯一id
+///
 pub fn alloc_rt_uid() -> usize {
     RUNTIME_UID_GEN.fetch_add(1, Ordering::Relaxed)
 }
 
-/*
-* 异步任务唯一id
-*/
+///
+/// 异步任务唯一id
+///
 #[derive(Clone)]
 pub struct TaskId(Arc<AtomicUsize>);
 
@@ -47,9 +50,9 @@ impl Debug for TaskId {
     }
 }
 
-/*
-* 异步运行时
-*/
+///
+/// 异步运行时
+///
 pub enum AsyncRuntime<O: Default + 'static> {
     Local(SingleTaskRuntime<O>),                                                            //本地运行时
     Multi(MultiTaskRuntime<O>),                                                             //多线程运行时
@@ -73,7 +76,7 @@ impl<O: Default + 'static> Clone for AsyncRuntime<O> {
 * 异步运行时同步方法
 */
 impl<O: Default + 'static> AsyncRuntime<O> {
-    //获取当前异步运行时的唯一id
+    /// 获取当前异步运行时的唯一id
     pub fn get_id(&self) -> usize {
         match self {
             AsyncRuntime::Local(rt) => rt.get_id(),
@@ -82,7 +85,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //获取当前异步运行时待处理任务数量
+    /// 获取当前异步运行时待处理任务数量
     pub fn wait_len(&self) -> usize {
         match self {
             AsyncRuntime::Local(rt) => rt.wait_len(),
@@ -91,7 +94,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //获取当前异步运行时任务数量
+    /// 获取当前异步运行时任务数量
     pub fn len(&self) -> usize {
         match self {
             AsyncRuntime::Local(rt) => rt.len(),
@@ -100,7 +103,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //分配异步任务的唯一id
+    /// 分配异步任务的唯一id
     pub fn alloc(&self) -> TaskId {
         match self {
             AsyncRuntime::Local(rt) => rt.alloc(),
@@ -109,7 +112,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //派发一个指定的异步任务到异步运行时
+    /// 派发一个指定的异步任务到异步运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         match self {
@@ -127,7 +130,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //派发一个在指定时间后执行的异步任务到异步运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    /// 派发一个在指定时间后执行的异步任务到异步运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
     pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<usize>
         where F: Future<Output = O> + Send + 'static {
         match self {
@@ -150,7 +153,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //取消指定句柄的定时异步任务
+    /// 取消指定句柄的定时异步任务
     pub fn cancel_timing(&self, handle: usize) {
         match self {
             AsyncRuntime::Local(rt) => rt.cancel_timing(handle),
@@ -159,7 +162,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //挂起指定唯一id的异步任务
+    /// 挂起指定唯一id的异步任务
     pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
         match self {
             AsyncRuntime::Local(rt) => rt.pending(task_id, waker),
@@ -168,7 +171,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //唤醒指定唯一id的异步任务
+    /// 唤醒指定唯一id的异步任务
     pub fn wakeup(&self, task_id: &TaskId) {
         match self {
             AsyncRuntime::Local(rt) => rt.wakeup(task_id),
@@ -177,7 +180,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //构建用于派发多个异步任务到指定运行时的映射
+    /// 构建用于派发多个异步任务到指定运行时的映射
     pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
         match self {
             AsyncRuntime::Local(rt) => rt.map(),
@@ -186,7 +189,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //关闭异步运行时，返回请求关闭是否成功
+    /// 关闭异步运行时，返回请求关闭是否成功
     pub fn close(&self) -> bool {
         match self {
             AsyncRuntime::Worker(worker_status, worker_waker, rt) => {
@@ -206,7 +209,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
 * 异步运行时同步方法
 */
 impl<O: Default + 'static> AsyncRuntime<O> {
-    //挂起当前异步运行时的当前任务，等待指定的时间后唤醒当前任务
+    /// 挂起当前异步运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
         match self {
             AsyncRuntime::Local(rt) => rt.wait_timeout(timeout).await,
@@ -215,7 +218,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //挂起当前异步运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
+    /// 挂起当前异步运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
     pub async fn wait<R, V, F>(&self, art: AsyncRuntime<R>, future: F) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static,
@@ -227,7 +230,7 @@ impl<O: Default + 'static> AsyncRuntime<O> {
         }
     }
 
-    //挂起当前异步运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    /// 挂起当前异步运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
     pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static  {
@@ -239,9 +242,9 @@ impl<O: Default + 'static> AsyncRuntime<O> {
     }
 }
 
-/*
-* 异步值
-*/
+///
+/// 异步值
+///
 pub struct AsyncValue<O: Default + 'static, V: Send + 'static> {
     rt:         AsyncRuntime<O>,            //异步值的运行时
     task_id:    TaskId,                     //异步值的任务唯一id
@@ -279,7 +282,7 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncValue<O, V> {
 }
 
 impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
-    //构建异步值，默认值为未就绪
+    /// 构建异步值，默认值为未就绪
     pub fn new(rt: AsyncRuntime<O>) -> Self {
         let task_id = rt.alloc();
 
@@ -291,7 +294,7 @@ impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
         }
     }
 
-    //设置异步值
+    /// 设置异步值
     pub fn set(self, value: V) {
         let mut spin_len = 1;
         loop {
@@ -324,9 +327,9 @@ impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
     }
 }
 
-/*
-* 等待异步任务运行的结果
-*/
+///
+/// 等待异步任务运行的结果
+///
 pub struct AsyncWaitResult<V: Send + 'static>(Arc<RefCell<Option<Result<V>>>>);
 
 unsafe impl<V: Send + 'static> Send for AsyncWaitResult<V> {}
@@ -338,9 +341,9 @@ impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
     }
 }
 
-/*
-* 等待异步任务运行的结果集
-*/
+///
+/// 等待异步任务运行的结果集
+///
 pub struct AsyncWaitResults<V: Send + 'static>(Arc<RefCell<Option<Vec<Result<V>>>>>);
 
 unsafe impl<V: Send + 'static> Send for AsyncWaitResults<V> {}
@@ -352,25 +355,25 @@ impl<V: Send + 'static> Clone for AsyncWaitResults<V> {
     }
 }
 
-/*
-* 等待执行的定时任务
-*/
+///
+/// 等待执行的定时任务
+///
 pub enum WaitRunTask<O: Default + 'static> {
     SingleTask(Arc<SingleTask<O>>), //单线程定时任务
     MultiTask(Arc<MultiTask<O>>),   //多线程定时任务
 }
 
-/*
-* 异步定时器任务
-*/
+///
+/// 异步定时器任务
+///
 pub enum AsyncTimingTask<O: Default + 'static> {
     Pended(TaskId),             //已挂起的定时任务
     WaitRun(WaitRunTask<O>),    //等待执行的定时任务
 }
 
-/*
-* 异步任务本地定时器
-*/
+///
+/// 异步任务本地定时器
+///
 pub struct AsyncTaskTimer<O: Default + 'static> {
     producor:   Sender<(usize, AsyncTimingTask<O>)>,            //定时任务生产者
     consumer:   Receiver<(usize, AsyncTimingTask<O>)>,          //定时任务消费者
@@ -381,7 +384,7 @@ unsafe impl<O: Default + 'static> Send for AsyncTaskTimer<O> {}
 unsafe impl<O: Default + 'static> Sync for AsyncTaskTimer<O> {}
 
 impl<O: Default + 'static> AsyncTaskTimer<O> {
-    //构建异步任务本地定时器
+    /// 构建异步任务本地定时器
     pub fn new() -> Self {
         let (producor, consumer) = unbounded();
         AsyncTaskTimer {
@@ -391,7 +394,7 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
         }
     }
 
-    //构建指定间隔的异步任务本地定时器
+    /// 构建指定间隔的异步任务本地定时器
     pub fn with_interval(time: usize) -> Self {
         let (producor, consumer) = unbounded();
         AsyncTaskTimer {
@@ -401,27 +404,27 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
         }
     }
 
-    //获取定时任务生产者
+    /// 获取定时任务生产者
     pub fn get_producor(&self) -> Sender<(usize, AsyncTimingTask<O>)> {
         self.producor.clone()
     }
 
-    //获取剩余未到期的定时器任务数量
+    /// 获取剩余未到期的定时器任务数量
     pub fn len(&self) -> usize {
         self.timer.as_ref().borrow().len()
     }
 
-    //设置定时器
+    /// 设置定时器
     pub fn set_timer(&self, task: AsyncTimingTask<O>, timeout: usize) -> usize {
         self.timer.borrow_mut().set_timeout(task, timeout)
     }
 
-    //取消定时器
+    /// 取消定时器
     pub fn cancel_timer(&self, timer_ref: usize) -> Option<AsyncTimingTask<O>> {
         self.timer.borrow_mut().cancel(timer_ref)
     }
 
-    //消费所有定时任务，返回定时任务数量
+    /// 消费所有定时任务，返回定时任务数量
     pub fn consume(&self) -> usize {
         let mut len = 0;
         let timer_tasks = self.consumer.try_iter().collect::<Vec<(usize, AsyncTimingTask<O>)>>();
@@ -433,25 +436,25 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
         len
     }
 
-    //轮询定时器
+    /// 轮询定时器
     pub fn poll(&self) -> u64 {
         self.timer.borrow_mut().try_poll()
     }
 
-    //从定时器中弹出到期的一个任务
+    /// 从定时器中弹出到期的一个任务
     pub fn pop(&self) -> Option<AsyncTimingTask<O>> {
         self.timer.borrow_mut().try_pop()
     }
 
-    //清空定时器
+    /// 清空定时器
     pub fn clear(&self) {
         self.timer.borrow_mut().clear();
     }
 }
 
-/*
-* 等待指定超时
-*/
+///
+/// 等待指定超时
+///
 pub struct AsyncWaitTimeout<O: Default + 'static> {
     rt:         AsyncRuntime<O>,                        //当前运行时
     producor:   Sender<(usize, AsyncTimingTask<O>)>,    //超时请求生产者
@@ -484,7 +487,7 @@ impl<O: Default + 'static> Future for AsyncWaitTimeout<O> {
 }
 
 impl<O: Default + 'static> AsyncWaitTimeout<O> {
-    //构建等待指定超时任务的方法
+    /// 构建等待指定超时任务的方法
     pub fn new(rt: AsyncRuntime<O>,
                producor: Sender<(usize, AsyncTimingTask<O>)>,
                timeout: usize) -> Self {
@@ -497,9 +500,9 @@ impl<O: Default + 'static> AsyncWaitTimeout<O> {
     }
 }
 
-/*
-* 等待异步任务执行完成
-*/
+///
+/// 等待异步任务执行完成
+///
 pub struct AsyncWait<O: Default + 'static, R: Default + 'static, V: Send + 'static> {
     wait:   AsyncRuntime<O>,                        //需要等待的异步运行时
     runner: AsyncRuntime<R>,                        //需要运行的异步运行时
@@ -567,7 +570,7 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 }
 
 impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWait<O, R, V> {
-    //构建等待异步任务执行完成的方法
+    /// 构建等待异步任务执行完成的方法
     fn new(wait: AsyncRuntime<O>,
            runner: AsyncRuntime<R>,
            future: Option<BoxFuture<'static, Result<V>>>) -> Self {
@@ -580,9 +583,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWait<O,
     }
 }
 
-/*
-* 等待任意异步任务执行完成
-*/
+///
+/// 等待任意异步任务执行完成
+///
 pub struct AsyncWaitAny<O: Default + 'static, R: Default + 'static, V: Send + 'static> {
     wait:       AsyncRuntime<O>,                                                //需要等待的异步运行时
     futures:    Option<Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>>,  //需要运行的异步运行时和等待执行的异步任务
@@ -660,7 +663,7 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> Future for A
 }
 
 impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWaitAny<O, R, V> {
-    //构建等待异步任务执行完成的方法
+    /// 构建等待异步任务执行完成的方法
     fn new(wait: AsyncRuntime<O>,
            futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Self {
         AsyncWaitAny {
@@ -672,9 +675,9 @@ impl<O: Default + 'static, R: Default + 'static, V: Send + 'static> AsyncWaitAny
     }
 }
 
-/*
-* 异步映射，用于将多个任务派发到多个异步运行时
-*/
+///
+/// 异步映射，用于将多个任务派发到多个异步运行时
+///
 pub struct AsyncMap<O: Default + 'static, V: Send + 'static> {
     count:      usize,                                                  //派发的任务数量
     futures:    Vec<(AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>,  //待派发任务
@@ -685,7 +688,7 @@ pub struct AsyncMap<O: Default + 'static, V: Send + 'static> {
 unsafe impl<O: Default + 'static, V: Send + 'static> Send for AsyncMap<O, V> {}
 
 impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
-    //加入需要映射的任务，并返回任务序号
+    /// 加入需要映射的任务，并返回任务序号
     pub fn join<F>(&mut self, rt: AsyncRuntime<O>, future: F) -> usize
         where F: Future<Output = Result<V>> + Send + 'static {
         let index = self.count;
@@ -694,7 +697,7 @@ impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
         index
     }
 
-    //映射所有任务，并返回指定异步运行时的异步归并
+    /// 映射所有任务，并返回指定异步运行时的异步归并
     pub fn map(self, wait: AsyncRuntime<O>) -> AsyncReduce<O, V> {
         let count = Arc::new(AtomicUsize::new(self.count));
         let producor = self.producor.clone();
@@ -715,9 +718,9 @@ impl<O: Default + 'static, V: Send + 'static> AsyncMap<O, V> {
     }
 }
 
-/*
-* 异步归并，用于归并多个任务的返回值
-*/
+///
+/// 异步归并，用于归并多个任务的返回值
+///
 pub struct AsyncReduce<O: Default + 'static, V: Send + 'static> {
     futures:    Option<Vec<(AsyncRuntime<O>, BoxFuture<'static, Result<V>>)>>,  //待派发任务
     producor:   Box<Sender<(usize, Result<V>)>>,                                //异步返回值生成器
@@ -797,11 +800,11 @@ impl<O: Default + 'static, V: Send + 'static> Future for AsyncReduce<O, V> {
     }
 }
 
-/*
-* 派发一个工作线程
-* 返回线程的句柄，可以通过句柄关闭线程
-* 线程在没有任务可以执行时会休眠，当派发任务或唤醒任务时会自动唤醒线程
-*/
+///
+/// 派发一个工作线程
+/// 返回线程的句柄，可以通过句柄关闭线程
+/// 线程在没有任务可以执行时会休眠，当派发任务或唤醒任务时会自动唤醒线程
+///
 pub fn spawn_worker_thread<F0, F1>(thread_name: &str,
                                    thread_stack_size: usize,
                                    thread_status: Arc<AtomicBool>,
@@ -877,7 +880,7 @@ pub fn spawn_worker_thread<F0, F1>(thread_name: &str,
     thread_status_copy
 }
 
-//唤醒工作者所在线程，如果线程当前正在运行，则忽略
+/// 唤醒工作者所在线程，如果线程当前正在运行，则忽略
 pub fn wakeup_worker_thread<O: Default + 'static>(worker_waker: &Arc<(AtomicBool, Mutex<()>, Condvar)>, rt: &SingleTaskRuntime<O>) {
     //检查工作者所在线程是否需要唤醒
     if worker_waker.0.load(Ordering::Relaxed) && rt.len() > 0 {

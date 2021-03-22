@@ -1,3 +1,6 @@
+//! # 使用本地线程驱动的定时器
+//!
+
 #![allow(warnings)]
 
 #![feature(integer_atomics)]
@@ -7,21 +10,21 @@ use std::mem::transmute;
 use time::run_millis;
 use wheel::{wheel::Item, slab_wheel::Wheel};
 
-/*
-* 本地定时器，由本地线程推动
-*/
+///
+/// 本地定时器，由本地线程推动
+///
 pub struct LocalTimer<T: Send + 'static> {
     wheel:      Wheel<T>,       //定时轮
     tick_time:  usize,          //定时轮最小定时间隔
 }
 
 impl<T: Send + 'static> LocalTimer<T>{
-    //构建一个指定间隔时长的本地定时器，单位毫秒
+    /// 构建一个指定间隔时长的本地定时器，单位毫秒
     pub fn new() -> Self {
         LocalTimer::with_tick(10)
     }
 
-    //构建一个指定间隔时长的本地定时器，单位毫秒
+    /// 构建一个指定间隔时长的本地定时器，单位毫秒
     pub fn with_tick(mut tick_time: usize) -> Self {
         if tick_time < 10 {
             tick_time = 10;
@@ -35,12 +38,12 @@ impl<T: Send + 'static> LocalTimer<T>{
         }
     }
 
-    //获取当前未到期的定时任务
+    /// 获取当前未到期的定时任务
     pub fn len(&self) -> usize {
         self.wheel.len()
     }
 
-    //设置定时任务，返回任务句柄
+    /// 设置定时任务，返回任务句柄
     pub fn set_timeout(&mut self, task: T, timeout: usize) -> usize {
 	    let item = Item {
             elem: task,
@@ -49,7 +52,7 @@ impl<T: Send + 'static> LocalTimer<T>{
         self.wheel.insert(item)
     }
 
-    //推动定时器运行，已到时间的任务，会从定时器中移除，并返回
+    /// 推动定时器运行，已到时间的任务，会从定时器中移除，并返回
     pub fn poll(&mut self) -> Vec<T> {
         let mut tasks = Vec::new();
 
@@ -66,7 +69,7 @@ impl<T: Send + 'static> LocalTimer<T>{
         tasks
     }
 
-    //尝试推动定时器运行，返回定时器内部时间与当前时间的差值
+    /// 尝试推动定时器运行，返回定时器内部时间与当前时间的差值
     pub fn try_poll(&mut self) -> u64 {
         let last_run_millis = self.wheel.get_time();
         if run_millis() > self.tick_time as u64 + last_run_millis {
@@ -77,7 +80,7 @@ impl<T: Send + 'static> LocalTimer<T>{
         last_run_millis
     }
 
-    //尝试获取一个已到时间的任务，返回的任务会从定时器中移除
+    /// 尝试获取一个已到时间的任务，返回的任务会从定时器中移除
     pub fn try_pop(&mut self) -> Option<T> {
         if let Some(item) = self.wheel.get_one_zero() {
             //有0毫秒任务
@@ -92,7 +95,7 @@ impl<T: Send + 'static> LocalTimer<T>{
         None
     }
 
-    //取消指定任务句柄的定时任务
+    /// 取消指定任务句柄的定时任务
     pub fn cancel(&mut self, index: usize) -> Option<T> {
         match self.wheel.try_remove(index) {
             None => None,
@@ -102,13 +105,13 @@ impl<T: Send + 'static> LocalTimer<T>{
         }
     }
 
-    //清空所有定时任务
+    /// 清空所有定时任务
     pub fn clear(&mut self) {
         self.wheel.clear();
     }
 }
 
-//推动定时器运行超时时长为0的任务，返回已到时间的任务
+/// 推动定时器运行超时时长为0的任务，返回已到时间的任务
 fn poll_zero<T: Send + 'static>(timer: &mut LocalTimer<T>, tasks: &mut Vec<T>) {
     while timer.wheel.zero_size() > 0 {
         //如果有超时时长为0的任务
@@ -119,7 +122,7 @@ fn poll_zero<T: Send + 'static>(timer: &mut LocalTimer<T>, tasks: &mut Vec<T>) {
     }
 }
 
-//推动定时器运行定时任务，返回已到时间的任务
+/// 推动定时器运行定时任务，返回已到时间的任务
 fn poll_task<T: Send + 'static>(r: &mut Vec<(Item<T>, usize)>, tasks: &mut Vec<T>) {
     let mut j = r.len();
     for _ in 0..r.len(){

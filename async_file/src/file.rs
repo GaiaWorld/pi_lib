@@ -1,3 +1,6 @@
+//! # 异步文件，提供了对目录和文件的基础异步操作
+//!
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -101,9 +104,9 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> AsyncRenameFile<P, O
     }
 }
 
-/*
-* 异步重命名文件或目录
-*/
+///
+/// 异步重命名文件或目录
+///
 pub async fn rename<P, O>(runtime: MultiTaskRuntime<O>, from: P, to: P) -> Result<()>
     where P: AsRef<Path> + Send + 'static, O: Default + 'static {
     AsyncRenameFile::new(runtime, from, to).await
@@ -185,9 +188,9 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> AsyncCreateDir<P, O>
     }
 }
 
-/*
-* 异步创建目录
-*/
+///
+/// 异步创建目录
+///
 pub async fn create_dir<P, O>(runtime: MultiTaskRuntime<O>, path: P) -> Result<()>
     where P: AsRef<Path> + Send + 'static, O: Default + 'static {
     AsyncCreateDir::new(runtime, path).await
@@ -269,9 +272,9 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> AsyncRemoveDir<P, O>
     }
 }
 
-/*
-* 异步移除目录
-*/
+///
+/// 异步移除目录
+///
 pub async fn remove_dir<P, O>(runtime: MultiTaskRuntime<O>, path: P) -> Result<()>
     where P: AsRef<Path> + Send + 'static, O: Default + 'static {
     AsyncRemoveDir::new(runtime, path).await
@@ -356,9 +359,9 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> AsyncCopyFile<P, O> 
     }
 }
 
-/*
-* 异步复制文件
-*/
+///
+/// 异步复制文件
+///
 pub async fn copy_file<P, O>(runtime: MultiTaskRuntime<O>, from: P, to: P) -> Result<u64>
     where P: AsRef<Path> + Send + 'static, O: Default + 'static {
     AsyncCopyFile::new(runtime, from, to).await
@@ -440,17 +443,17 @@ impl<P: AsRef<Path> + Send + 'static, O: Default + 'static> AsyncRemoveFile<P, O
     }
 }
 
-/*
-* 异步移除文件
-*/
+///
+/// 异步移除文件
+///
 pub async fn remove_file<P, O>(runtime: MultiTaskRuntime<O>, path: P) -> Result<()>
     where P: AsRef<Path> + Send + 'static, O: Default + 'static {
     AsyncRemoveFile::new(runtime, path).await
 }
 
-/*
-* 文件选项
-*/
+///
+/// 文件选项
+///
 #[derive(Clone)]
 pub enum AsyncFileOptions {
     OnlyRead,           //只读
@@ -462,9 +465,9 @@ pub enum AsyncFileOptions {
     TruncateReadWrite,  //可读可覆写
 }
 
-/*
-* 写文件选项
-*/
+///
+/// 写文件选项
+///
 #[derive(Debug, Clone)]
 pub enum WriteOptions {
     None,
@@ -489,9 +492,9 @@ impl<O: Default + 'static> Debug for InnerFile<O> {
     }
 }
 
-/*
-* 异步文件
-*/
+///
+/// 异步文件
+///
 #[derive(Debug)]
 pub struct AsyncFile<O: Default + 'static>(Arc<InnerFile<O>>);
 
@@ -508,32 +511,32 @@ impl<O: Default + 'static> Clone for AsyncFile<O> {
 * 异步文件的同步方法
 */
 impl<O: Default + 'static> AsyncFile<O> {
-    //获取文件打开选项
+    /// 获取文件打开选项
     pub fn get_options(&self) -> AsyncFileOptions {
         self.0.options.clone()
     }
 
-    //检查是否是符号链接
+    /// 检查是否是符号链接
     pub fn is_symlink(&self) -> bool {
         self.0.inner.read().metadata().ok().unwrap().file_type().is_symlink()
     }
 
-    //检查是否是文件
+    /// 检查是否是文件
     pub fn is_file(&self) -> bool {
         self.0.inner.read().metadata().ok().unwrap().file_type().is_file()
     }
 
-    //检查文件是否只读
+    /// 检查文件是否只读
     pub fn is_only_read(&self) -> bool {
         self.0.inner.read().metadata().ok().unwrap().permissions().readonly()
     }
 
-    //获取文件大小
+    /// 获取文件大小
     pub fn get_size(&self) -> u64 {
         self.0.inner.read().metadata().ok().unwrap().len()
     }
 
-    //获取文件修改时间
+    /// 获取文件修改时间
     pub fn get_modified_time(&self) -> Result<Duration> {
         match self.0.inner.read().metadata().ok().unwrap().modified() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
@@ -546,7 +549,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         }
     }
 
-    //获取文件访问时间
+    /// 获取文件访问时间
     pub fn get_accessed_time(&self) -> Result<Duration> {
         match self.0.inner.read().metadata().ok().unwrap().accessed() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
@@ -559,7 +562,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         }
     }
 
-    //获取文件创建时间
+    /// 获取文件创建时间
     pub fn get_created_time(&self) -> Result<Duration> {
         match self.0.inner.read().metadata().ok().unwrap().created() {
             Err(e) => Err(Error::new(ErrorKind::Other, e)),
@@ -577,7 +580,7 @@ impl<O: Default + 'static> AsyncFile<O> {
 * 异步文件的异步方法
 */
 impl<O: Default + 'static> AsyncFile<O> {
-    //以指定方式异步打开指定的文件
+    /// 以指定方式异步打开指定的文件
     pub async fn open<P>(runtime: MultiTaskRuntime<O>,
                          path: P,
                          options: AsyncFileOptions) -> Result<Self>
@@ -585,7 +588,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         AsyncOpenFile::new(runtime, path, options).await
     }
 
-    //从指定位置开始异步读指定字节
+    /// 从指定位置开始异步读指定字节
     pub async fn read(&self, pos: u64, len: usize) -> Result<Vec<u8>> {
         if len == 0 {
             //无效的字节数，则立即返回
@@ -597,7 +600,7 @@ impl<O: Default + 'static> AsyncFile<O> {
         AsyncReadFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, len, 0).await
     }
 
-    //从指定位置开始异步写指定字节
+    /// 从指定位置开始异步写指定字节
     pub async fn write(&self, pos: u64, buf: Arc<[u8]>, options: WriteOptions) -> Result<usize> {
         if buf.len() == 0 {
             //无效的字节数，则立即返回

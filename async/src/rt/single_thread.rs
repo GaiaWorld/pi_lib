@@ -1,3 +1,6 @@
+//! 单线程运行时
+//!
+
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::future::Future;
@@ -15,9 +18,9 @@ use crate::{AsyncTask,
             rt::{AsyncWaitResult, WaitRunTask, AsyncTimingTask}};
 use super::{TaskId, AsyncRuntime, AsyncTaskTimer, AsyncWaitTimeout, AsyncWait, AsyncWaitAny, AsyncMap, alloc_rt_uid};
 
-/*
-* 单线程任务
-*/
+///
+/// 单线程任务
+///
 pub struct SingleTask<O: Default + 'static> {
     uid:            TaskId,                                     //任务唯一id
     future:         UnsafeCell<Option<BoxFuture<'static, O>>>,  //异步任务
@@ -58,7 +61,7 @@ impl<O: Default + 'static> AsyncTask for SingleTask<O> {
 }
 
 impl<O: Default + 'static> SingleTask<O> {
-    //构建单线程任务
+    /// 构建单线程任务
     pub fn new(uid: TaskId,
                queue: Arc<SingleTasks<O>>,
                future: Option<BoxFuture<'static, O>>) -> SingleTask<O> {
@@ -69,15 +72,15 @@ impl<O: Default + 'static> SingleTask<O> {
         }
     }
 
-    //检查是否允许唤醒
+    /// 检查是否允许唤醒
     pub fn is_enable_wakeup(&self) -> bool {
         self.uid.0.load(Ordering::Relaxed) > 0
     }
 }
 
-/*
-* 单线程任务队列
-*/
+///
+/// 单线程任务队列
+///
 pub struct SingleTasks<O: Default + 'static> {
     id:             usize,                                          //绑定的线程唯一id
     consumer:       Arc<RefCell<MpscRecv<Arc<SingleTask<O>>>>>,     //任务消费者
@@ -104,7 +107,7 @@ impl<O: Default + 'static> Clone for SingleTasks<O> {
 }
 
 impl<O: Default + 'static> SingleTasks<O> {
-    //获取任务数量
+    /// 获取任务数量
     #[inline]
     pub fn len(&self) -> usize {
         if let Some(len) = self.produce_count.load(Ordering::Relaxed).checked_sub(self.consume_count.load(Ordering::Relaxed)) {
@@ -114,13 +117,13 @@ impl<O: Default + 'static> SingleTasks<O> {
         }
     }
 
-    //向单线程任务队列头推入指定的任务
+    /// 向单线程任务队列头推入指定的任务
     pub fn push_front(&self, task: Arc<SingleTask<O>>) {
         self.consumer.as_ref().borrow_mut().push_front(task);
         self.produce_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    //向单线程任务队列尾推入指定的任务
+    /// 向单线程任务队列尾推入指定的任务
     pub fn push_back(&self, task: Arc<SingleTask<O>>) -> Result<()> {
         self.producer.send(task);
         self.produce_count.fetch_add(1, Ordering::Relaxed);
@@ -128,9 +131,9 @@ impl<O: Default + 'static> SingleTasks<O> {
     }
 }
 
-/*
-* 异步单线程任务运行时
-*/
+///
+/// 异步单线程任务运行时
+///
 pub struct SingleTaskRuntime<O: Default + 'static>(Arc<(
     usize,                                  //运行时唯一id
     Arc<SingleTasks<O>>,                    //异步任务队列
@@ -151,27 +154,27 @@ impl<O: Default + 'static> Clone for SingleTaskRuntime<O> {
 * 异步单线程任务运行时同步方法
 */
 impl<O: Default + 'static> SingleTaskRuntime<O> {
-    //获取当前运行时的唯一id
+    /// 获取当前运行时的唯一id
     pub fn get_id(&self) -> usize {
         (self.0).0
     }
 
-    //获取当前运行时待处理任务数量
+    /// 获取当前运行时待处理任务数量
     pub fn wait_len(&self) -> usize {
         self.len()
     }
 
-    //获取当前运行时任务数量
+    /// 获取当前运行时任务数量
     pub fn len(&self) -> usize {
         (self.0).1.len()
     }
 
-    //分配异步任务的唯一id
+    /// 分配异步任务的唯一id
     pub fn alloc(&self) -> TaskId {
         TaskId(Arc::new(AtomicUsize::new(0)))
     }
 
-    //派发一个指定的异步任务到异步单线程运行时
+    /// 派发一个指定的异步任务到异步单线程运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         let queue = (self.0).1.clone();
@@ -183,7 +186,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         Ok(())
     }
 
-    //派发一个在指定时间后执行的异步任务到异步单线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    /// 派发一个在指定时间后执行的异步任务到异步单线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
     pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<usize>
         where F: Future<Output = O> + Send + 'static {
         let queue = (self.0).1.clone();
@@ -193,18 +196,18 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         Ok(handle)
     }
 
-    //取消指定句柄的单线程定时异步任务
+    /// 取消指定句柄的单线程定时异步任务
     pub fn cancel_timing(&self, handle: usize) {
         let _ = (self.0).3.lock().timer.as_ref().borrow_mut().cancel(handle);
     }
 
-    //挂起指定唯一id的异步任务
+    /// 挂起指定唯一id的异步任务
     pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
         task_id.0.store(Box::into_raw(Box::new(waker)) as usize, Ordering::Relaxed);
         Poll::Pending
     }
 
-    //唤醒指定唯一id的异步任务
+    /// 唤醒指定唯一id的异步任务
     pub fn wakeup(&self, task_id: &TaskId) {
         match task_id.0.load(Ordering::Relaxed) {
             0 => panic!("Single runtime wakeup task failed, reason: task id not exist"),
@@ -217,7 +220,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         }
     }
 
-    //构建用于派发多个异步任务到指定运行时的映射
+    /// 构建用于派发多个异步任务到指定运行时的映射
     pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
         let (producor, consumer) = unbounded();
 
@@ -234,12 +237,12 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 * 异步单线程任务运行时异步方法
 */
 impl<O: Default + 'static> SingleTaskRuntime<O> {
-    //挂起当前单线程运行时的当前任务，等待指定的时间后唤醒当前任务
+    /// 挂起当前单线程运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
         AsyncWaitTimeout::new(AsyncRuntime::Local(self.clone()), (self.0).2.clone(), timeout).await
     }
 
-    //挂起当前单线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
+    /// 挂起当前单线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
     pub async fn wait<R, V, F>(&self, rt: AsyncRuntime<R>, future: F) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static,
@@ -247,7 +250,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
         AsyncWait::new(AsyncRuntime::Local(self.clone()), rt, Some(Box::new(future).boxed())).await
     }
 
-    //挂起当前单线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    /// 挂起当前单线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
     pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static  {
@@ -255,9 +258,9 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
     }
 }
 
-/*
-* 单线程异步任务执行器
-*/
+///
+/// 单线程异步任务执行器
+///
 pub struct SingleTaskRunner<O: Default + 'static> {
     is_running: AtomicBool,             //是否开始运行
     runtime:    SingleTaskRuntime<O>,   //异步单线程任务运行时
@@ -267,12 +270,12 @@ unsafe impl<O: Default + 'static> Send for SingleTaskRunner<O> {}
 unsafe impl<O: Default + 'static> Sync for SingleTaskRunner<O> {}
 
 impl<O: Default + 'static> SingleTaskRunner<O> {
-    //构建单线程异步任务执行器
+    /// 构建单线程异步任务执行器
     pub fn new() -> Self {
         SingleTaskRunner::with_thread_waker(None)
     }
 
-    //用绑定线程的唤醒器，构建单线程任务队列
+    /// 用绑定线程的唤醒器，构建单线程任务队列
     pub fn with_thread_waker(thread_waker: Option<Arc<(AtomicBool, Mutex<()>, Condvar)>>) -> Self {
         //构建单线程任务队列
         let rt_uid = alloc_rt_uid();
@@ -305,7 +308,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
         }
     }
 
-    //启动单线程异步任务执行器
+    /// 启动单线程异步任务执行器
     pub fn startup(&self) -> Option<SingleTaskRuntime<O>> {
         if self.is_running.compare_and_swap(false, true, Ordering::SeqCst) {
             //已启动，则忽略
@@ -315,7 +318,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
         Some(self.runtime.clone())
     }
 
-    //运行一次单线程异步任务执行器，返回当前任务队列中任务的数量
+    /// 运行一次单线程异步任务执行器，返回当前任务队列中任务的数量
     pub fn run_once(&self) -> Result<usize> {
         if !self.is_running.load(Ordering::Relaxed) {
             //未启动，则返回错误原因
@@ -355,7 +358,7 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
         Ok((self.runtime.0).1.consumer.as_ref().borrow().len())
     }
 
-    //运行单线程异步任务执行器，并执行任务队列中的所有任务
+    /// 运行单线程异步任务执行器，并执行任务队列中的所有任务
     pub fn run(&self) -> Result<usize> {
         if !self.is_running.load(Ordering::Relaxed) {
             //未启动，则返回错误原因

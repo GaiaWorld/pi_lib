@@ -9,18 +9,18 @@ use atom::Atom;
 use worker::task::TaskType;
 use future::FutTask;
 
-/*
-* 未来异步任务优先级
-*/
+///
+/// 未来异步任务优先级
+///
 const FUTURE_ASYNC_TASK_PRIORITY: usize = 100;
 
-/*
-* 未来任务池
-*/
+///
+/// 未来任务池
+///
 #[derive(Debug)]
 pub struct FutTaskPool {
-    counter:    AtomicUsize,                                                                            //未来任务计数器
-    executor:   fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>,   //未来任务执行器
+    counter:    AtomicUsize,                                                                                //未来任务计数器
+    executor:   fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>,  //未来任务执行器
 }
 
 impl Clone for FutTaskPool {
@@ -33,7 +33,7 @@ impl Clone for FutTaskPool {
 }
 
 impl FutTaskPool {
-    //构建一个未来任务池
+    /// 构建一个未来任务池
     pub fn new(executor: fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>) -> Self {
         FutTaskPool {
             counter: AtomicUsize::new(0),
@@ -41,12 +41,12 @@ impl FutTaskPool {
         }
     }
 
-    //获取当前未来任务计数
+    /// 获取当前未来任务计数
     pub fn counte(&self) -> usize {
         self.counter.load(Ordering::Relaxed)
     }
 
-    //分派一个未来任务
+    /// 分派一个未来任务
     pub fn spawn<T, E>(&self,
         callback: Box<dyn FnOnce(fn(TaskType, usize, Option<isize>, Box<dyn FnOnce(Option<isize>)>, Atom) -> Option<isize>, Arc<Producer<Result<T, E>>>, Arc<Consumer<Task>>, usize)>,
         timeout: u32) -> FutTask<T, E> where T: Send + 'static, E: Send + 'static {

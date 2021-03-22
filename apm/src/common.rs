@@ -1,3 +1,6 @@
+//! # 获取平台通用的系统信息
+//!
+
 use std::thread;
 use std::sync::Arc;
 use std::net::IpAddr;
@@ -24,9 +27,9 @@ lazy_static! {
     static ref SERVER_PORTS_TABLE: Arc<RwLock<FnvHashMap<u16, SocketAddr>>> = Arc::new(RwLock::new(FnvHashMap::default()));
 }
 
-/*
-* 获取所有打开的服务器端口
-*/
+///
+/// 获取所有打开的服务器端口
+///
 pub fn server_ports() -> Option<Vec<u16>> {
     let ports = SERVER_PORTS_TABLE.read().unwrap();
     let keys = ports.keys();
@@ -39,9 +42,9 @@ pub fn server_ports() -> Option<Vec<u16>> {
     }).collect())
 }
 
-/*
-* 获取指定服务器端口的注册信息
-*/
+///
+/// 获取指定服务器端口的注册信息
+///
 pub fn port_info(port: u16) -> Option<SocketAddr> {
     if let Some(addr) = SERVER_PORTS_TABLE.read().unwrap().get(&port) {
         return Some(addr.clone());
@@ -50,43 +53,43 @@ pub fn port_info(port: u16) -> Option<SocketAddr> {
     None
 }
 
-/*
-* 注册指定服务器端口，返回上个服务器端口
-*/
+///
+/// 注册指定服务器端口，返回上个服务器端口
+///
 pub fn register_server_port(addr: SocketAddr) -> Option<SocketAddr> {
     SERVER_PORTS_TABLE.write().unwrap().insert(addr.port(), addr)
 }
 
-/*
-* 注销指定服务器端口
-*/
+///
+/// 注销指定服务器端口
+///
 pub fn unregister_server_port(port: u16) -> Option<SocketAddr> {
     SERVER_PORTS_TABLE.write().unwrap().remove(&port)
 }
 
-/*
-* 进程状态
-*/
+///
+/// 进程状态
+///
 pub type ProcessState = ProcessStatus;
 
-/*
-* 硬盘类型
-*/
+///
+/// 硬盘类型
+///
 pub type DiskType = sysinfo::DiskType;
 
-/*
-* TCP状态
-*/
+///
+/// TCP状态
+///
 pub type TcpStatus = TcpState;
 
-/*
-* 网络连接信息
-*/
+///
+/// 网络连接信息
+///
 type NetSocketsInfo = Vec<(NetProtocolType, IpAddr, u16, Option<IpAddr>, Option<u16>, Option<TcpStatus>, Vec<u32>)>;
 
-/*
-* 守护对象，用于监控对象是否退出或回收，如果是则执行回调
-*/
+///
+/// 守护对象，用于监控对象是否退出或回收，如果是则执行回调
+///
 pub struct ApmGuard<T> {
     arg: T,
     callback: Arc<Fn(&mut T, thread::Thread)>,
@@ -99,7 +102,7 @@ impl<T> Drop for ApmGuard<T> {
 }
 
 impl<T> ApmGuard<T> {
-    //构建守护对象
+    /// 构建守护对象
     pub fn new(arg: T, callback: Arc<Fn(&mut T, thread::Thread)>) -> Self {
         ApmGuard {
             arg,
@@ -108,18 +111,18 @@ impl<T> ApmGuard<T> {
     }
 }
 
-/*
-* 网络IP类型
-*/
+///
+/// 网络IP类型
+///
 pub enum NetIPType {
     IPv4,
     IPv6,
     All,
 }
 
-/*
-* 网络协议类型
-*/
+///
+/// 网络协议类型
+///
 #[derive(Debug)]
 pub enum NetProtocolType {
     TCP,
@@ -127,9 +130,9 @@ pub enum NetProtocolType {
     All,
 }
 
-/*
-* 通用系统状态
-*/
+///
+/// 通用系统状态
+///
 #[derive(Clone)]
 pub struct SysStat {
     inner: Arc<RefCell<System>>,            //通用内部系统状态
@@ -137,7 +140,7 @@ pub struct SysStat {
 }
 
 impl SysStat {
-    //构建通用系统状态
+    /// 构建通用系统状态
     #[cfg(any(windows))]
     pub fn new() -> Self {
         SysStat {
@@ -154,7 +157,7 @@ impl SysStat {
         }
     }
 
-    //获取指定平台详细状态
+    /// 获取指定平台详细状态
     pub fn special_platform(&self) -> Option<Arc<SysSpecialStat>> {
         if let Some(detal) = &self.special {
             return Some(detal.clone());
@@ -163,7 +166,7 @@ impl SysStat {
         None
     }
 
-    //获取cpu逻辑核心数
+    /// 获取cpu逻辑核心数
     pub fn processor_count(&self) -> usize {
         self.inner.borrow_mut().refresh_system();
 
@@ -175,14 +178,14 @@ impl SysStat {
         count - 1
     }
 
-    //获取cpu占用率
+    /// 获取cpu占用率
     pub fn cpu_usage(&self) -> f32 {
         self.inner.borrow_mut().refresh_system();
 
         self.inner.borrow().get_global_processor_info().get_cpu_usage()
     }
 
-    //获取指定逻辑核心的占用率
+    /// 获取指定逻辑核心的占用率
     pub fn processor_usage(&self, n: usize) -> f32 {
         self.inner.borrow_mut().refresh_system();
 
@@ -198,7 +201,7 @@ impl SysStat {
         0.0
     }
 
-    //获取cpu和所有逻辑核心的占用率
+    /// 获取cpu和所有逻辑核心的占用率
     pub fn processores_usage(&self) -> (f32, Vec<f32>) {
         self.inner.borrow_mut().refresh_system();
 
@@ -222,7 +225,7 @@ impl SysStat {
         (cpu_usage, vec)
     }
 
-    //获取系统内存基础状态，单位KB
+    /// 获取系统内存基础状态，单位KB
     pub fn memory_usage(&self) -> (u64, u64, u64, u64, u64, u64) {
         self.inner.borrow_mut().refresh_system();
 
@@ -235,7 +238,7 @@ impl SysStat {
          inner.get_used_swap())     //系统已使用交换区
     }
 
-    //获取当前进程id
+    /// 获取当前进程id
     #[cfg(any(windows))]
     pub fn current_pid(&self) -> usize {
         sysinfo::get_current_pid().unwrap()
@@ -259,7 +262,7 @@ impl SysStat {
          process.status())              //当前进程运行状态
     }
 
-    //获取硬盘基础状态
+    /// 获取硬盘基础状态
     pub fn disk_usage(&self) -> Vec<(String, DiskType, String, PathBuf, u64, u64)> {
         self.inner.borrow_mut().refresh_disks();
 
@@ -290,7 +293,7 @@ impl SysStat {
         vec
     }
 
-    //获取网络io当前总流量，单位B
+    /// 获取网络io当前总流量，单位B
     pub fn net_io_usage(&self) -> (u64, u64) {
         self.inner.borrow_mut().refresh_networks();
 
@@ -306,7 +309,7 @@ impl SysStat {
         (input, output)
     }
 
-    //获取系统网络连接数
+    /// 获取系统网络连接数
     pub fn sockets_size(&self, ip_type: NetIPType, protocol_type: NetProtocolType) -> usize {
         let (address_flag, protocol_flag) = filter_sockets_args(ip_type, protocol_type);
 
@@ -317,7 +320,7 @@ impl SysStat {
         0
     }
 
-    //获取系统网络连接状态
+    /// 获取系统网络连接状态
     pub fn sockets_info(&self, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
         let mut vec = Vec::new();
         let (address_flag, protocol_flag) = filter_sockets_args(ip_type, protocol_type);
@@ -331,7 +334,7 @@ impl SysStat {
         vec
     }
 
-    //获取指定进程的网络连接状态
+    /// 获取指定进程的网络连接状态
     pub fn process_sockets_info(&self, pid: i32, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
         let mut vec = Vec::new();
         let (address_flag, protocol_flag) = filter_sockets_args(ip_type, protocol_type);
@@ -355,12 +358,12 @@ impl SysStat {
         vec
     }
 
-    //获取指定进程的网络连接状态
+    /// 获取指定进程的网络连接状态
     pub fn current_process_sockets_info(&self, pid: i32, ip_type: NetIPType, protocol_type: NetProtocolType) -> NetSocketsInfo {
         self.process_sockets_info(pid, ip_type, protocol_type)
     }
 
-    //获取系统正常运行时间，单位秒
+    /// 获取系统正常运行时间，单位秒
     pub fn uptime(&self) -> u64 {
         self.inner.borrow_mut().refresh_system();
 

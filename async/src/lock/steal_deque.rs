@@ -1,3 +1,6 @@
+//! # 多生产者多消费者的双端队列，支持任务窃取
+//!
+
 use std::sync::Arc;
 use std::ptr::null_mut;
 use std::cell::UnsafeCell;
@@ -15,9 +18,9 @@ const UNLOCK_EMPTY: u8 = 0;     //无锁无任务
 const UNLOCK_NON_EMPTY: u8 = 1; //无锁有任务
 const LOCKED: u8 = 2;           //有锁
 
-/*
-* 构建支持窃取值的MPSC双端队列，并返回发送者和接收者
-*/
+///
+/// 构建支持窃取值的MPSC双端队列，并返回发送者和接收者
+///
 pub fn steal_deque<T: 'static>() -> (Sender<T>, Receiver<T>) {
     let send_buf = Arc::new(SendBuf {
         buf_status: AtomicU8::new(UNLOCK_EMPTY),
@@ -47,9 +50,9 @@ struct SendBuf<T: 'static> {
     buf:           UnsafeCell<Option<Vec<T>>>,       //缓冲区
 }
 
-/*
-* 双端队列的发送者
-*/
+///
+/// 双端队列的发送者
+///
 pub struct Sender<T: 'static> {
     inner:  Arc<SendBuf<T>>, //缓冲区
 }
@@ -66,12 +69,12 @@ impl<T: 'static> Clone for Sender<T> {
 }
 
 impl<T: 'static> Sender<T> {
-    //尝试检查发送缓冲区是否为空，不允许用于精确判断
+    /// 尝试检查发送缓冲区是否为空，不允许用于精确判断
     pub fn try_is_empty(&self) -> bool {
         self.inner.buf_status.load(Ordering::SeqCst) == UNLOCK_EMPTY
     }
 
-    //获取发送缓冲区长度，可用于精确判断
+    /// 获取发送缓冲区长度，可用于精确判断
     pub fn len(&self) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -106,7 +109,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //尝试指定次数，发送指定的值，发送失败则返回原值
+    /// 尝试指定次数，发送指定的值，发送失败则返回原值
     pub fn try_send(&self, limit: usize, value: T) -> Option<T> {
         let mut spin_len = 1;
         let mut try_count = 0;
@@ -152,7 +155,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //发送指定的值，返回当前发送缓冲区长度
+    /// 发送指定的值，返回当前发送缓冲区长度
     pub fn send(&self, value: T) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -191,7 +194,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //将指定的缓冲区追加到当前缓冲区尾部，返回当前发送缓冲区长度
+    /// 将指定的缓冲区追加到当前缓冲区尾部，返回当前发送缓冲区长度
     pub fn append(&self, buf: &mut Vec<T>) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -230,7 +233,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //尝试指定次数，获取发送缓冲区
+    /// 尝试指定次数，获取发送缓冲区
     pub fn try_take(&self, limit: usize) -> Option<Vec<T>> {
         let mut spin_len = 1;
         let mut try_count = 0;
@@ -269,7 +272,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //获取发送缓冲区
+    /// 获取发送缓冲区
     pub fn take(&self) -> Vec<T> {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -310,9 +313,9 @@ struct RecvBuf<T: 'static> {
     buf:    UnsafeCell<Option<T>>,  //缓冲区
 }
 
-/*
-* 双端队列的接收者
-*/
+///
+/// 双端队列的接收者
+///
 pub struct Receiver<T: 'static> {
     inner:  Arc<RecvBuf<T>>,  //缓冲区
 }
@@ -329,7 +332,7 @@ impl<T: 'static> Clone for Receiver<T> {
 }
 
 impl<T: 'static> Receiver<T> {
-    //检查接收队列是否为空
+    /// 检查接收队列是否为空
     pub fn is_empty_recv(&self) -> bool {
         unsafe {
             let deque = self.inner.deque.load(Ordering::SeqCst);
@@ -342,7 +345,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //检查队列是否为空
+    /// 检查队列是否为空
     pub fn is_empty(&self) -> bool {
         unsafe {
             let deque = self.inner.deque.load(Ordering::SeqCst);
@@ -357,7 +360,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //获取队列长度
+    /// 获取队列长度
     pub fn len(&self) -> usize {
         let deque = self.inner.deque.load(Ordering::SeqCst);
         if deque.is_null() {
@@ -374,7 +377,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //非阻塞接收值，并记录当前接收队列的长度
+    /// 非阻塞接收值，并记录当前接收队列的长度
     pub fn try_recv(&self, counter: &AtomicUsize) -> Option<T> {
         if let Some(value) = unsafe { (&mut *self.inner.buf.get()).take() } {
             Some(value)
@@ -393,7 +396,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //非阻塞弹出值，并记录当前接收队列的长度
+    /// 非阻塞弹出值，并记录当前接收队列的长度
     fn pop(&self, counter: &AtomicUsize) -> Option<T> {
         if let Some(mut deque) = swap_recv_deque(&self.inner.deque, null_mut()) {
             if let Some(value) = deque.pop_front() {
@@ -459,13 +462,13 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //获取接收队列
+    /// 获取接收队列
     pub fn take(&self) -> Option<VecDeque<T>> {
         //交换接收队列，返回当前接收队列
         swap_recv_deque(&self.inner.deque, Box::into_raw(Box::new(VecDeque::new())))
     }
 
-    //向接收缓冲区头部增加值
+    /// 向接收缓冲区头部增加值
     pub fn push_front(&self, value: T, counter: &AtomicUsize)  {
         unsafe {
             if let Some(last_value) = (&mut *self.inner.buf.get()).take() {
@@ -484,7 +487,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //向接收缓冲区尾部增加值
+    /// 向接收缓冲区尾部增加值
     pub fn append(&self, value: T, counter: &AtomicUsize)  {
         if let Some(mut deque) = swap_recv_deque(&self.inner.deque, null_mut()) {
             deque.push_back(value);

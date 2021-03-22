@@ -1,3 +1,6 @@
+//! # 通用异步互斥锁，不支持重入
+//!
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::future::Future;
@@ -8,9 +11,9 @@ use std::task::{Waker, Context, Poll};
 
 use super::spin_lock::SpinLock;
 
-/*
-* 异步互斥锁守护者
-*/
+///
+/// 异步互斥锁守护者
+///
 pub struct MutexGuard<T> {
     guarder:  Arc<InnerMutex<T>>,  //内部锁
 }
@@ -47,9 +50,9 @@ impl<T> Drop for MutexGuard<T> {
     }
 }
 
-/*
-* 异步互斥锁，支持临界区内执行异步任务等待，不支持重入
-*/
+///
+/// 异步互斥锁，支持临界区内执行异步任务等待，不支持重入
+///
 pub struct Mutex<T> {
     inner:  Arc<InnerMutex<T>>,  //内部锁
 }
@@ -61,7 +64,7 @@ unsafe impl<T> Sync for Mutex<T> {}
 * 异步互斥锁同步方法
 */
 impl<T> Mutex<T> {
-    //构建异步互斥锁
+    /// 构建异步互斥锁
     pub fn new(v: T) -> Self {
         let inner = Arc::new(InnerMutex {
             status: SpinLock::new((true, VecDeque::new())),
@@ -78,7 +81,7 @@ impl<T> Mutex<T> {
 * 异步互斥锁异步方法
 */
 impl<T> Mutex<T> {
-    //获取异步互斥锁
+    /// 获取异步互斥锁
     pub async fn lock(&self) -> MutexGuard<T> {
         FutureMutex {
             inner: self.inner.clone(),

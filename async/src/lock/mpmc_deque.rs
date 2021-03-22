@@ -1,3 +1,6 @@
+//! # 多生产者多消费者的双端队列
+//!
+
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
@@ -25,9 +28,9 @@ struct InnerDeque<T: 'static> {
 unsafe impl<T: 'static> Send for InnerDeque<T> {}
 unsafe impl<T: 'static> Sync for InnerDeque<T> {}
 
-/*
-* MPMC双端队列
-*/
+///
+/// MPMC双端队列
+///
 pub struct MpmcDeque<T: 'static> {
     inner:  Arc<InnerDeque<T>>, //内部自旋锁双端队列
 }
@@ -44,7 +47,7 @@ impl<T: 'static> Clone for MpmcDeque<T> {
 }
 
 impl<T: 'static> MpmcDeque<T> {
-    //构建自旋锁双端队列
+    /// 构建自旋锁双端队列
     pub fn new() -> Self {
         let inner = Arc::new(InnerDeque {
             tail_status: AtomicU8::new(UNLOCK_EMPTY),
@@ -58,7 +61,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //构建指定初始容量的自旋锁双端队列
+    /// 构建指定初始容量的自旋锁双端队列
     pub fn with_capacity(capacity: usize) -> Self {
         let inner = Arc::new(InnerDeque {
             tail_status: AtomicU8::new(UNLOCK_EMPTY),
@@ -72,17 +75,17 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //检查队列尾是否为空
+    /// 检查队列尾是否为空
     pub fn is_empty_tail(&self) -> bool {
         self.inner.tail_status.load(Ordering::SeqCst) == UNLOCK_EMPTY
     }
 
-    //检查队列头是否为空
+    /// 检查队列头是否为空
     pub fn is_empty_head(&self) -> bool {
         self.inner.head_status.load(Ordering::SeqCst) == UNLOCK_EMPTY
     }
 
-    //获取队列尾长度
+    /// 获取队列尾长度
     pub fn tail_len(&self) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -117,7 +120,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //获取队列头长度
+    /// 获取队列头长度
     pub fn head_len(&self) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -152,7 +155,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //从队列头弹出值
+    /// 从队列头弹出值
     pub fn pop(&self) -> Option<T> {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -228,7 +231,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //从队列头加入值
+    /// 从队列头加入值
     pub fn push_front(&self, value: T) {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -266,7 +269,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //从队列尾加入值
+    /// 从队列尾加入值
     pub fn push_back(&self, value: T) {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -304,7 +307,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //从队列头取所有值
+    /// 从队列头取所有值
     pub fn take_heads(&self) -> VecDeque<T> {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -335,7 +338,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //从队列尾取所有值
+    /// 从队列尾取所有值
     pub fn take_tails(&self) -> Vec<T> {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -366,7 +369,7 @@ impl<T: 'static> MpmcDeque<T> {
         }
     }
 
-    //连接到队列头
+    /// 连接到队列头
     pub fn join(&self, head: Vec<T>) {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;

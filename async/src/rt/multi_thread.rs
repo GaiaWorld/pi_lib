@@ -1,3 +1,6 @@
+//! # 多线程运行时
+//!
+
 use std::sync::Arc;
 use std::future::Future;
 use std::time::Duration;
@@ -30,9 +33,9 @@ thread_local! {
     static THREAD_LOCAL_ID: UnsafeCell<usize> = UnsafeCell::new(0);
 }
 
-/*
-* 多线程任务
-*/
+///
+/// 多线程任务
+///
 pub struct MultiTask<O: Default + 'static> {
     uid:    TaskId,                                     //任务唯一id
     future: UnsafeCell<Option<BoxFuture<'static, O>>>,  //异步任务
@@ -78,7 +81,7 @@ impl<O: Default + 'static> AsyncTask for MultiTask<O> {
 }
 
 impl<O: Default + 'static> MultiTask<O> {
-    //构建多线程任务
+    /// 构建多线程任务
     pub fn new(uid: TaskId, queue: Arc<MultiTasks<O>>, future: Option<BoxFuture<'static, O>>) -> MultiTask<O> {
         MultiTask {
             uid,
@@ -87,15 +90,15 @@ impl<O: Default + 'static> MultiTask<O> {
         }
     }
 
-    //检查是否允许唤醒
+    /// 检查是否允许唤醒
     pub fn is_enable_wakeup(&self) -> bool {
         self.uid.0.load(Ordering::Relaxed) > 0
     }
 }
 
-/*
-* 多线程任务队列
-*/
+///
+/// 多线程任务队列
+///
 pub struct MultiTasks<O: Default + 'static> {
     id:             usize,                          //绑定的线程唯一id
     consumer:       StealRecv<Arc<MultiTask<O>>>,   //任务消费者
@@ -122,23 +125,23 @@ impl<O: Default + 'static> Clone for MultiTasks<O> {
 }
 
 impl<O: Default + 'static> MultiTasks<O> {
-    //获取任务数量，不精确
+    /// 获取任务数量，不精确
     #[inline]
     pub fn len(&self) -> usize {
         self.producer.len() + self.consumer.len()
     }
 
-    //当前队列的工作者是否正在工作
+    /// 当前队列的工作者是否正在工作
     pub fn is_working(&self) -> bool {
         self.is_working.load(Ordering::Relaxed)
     }
 
-    //设置当前工作者状态为正在工作
+    /// 设置当前工作者状态为正在工作
     pub fn running_worker(&self) {
         self.is_working.store(true, Ordering::Relaxed);
     }
 
-    //设置当前工作者状态为已休眠
+    /// 设置当前工作者状态为已休眠
     pub fn sleep_worker(&self) {
         self.is_working.compare_exchange(true,
                                          false,
@@ -146,7 +149,7 @@ impl<O: Default + 'static> MultiTasks<O> {
                                          Ordering::Relaxed);
     }
 
-    //尝试向多线程任务队列尾推入指定的任务
+    /// 尝试向多线程任务队列尾推入指定的任务
     pub fn try_push_back(&self, task: Arc<MultiTask<O>>) -> Option<Arc<MultiTask<O>>> {
         if let Some(task) = self.producer.try_send(1, task) {
             //尝试推入指定的任务失败
@@ -156,13 +159,13 @@ impl<O: Default + 'static> MultiTasks<O> {
         None
     }
 
-    //向多线程任务队列尾推入指定的任务
+    /// 向多线程任务队列尾推入指定的任务
     pub fn push_back(&self, task: Arc<MultiTask<O>>) -> Result<()> {
         self.producer.send(task);
         Ok(())
     }
 
-    //尝试向多线程任务队列尾推入指定的任务，并根据需要通知控制者唤醒休眠的工作者，成功返回空
+    /// 尝试向多线程任务队列尾推入指定的任务，并根据需要通知控制者唤醒休眠的工作者，成功返回空
     pub fn try_push_back_notify(&self, task: Arc<MultiTask<O>>) -> Option<Arc<MultiTask<O>>> {
         if let Some(task) = self.producer.try_send(1, task) {
             //尝试推入指定的任务失败
@@ -182,7 +185,7 @@ impl<O: Default + 'static> MultiTasks<O> {
         None
     }
 
-    //向多线程任务队列尾推入指定的任务，并根据需要通知控制者唤醒休眠的工作者
+    /// 向多线程任务队列尾推入指定的任务，并根据需要通知控制者唤醒休眠的工作者
     pub fn push_back_notify(&self, task: Arc<MultiTask<O>>) -> Result<()> {
         self.producer.send(task);
 
@@ -199,20 +202,20 @@ impl<O: Default + 'static> MultiTasks<O> {
         Ok(())
     }
 
-    //向多线程任务接收队列头推入指定的任务，一般用于当前线程内的推入
+    /// 向多线程任务接收队列头推入指定的任务，一般用于当前线程内的推入
     pub fn push_recv_front(&self, task: Arc<MultiTask<O>>) {
         self.consumer.push_front(task, &self.recv_counter);
     }
 
-    //向多线程任务接收队列尾推入指定的任务，一般用于当前线程内的推入
+    /// 向多线程任务接收队列尾推入指定的任务，一般用于当前线程内的推入
     pub fn push_recv_back(&self, task: Arc<MultiTask<O>>) {
         self.consumer.append(task, &self.recv_counter);
     }
 }
 
-/*
-* 异步多线程任务运行时，支持运行时线程间任务窃取
-*/
+///
+/// 异步多线程任务运行时，支持运行时线程间任务窃取
+///
 pub struct MultiTaskRuntime<O: Default + 'static>(Arc<(
     usize,                                                                              //运行时唯一id
     AtomicUsize,                                                                        //异步任务计数器
@@ -234,22 +237,22 @@ impl<O: Default + 'static> Clone for MultiTaskRuntime<O> {
 * 异步多线程任务运行时同步方法
 */
 impl<O: Default + 'static> MultiTaskRuntime<O> {
-    //获取当前运行时的唯一id
+    /// 获取当前运行时的唯一id
     pub fn get_id(&self) -> usize {
         (self.0).0
     }
 
-    //获取当前运行时的工作者线程数量
+    /// 获取当前运行时的工作者线程数量
     pub fn worker_size(&self) -> usize {
         (self.0).2.len()
     }
 
-    //获取当前运行时待处理任务数量
+    /// 获取当前运行时待处理任务数量
     pub fn wait_len(&self) -> usize {
         (self.0).3.load(Ordering::Relaxed)
     }
 
-    //获取当前运行时任务数量，不精确
+    /// 获取当前运行时任务数量，不精确
     pub fn len(&self) -> usize {
         let mut len = 0;
         for tasks in (self.0).2.iter() {
@@ -258,12 +261,12 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         len
     }
 
-    //分配异步任务的唯一id
+    /// 分配异步任务的唯一id
     pub fn alloc(&self) -> TaskId {
         TaskId(Arc::new(AtomicUsize::new(0)))
     }
 
-    //派发一个指定的异步任务到异步多线程运行时
+    /// 派发一个指定的异步任务到异步多线程运行时
     pub fn spawn<F>(&self, task_id: TaskId, future: F) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         let queues = &(self.0).2;
@@ -307,7 +310,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         Ok(())
     }
 
-    //派发一个在指定时间后执行的异步任务到异步多线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    /// 派发一个在指定时间后执行的异步任务到异步多线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
     pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<u64>
         where F: Future<Output = O> + Send + 'static {
         if let Some(timers) = &(self.0).4 {
@@ -323,7 +326,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         Err(Error::new(ErrorKind::Other, format!("Spawn timing task failed, task_id: {:?}, reason: timer not exist", task_id)))
     }
 
-    //取消指定句柄的多线程定时异步任务
+    /// 取消指定句柄的多线程定时异步任务
     pub fn cancel_timing(&self, handle: u64) {
         if let Some(timers) = &(self.0).4 {
             let index = (handle >> 40) as usize; //获取多线程定时异步任务所在定时器偏移
@@ -333,13 +336,13 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         }
     }
 
-    //挂起指定唯一id的异步任务
+    /// 挂起指定唯一id的异步任务
     pub fn pending<Output>(&self, task_id: &TaskId, waker: Waker) -> Poll<Output> {
         task_id.0.store(Box::into_raw(Box::new(waker)) as usize, Ordering::Relaxed);
         Poll::Pending
     }
 
-    //唤醒执行指定唯一id的异步任务
+    /// 唤醒执行指定唯一id的异步任务
     pub fn wakeup(&self, task_id: &TaskId) {
         match task_id.0.load(Ordering::Relaxed) {
             0 => panic!("Multi runtime wakeup task failed, reason: task id not exist"),
@@ -352,7 +355,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         }
     }
 
-    //构建用于派发多个异步任务到指定运行时的映射
+    /// 构建用于派发多个异步任务到指定运行时的映射
     pub fn map<V: Send + 'static>(&self) -> AsyncMap<O, V> {
         let (producor, consumer) = unbounded();
 
@@ -369,7 +372,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
 * 异步多线程任务运行时异步方法
 */
 impl<O: Default + 'static> MultiTaskRuntime<O> {
-    //挂起当前多线程运行时的当前任务，等待指定的时间后唤醒当前任务
+    /// 挂起当前多线程运行时的当前任务，等待指定的时间后唤醒当前任务
     pub async fn wait_timeout(&self, timeout: usize) {
         if let Some(timers) = &(self.0).4 {
             //有本地定时器，则异步等待指定时间
@@ -390,7 +393,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         }
     }
 
-    //挂起当前多线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
+    /// 挂起当前多线程运行时的当前任务，并在指定的其它运行时上派发一个指定的异步任务，等待其它运行时上的异步任务完成后，唤醒当前运行时的当前任务，并返回其它运行时上的异步任务的值
     pub async fn wait<R, V, F>(&self, rt: AsyncRuntime<R>, future: F) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static,
@@ -398,7 +401,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
         AsyncWait::new(AsyncRuntime::Multi(self.clone()), rt, Some(Box::new(future).boxed())).await
     }
 
-    //挂起当前多线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
+    /// 挂起当前多线程运行时的当前任务，并在多个其它运行时上执行多个其它任务，其中任意一个任务完成，则唤醒当前运行时的当前任务，并返回这个已完成任务的值，而其它未完成的任务的值将被忽略
     pub async fn wait_any<R, V>(&self, futures: Vec<(AsyncRuntime<R>, BoxFuture<'static, Result<V>>)>) -> Result<V>
         where R: Default + 'static,
               V: Send + 'static  {
@@ -406,9 +409,9 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
     }
 }
 
-/*
-* 异步多线程任务池
-*/
+///
+/// 异步多线程任务池
+///
 pub struct MultiTaskPool<O: Default + 'static> {
     runtime:    MultiTaskRuntime<O>,            //异步多线程任务运行时
     timeout:    u64,                            //工作者空闲时最长休眠时间
@@ -419,7 +422,7 @@ unsafe impl<O: Default + 'static> Send for MultiTaskPool<O> {}
 unsafe impl<O: Default + 'static> Sync for MultiTaskPool<O> {}
 
 impl<O: Default + 'static> MultiTaskPool<O> {
-    //构建指定线程名前缀、线程数量、线程栈大小、线程空闲时最长休眠时间和是否使用本地定时器的多线程任务池
+    /// 构建指定线程名前缀、线程数量、线程栈大小、线程空闲时最长休眠时间和是否使用本地定时器的多线程任务池
     pub fn new(prefix: String, mut size: usize, stack_size: usize, timeout: u64, interval: Option<usize>) -> Self {
         if size == 0 {
             //如果线程太少，则设置至少1个线程
@@ -483,12 +486,12 @@ impl<O: Default + 'static> MultiTaskPool<O> {
         }
     }
 
-    //在启动前获取异步运行时
+    /// 在启动前获取异步运行时
     pub fn runtime(&self) -> &MultiTaskRuntime<O> {
         &self.runtime
     }
 
-    //启动异步多线程任务池，如果任务有大量或长时间的阻塞则建议允许窃取，否则建议不允许窃取
+    /// 启动异步多线程任务池，如果任务有大量或长时间的阻塞则建议允许窃取，否则建议不允许窃取
     pub fn startup(mut self, enable_steal: bool) -> MultiTaskRuntime<O> {
         //启动工作线程
         for index in 0..self.builders.len() {
