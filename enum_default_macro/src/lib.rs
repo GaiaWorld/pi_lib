@@ -1,3 +1,26 @@
+//! 提供一个宏，该宏可以为枚举类型实现`std::default::Default`
+//! 实现`std::default::Default`是，是将枚举的第一个类型作为默认值
+//! 
+//! # example
+//! 
+//! derive(EnumDefault, Debug)
+//! enum AA {
+//!     A,
+//!     B,
+//!     C,
+//! }
+//! println!("AA default:{:?}", AA::default());//AA::A为默认值
+//!
+//! # example
+//!
+//! derive(EnumDefault, Debug)
+//! enum BB {
+//!     A{id:number},
+//!     B,
+//!     C,
+//! }
+//! println!("BB default:{:?}", BB::default());BB::A{id:0}为默认值
+
 #![recursion_limit="256"]
 extern crate proc_macro;
 extern crate quote;

@@ -1,10 +1,11 @@
-/// A double-ended queue implemented with a link and map.
-///
-/// Support for appending to the back and popping from the back.
-/// Support for prepending to the front and popping from the front.
-/// Supports quick deletion of specified elements
-/// 
-/// 
+//! 双端队列核心逻辑，通常不单独使用，而是需要与一个索引工厂配合使用。
+//! 关于索引的意义，请参考：https://github.com/GaiaWorld/pi_lib/tree/master/dyn_uint
+//! 由于需要从任意位置删除元素，我们未采用标准库使用vec作为双端队列内部容器的做法。
+//! 如果要从任意位置删除，链表是个不错的选择。
+//! 
+//! 简单的使用本双端队列，请使用slab_deque模块提供的双端队列
+//! 要查看本模块的用法，可以参照slab_deque模块，和https://github.com/GaiaWorld/pi_lib/tree/master/task_pool库
+
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::marker::PhantomData;
 use std::mem::replace;
@@ -12,6 +13,7 @@ use std::iter::Iterator;
 
 use slab::IndexMap;
 
+/// 双端队列
 pub struct Deque<T, C: IndexMap<Node<T>>>{
 	first : usize,
 	last :usize,

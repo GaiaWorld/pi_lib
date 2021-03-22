@@ -1,17 +1,28 @@
 
-/// A double-ended queue implemented with a link and map.
-///
-/// Support for appending to the back and popping from the back.
-/// Support for prepending to the front and popping from the front.
-/// Supports quick deletion of specified elements
-/// 
-/// extern crate slab;
-/// 
+//! 双端队列
+//! 支持从队列头部添加或弹出
+//! 支持从队列尾部添加或弹出
+//! 与标准库的双端队列相比，本双端队列还支持根据索引快速从任意位置删除和查询，一些时候，可快速删除的双端队列十分有用（例如pi_lib中的task_pool）
+//!
+//! 特色： 将双端队列本身的逻辑和索引（删除就需要依赖索引）分离，因此，十分容易和其它需要索引的数据结构共享索引。
+//! 关于共享索引的意义，请参考：https://github.com/GaiaWorld/pi_lib/tree/master/dyn_uint
+//!
+//! 选择:
+//! - 当你需要使用双端队列，并且你不需要快速从任意位置删除和查询，标准库中的双端队列是一个不错的选择
+//! - 当你的部分功能需要使用从任意位置删除和查询，部分功能不需要时，不太建议你同时依赖标准库与本库的双端队列，毕竟会增减应用程序的尺寸
+//! 但如果你不在意，你可以这么做！这种情况下，
+//! 建议的做法是，总是使用本库或其它的代替品,本库的双端队列性能仅比标准库略低（删除功能也需要一定成本）
+
+
 #[cfg(test)]
 extern crate time;
 extern crate slab;
 
+/// 双端队列的核心逻辑模块
 pub mod deque;
+
+/// deque模块通常不单独使用，slab_deque模块将deque，为其提供一个Slab实现的索引工厂
+/// 当不需要与其它数据结构结合时，你可以使用slab_deque为你提供的双端队列默认实现
 pub mod slab_deque;
 
 
