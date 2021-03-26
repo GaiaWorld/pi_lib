@@ -1,3 +1,6 @@
+//! # 多生产者单消费者的单端队列
+//!
+
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
@@ -12,9 +15,9 @@ const UNLOCK_EMPTY: u8 = 0;     //无锁无任务
 const UNLOCK_NON_EMPTY: u8 = 1; //无锁有任务
 const LOCKED: u8 = 2;           //有锁
 
-/*
-* 构建MPSC的双端队列，并返回发送者和接收者
-*/
+///
+/// 构建MPSC的双端队列，并返回发送者和接收者
+///
 pub fn mpsc_deque<T: 'static>() -> (Sender<T>, Receiver<T>) {
     let send_buf = Arc::new(SendBuf {
         buf_status: AtomicU8::new(UNLOCK_EMPTY),
@@ -43,9 +46,9 @@ struct SendBuf<T: 'static> {
     buf:           UnsafeCell<Option<Vec<T>>>,       //缓冲区
 }
 
-/*
-* 双端队列的发送者
-*/
+///
+/// 双端队列的发送者
+///
 pub struct Sender<T: 'static> {
     inner:  Arc<SendBuf<T>>, //缓冲区
 }
@@ -62,12 +65,12 @@ impl<T: 'static> Clone for Sender<T> {
 }
 
 impl<T: 'static> Sender<T> {
-    //尝试检查发送缓冲区是否为空，不允许用于精确判断
+    /// 尝试检查发送缓冲区是否为空，不允许用于精确判断
     pub fn try_is_empty(&self) -> bool {
         self.inner.buf_status.load(Ordering::SeqCst) == UNLOCK_EMPTY
     }
 
-    //获取发送缓冲区长度，可用于精确判断
+    /// 获取发送缓冲区长度，可用于精确判断
     pub fn len(&self) -> usize {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -102,7 +105,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //发送指定的值
+    /// 发送指定的值
     pub fn send(&self, value: T) {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -140,7 +143,7 @@ impl<T: 'static> Sender<T> {
         }
     }
 
-    //获取发送缓冲区
+    /// 获取发送缓冲区
     pub fn take(&self) -> Vec<T> {
         let mut spin_len = 1;
         let mut status = UNLOCK_NON_EMPTY;
@@ -180,9 +183,9 @@ struct RecvBuf<T: 'static> {
     buf:    UnsafeCell<Option<VecDeque<T>>>,    //缓冲区
 }
 
-/*
-* 双端队列的接收者
-*/
+///
+/// 双端队列的接收者
+///
 pub struct Receiver<T: 'static> {
     inner:  RecvBuf<T>,  //缓冲区
 }
@@ -190,28 +193,28 @@ pub struct Receiver<T: 'static> {
 unsafe impl<T: 'static> Send for Receiver<T> {}
 
 impl<T: 'static> Receiver<T> {
-    //尝试检查队列是否为空，不允许用于精确判断
+    /// 尝试检查队列是否为空，不允许用于精确判断
     pub fn try_is_empty(&self) -> bool {
         unsafe {
             self.inner.sender.try_is_empty() && (&*self.inner.buf.get()).as_ref().unwrap().is_empty()
         }
     }
 
-    //获取队列长度，可用于精确判断
+    /// 获取队列长度，可用于精确判断
     pub fn len(&self) -> usize {
         unsafe {
             self.inner.sender.len() + (&*self.inner.buf.get()).as_ref().unwrap().len()
         }
     }
 
-    //将指定值推入接收缓冲区头
+    /// 将指定值推入接收缓冲区头
     pub fn push_front(&mut self, value: T) {
         unsafe {
             (&mut *self.inner.buf.get()).as_mut().unwrap().push_front(value);
         }
     }
 
-    //非阻塞接收值
+    /// 非阻塞接收值
     pub fn try_recv(&mut self) -> Option<T> {
         unsafe {
             if let Some(value) = (&mut *self.inner.buf.get()).as_mut().unwrap().pop_front() {
@@ -260,7 +263,7 @@ impl<T: 'static> Receiver<T> {
         }
     }
 
-    //非阻塞接收当前所有值
+    /// 非阻塞接收当前所有值
     pub fn try_recv_all(&mut self) -> Vec<T> {
         let mut truncated = false;
         let mut vec = Vec::new();

@@ -8,9 +8,9 @@ use npnc::bounded::spsc::{Producer, Consumer};
 
 use time::now_millisecond;
 
-/*
-* 未来任务
-*/
+///
+/// 未来任务
+///
 #[derive(Debug)]
 pub struct FutTask<T, E> {
     uid:        usize,                          //未来任务id
@@ -23,7 +23,7 @@ unsafe impl<T: Send + 'static, E: Send + 'static> Send for FutTask<T, E> {}
 unsafe impl<T: Send + 'static, E: Send + 'static> Sync for FutTask<T, E> {}
 
 impl<T: Send + 'static, E: Send + 'static> FutTask<T, E> {
-    //构建一个未来任务
+    /// 构建一个未来任务
     pub fn new(uid: usize, timeout: u32, inner: Arc<Consumer<Result<T, E>>>, sender: Arc<Producer<task::Task>>) -> Self {
         FutTask {
             uid: uid,
@@ -33,7 +33,7 @@ impl<T: Send + 'static, E: Send + 'static> FutTask<T, E> {
         }
     }
 
-    //获取当前未来任务id
+    /// 获取当前未来任务id
     pub fn get_uid(&self) -> usize {
         self.uid
     }

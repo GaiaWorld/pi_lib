@@ -1,3 +1,10 @@
+//! # 用于指定的Rust库中满足导出规定的Rust代码的分析，并生成用于pi_v8的中间Rust代码和Typescript脚本
+//!
+//! * 整个过程分为两部分：
+//!     - Rust代码分析并生成语法树，也就是前端处理
+//!     - 解析语法树并生成中间Rust代码和Typescript脚本，也就是后端处理
+//!
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -24,9 +31,9 @@ use frontend::parse_source;
 use backend::{create_bind_crate, generate_crates_proxy_source};
 use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, ParseContext, ProxySourceGenerater, abs_path};
 
-/*
-* 初始化异步运行时
-*/
+///
+/// 初始化异步运行时
+///
 lazy_static! {
     static ref WORKER_RUNTIME: MultiTaskRuntime<()> = {
         let pool = MultiTaskPool::new("PI-JS-PROXY-GEN-WORKER-RT".to_string(), num_cpus::get_physical(), 8 * 1024 * 1024, 10, None);
@@ -34,9 +41,9 @@ lazy_static! {
     };
 }
 
-/*
-* 递归分析指定库列表下的所有源文件，可以指定是否并发分析，返回指定库列表中声明了导出的库列表
-*/
+///
+/// 递归分析指定库列表下的所有源文件，可以指定是否并发分析，返回指定库列表中声明了导出的库列表
+///
 pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec<Crate>> {
     let mut crates = Vec::new();
 
@@ -92,9 +99,9 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
     }
 }
 
-/*
-* 递归分析指定库下的所有源文件，递归调用异步函数，需要使用boxed的Future
-*/
+///
+/// 递归分析指定库下的所有源文件，递归调用异步函数，需要使用boxed的Future
+///
 pub async fn parse_crate(path: PathBuf) -> Result<Crate> {
     if path.is_dir() {
         //是目录，则继续分析
@@ -118,9 +125,9 @@ pub async fn parse_crate(path: PathBuf) -> Result<Crate> {
     }
 }
 
-/*
-* 分析源码目录
-*/
+///
+/// 分析源码目录
+///
 pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseContext>>> {
     async move {
         match fs::read_dir(path.clone()) {
@@ -199,9 +206,9 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
     }.boxed()
 }
 
-/*
-* 分析声明了导出的库列表，则创建指定路径的代理库，并生成相应的代理文件和代理代码，可以指定是否并发生成
-*/
+///
+/// 分析声明了导出的库列表，则创建指定路径的代理库，并生成相应的代理文件和代理代码，可以指定是否并发生成
+///
 pub async fn generate_proxy_crate(path: PathBuf,
                                   ts_proxy_root: PathBuf,
                                   version: &str,
@@ -267,9 +274,9 @@ pub async fn generate_proxy_crate(path: PathBuf,
     }
 }
 
-/*
-* 派发异步任务到代理生成器的异步运行时中运行
-*/
+///
+/// 派发异步任务到代理生成器的异步运行时中运行
+///
 pub fn spawn(task: impl Future<Output = ()> + Send + 'static) {
     WORKER_RUNTIME.spawn(WORKER_RUNTIME.alloc(), async move {
         task.await;

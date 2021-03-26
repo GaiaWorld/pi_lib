@@ -1,3 +1,6 @@
+//! # 获取Linux的系统信息
+//!
+//!
 extern crate psutil;
 
 use std::ptr;
@@ -31,16 +34,16 @@ const PROCESS_ROOT_PATH: &'static str = "/proc/";
 */
 const THREADS_DIR: &'static str = "/task";
 
-/*
-* 获取当前线程的本地线程id
-*/
+///
+/// 获取当前线程的本地线程id
+///
 pub fn current_tid() -> i32 {
     unsafe { libc::syscall(libc::SYS_gettid) as i32 }
 }
 
-/*
-* linux系统状态
-*/
+///
+/// linux系统状态
+///
 pub struct LinuxSysStat {
     interval: f64,                                              //采集间隔时长，单位秒
     disk_counter: Arc<RefCell<disk::DiskIOCountersCollector>>,  //硬盘io计数器
@@ -409,7 +412,7 @@ fn is_hidden(entry: &DirEntry) -> bool {
 }
 
 impl LinuxSysStat {
-    //构建linux系统状态
+    /// 构建linux系统状态
     pub fn new(interval: f64) -> Self {
         LinuxSysStat {
             interval,

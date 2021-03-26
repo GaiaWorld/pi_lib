@@ -1,3 +1,6 @@
+//! # 通用异步读写锁，不支持重入
+//!
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::future::Future;
@@ -15,9 +18,9 @@ const EXCLUSIVE: isize = -1;        //独占
 const UNLOCKED: isize = 0;          //未锁
 const SHARED_ONCE: isize = 1;       //唯一共享
 
-/*
-* 异步读锁守护者
-*/
+///
+/// 异步读锁守护者
+///
 pub struct RwLockReadGuard<T> {
     guarder:  Arc<InnerRwLock<T>>,  //内部锁
 }
@@ -113,9 +116,9 @@ impl<T> Drop for RwLockWriteGuard<T> {
     }
 }
 
-/*
-* 异步读写锁，支持临界区内执行异步任务等待，不支持重入
-*/
+///
+/// 异步读写锁，支持临界区内执行异步任务等待，不支持重入
+///
 pub struct RwLock<T> {
     inner:  Arc<InnerRwLock<T>>,  //内部锁
 }
@@ -127,7 +130,7 @@ unsafe impl<T> Sync for RwLock<T> {}
 * 异步读写锁同步方法
 */
 impl<T> RwLock<T> {
-    //构建异步读写锁
+    /// 构建异步读写锁
     pub fn new(v: T) -> Self {
         let inner = Arc::new(InnerRwLock {
             status: SpinLock::new((UNLOCKED, VecDeque::new(), VecDeque::new())),
@@ -144,14 +147,14 @@ impl<T> RwLock<T> {
 * 异步读写锁异步方法，支持临界区内执行异步任务等待，不支持重入
 */
 impl<T> RwLock<T> {
-    //获取异步读锁
+    /// 获取异步读锁
     pub async fn read(&self) -> RwLockReadGuard<T> {
         FutureShared {
             inner: self.inner.clone(),
         }.await
     }
 
-    //获取异步写锁
+    /// 获取异步写锁
     pub async fn write(&self) -> RwLockWriteGuard<T> {
         FutureExclusive {
             inner: self.inner.clone(),

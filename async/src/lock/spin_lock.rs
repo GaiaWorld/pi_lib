@@ -1,3 +1,6 @@
+//! # 同步自旋锁，不支持重入
+//!
+
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
@@ -5,9 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::spin;
 
-/*
-* 同步自旋锁守护者
-*/
+///
+/// 同步自旋锁守护者
+///
 pub struct SpinLockGuard<T> {
     guarder:  Arc<InnerSpinLock<T>>,  //内部锁
 }
@@ -36,9 +39,9 @@ impl<T> Drop for SpinLockGuard<T> {
     }
 }
 
-/*
-* 同步自旋锁，不支持临界区内执行异步任务等待，不支持重入
-*/
+///
+/// 同步自旋锁，不支持临界区内执行异步任务等待，不支持重入
+///
 pub struct SpinLock<T> {
     inner:  Arc<InnerSpinLock<T>>,  //内部锁
 }
@@ -47,7 +50,7 @@ unsafe impl<T> Send for SpinLock<T> {}
 unsafe impl<T> Sync for SpinLock<T> {}
 
 impl<T> SpinLock<T> {
-    //构建同步自旋锁
+    /// 构建同步自旋锁
     pub fn new(v: T) -> Self {
         let inner = Arc::new(InnerSpinLock {
             status: AtomicBool::new(false),
@@ -59,7 +62,7 @@ impl<T> SpinLock<T> {
         }
     }
 
-    //获取同步自旋锁
+    /// 获取同步自旋锁
     pub fn lock(&self) -> SpinLockGuard<T> {
         let mut spin_len = 1;
         loop {

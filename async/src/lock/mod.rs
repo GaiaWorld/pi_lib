@@ -1,4 +1,7 @@
-use std::sync::atomic::spin_loop_hint;
+//! # 提供了异步运行时需要的队列和锁
+//!
+
+use std::hint::spin_loop;
 
 pub mod mpmc_deque;
 pub mod mpsc_deque;
@@ -19,7 +22,7 @@ pub(crate) fn spin(mut len: u32) -> u32 {
     }
 
     for _ in 0..(1 << len) {
-        spin_loop_hint()
+        spin_loop()
     }
 
     len + 1
