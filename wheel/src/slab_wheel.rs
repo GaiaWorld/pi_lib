@@ -2,7 +2,7 @@
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use dyn_uint::{UintFactory, ClassFactory, SlabFactory};
-use wheel::{Wheel as W, Item};
+use crate::wheel::{Wheel as W, Item};
 
 pub struct Wheel<T> {
     index_factory: SlabFactory<usize,()>,

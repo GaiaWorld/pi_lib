@@ -1,6 +1,6 @@
-/**
- * 权重树，支持使用索引删除(实际上是一个堆的结构)
- */
+//! 权重树的核心逻辑
+//! 提供插入、删除、弹出的等主要接口
+//! 另外，使用了UintFactory，关于UintFactory，你可以看看其作用https://github.com/GaiaWorld/pi_lib/tree/master/dyn_uint
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::mem::transmute_copy;
 use std::ptr::write;
@@ -8,22 +8,24 @@ use std::ops::Drop;
 
 use dyn_uint::{UintFactory};
 
+/// 权重树
 pub struct WeightTree<T>(Vec<Item<T>>);
 
 impl<T> WeightTree<T> {
 
-	//构建一颗权重树
+	/// 构建一颗权重树
     #[inline]
 	pub fn new() -> Self{
         WeightTree(Vec::new())
 	}
 
-	//创建一颗权重树， 并初始容量
+	/// 创建一颗权重树， 并初始容量
     #[inline]
 	pub fn with_capacity(capacity: usize) -> Self{
 		WeightTree(Vec::with_capacity(capacity))
 	}
 
+	/// 权重树的长度
     #[inline]
     pub fn len(&self) -> usize{
 		self.0.len()
@@ -34,7 +36,7 @@ impl<T> WeightTree<T> {
 		self.0.clear();
 	}
 
-	//插入元素，返回该元素的位置
+	/// 插入元素，返回该元素的位置
     #[inline]
 	pub fn push<F:UintFactory>(&mut self, elem: T, weight: usize, index: usize, index_factory: &mut F){
 		let len = self.0.len();
@@ -48,7 +50,7 @@ impl<T> WeightTree<T> {
 		self.up(len, index_factory)
 	}
 
-	//All element weights and
+	/// 取到总权重
     #[inline]
 	pub fn amount(&self) -> usize{
 		match self.0.len(){
@@ -57,14 +59,14 @@ impl<T> WeightTree<T> {
 		}
 	}
 
-	//remove a element by weight and returns it, Panics if weight >= self.amount()
+	/// 指定一个权重，弹出对应任务
     #[inline]
 	pub unsafe fn pop<F:UintFactory>(&mut self, weight: usize, index_factory: &mut F) -> (T, usize, usize){
 		let index = self.find(weight, 0);
 	    self.delete(index, index_factory)
 	}
 
-	//remove a element by weight, returns it, or None if weight >= self.amount()
+	/// 指定一个权重，尝试弹出一个对应任务，如果指定权重大于权重树中任务的总权重，返回None
     #[inline]
 	pub fn try_pop<F:UintFactory>(&mut self, weight: usize, index_factory: &mut F) -> Option<(T, usize, usize)>{
 		match self.0.len(){
@@ -79,22 +81,27 @@ impl<T> WeightTree<T> {
 		}
 	}
 
+	/// 根据索引取到对应任务的可变引用，如果不存在，将panic
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T{
 		&mut self.0.get_unchecked_mut(index).elem
 	}
 
+
+	/// 根据索引取到对应任务的不可变引用，如果不存在，将panic
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> &T{
 		&self.0.get_unchecked(index).elem
 	}
 
+	/// 指定一个权重，根据权重查找可以被该权重弹出的任务，但不弹出，仅返回不可变引用
     #[inline]
 	pub unsafe fn get_unchecked_by_weight(&self, weight: usize) -> (&T, usize) {
 		let index = self.find(weight, 0);
         (&self.0[index].elem, self.0[index].index)
 	}
 
+	/// 指定一个权重，根据权重查找可以被该权重弹出的任务，但不弹出，仅返回可变引用
     #[inline]
 	pub unsafe fn get_unchecked_mut_by_weight(&mut self, weight: usize) -> (&mut T, usize) {
 		let index = self.find(weight, 0);
@@ -102,6 +109,7 @@ impl<T> WeightTree<T> {
         (&mut self.0[index].elem, i)
 	}
 
+	/// 根据索引，重新指定其对应任务的权重
     #[inline]
 	pub unsafe fn update_weight<F:UintFactory>(&mut self, weight: usize, index: usize, index_factory: &mut F){
 		let r_index = self.up_update(index, weight, index_factory);
@@ -111,6 +119,7 @@ impl<T> WeightTree<T> {
 		}
 	}
 
+	/// 删除指定索引对应的权重，返回被删除的任务，如果不存在，将panic
     #[inline]
 	pub unsafe fn delete<F:UintFactory>(&mut self, index: usize, index_factory: &mut F) -> (T, usize, usize){
         let len = self.0.len();
@@ -144,7 +153,7 @@ impl<T> WeightTree<T> {
 		(elem.elem, index_count, elem.index)
 	}
 
-	//Finding element index according to weight
+	// 更具权重查找可被弹出的任务
 	#[inline]
 	fn find(&self, mut weight: usize, cur_index:usize) -> usize{
 		let cur_weight = self.0[cur_index].count;
@@ -299,6 +308,7 @@ impl<T: Debug> Debug for WeightTree<T> where T: Debug {
     }
 }
 
+/// 权重树中每节点记录的数据
 #[derive(Debug)]
 pub struct Item<T>{
     elem: T,

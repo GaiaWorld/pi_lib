@@ -1,8 +1,3 @@
-#![allow(warnings)]
-
-#![feature(exclusive_range_pattern)]
-#![feature(test)]
-#[warn(unconditional_recursion)]
 //! 二进制对象表示法 模块
 
 //! Binary Object Notation
@@ -46,6 +41,13 @@
 
 //! 容器，由于有总大小的描述，从而可以只对感兴趣的部分作反序列化
 //! TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
+
+#![allow(warnings)]
+
+#![feature(exclusive_range_pattern)]
+#![feature(test)]
+#[warn(unconditional_recursion)]
+
 extern crate data_view;
 
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};

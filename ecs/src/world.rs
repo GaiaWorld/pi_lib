@@ -4,17 +4,17 @@ use hash::XHashMap;
 // use im::hashmap::HashMap;
 
 use atom::Atom;
+use share::Share;
 // use pointer::cell::{TrustCell};
 
-use cell::StdCell;
-use component::{CellMultiCase, Component, MultiCase, MultiCaseImpl};
-use dispatch::Dispatcher;
-use entity::{CellEntity, Entity, EntityImpl};
-use share::Share;
-use single::{CellSingleCase, SingleCase, SingleCaseImpl};
-use system::System;
-use LendMut;
-use RunTime;
+use crate::cell::StdCell;
+use crate::component::{CellMultiCase, Component, MultiCase, MultiCaseImpl};
+use crate::dispatch::Dispatcher;
+use crate::entity::{CellEntity, Entity, EntityImpl};
+use crate::single::{CellSingleCase, SingleCase, SingleCaseImpl};
+use crate::system::System;
+use crate::LendMut;
+use crate::RunTime;
 
 #[derive(Default, Clone)]
 pub struct World {

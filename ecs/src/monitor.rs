@@ -98,15 +98,15 @@ impl NotifyImpl1 {
 }
 
 pub trait Notify {
-    fn add_create(&self, CreateFn);
-    fn add_delete(&self, DeleteFn);
-    fn add_modify(&self, ModifyFn);
+    fn add_create(&self, f: CreateFn);
+    fn add_delete(&self, f: DeleteFn);
+    fn add_modify(&self, f: ModifyFn);
     fn create_event(&self, id: usize);
     fn delete_event(&self, id: usize);
     fn modify_event(&self, id: usize, field: &'static str, index: usize);
-    fn remove_create(&self, &CreateFn);
-    fn remove_delete(&self, &DeleteFn);
-    fn remove_modify(&self, &ModifyFn);
+    fn remove_create(&self, f: &CreateFn);
+    fn remove_delete(&self, f: &DeleteFn);
+    fn remove_modify(&self, f: &ModifyFn);
 }
 
 pub struct Write<'a, T> {

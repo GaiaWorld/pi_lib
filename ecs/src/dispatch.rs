@@ -1,8 +1,8 @@
 use atom::Atom;
-use cell::StdCell;
 use listener::{FnListeners, Listener};
 
-use world::World;
+use crate::cell::StdCell;
+use crate::world::World;
 
 pub trait Dispatcher {
     fn build(&mut self, names: String, world: &World);

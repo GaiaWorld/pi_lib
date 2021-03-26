@@ -1,10 +1,13 @@
+//! 定义数据结构HashMap（实际上是对`hash::XHashMap`的包装）
+//! 为`HashMap`实现`HashMap`trait
 
 use std::hash::Hash;
 
 use hash::XHashMap;
 
-use ::Map;
+use crate::Map;
 
+/// HashMap
 pub struct HashMap<K: Eq + Hash, V>(XHashMap<K, V>);
 
 impl<K: Hash + Eq, V> Map for HashMap<K, V>{

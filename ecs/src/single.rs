@@ -7,10 +7,10 @@ use std::{
 use any::ArcAny;
 // use pointer::cell::{StdCell};
 
-use cell::StdCell;
-use monitor::{CreateFn, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
-use system::{SystemData, SystemMutData};
-use {Fetch, Lend, LendMut, TypeIds, World};
+use crate::cell::StdCell;
+use crate::monitor::{CreateFn, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
+use crate::system::{SystemData, SystemMutData};
+use crate::{Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait SingleCase: Notify + ArcAny {}
 impl_downcast_arc!(SingleCase);

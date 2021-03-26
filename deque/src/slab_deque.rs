@@ -5,7 +5,7 @@
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use slab::Slab;
-use deque::{ Deque, Node, Iter as DIter };
+use crate::deque::{ Deque, Node, Iter as DIter };
 
 /// 一个用slab作为索引工厂的双端队列
 pub struct SlabDeque<T>{
@@ -14,13 +14,13 @@ pub struct SlabDeque<T>{
 }
 
 impl<T> Default for SlabDeque<T> {
-    fn default() -> Self {
+    fn default() -> SlabDeque<T> {
         SlabDeque::new()
     }
 }
 
 impl<T> SlabDeque<T> {
-    pub fn new() -> Self {
+    pub fn new() -> SlabDeque<T> {
         Self {
             deque: Deque::new(),
             slab: Slab::new(),

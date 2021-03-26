@@ -2,7 +2,7 @@ use std::cmp::{Ord, Ordering};
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use dyn_uint::{ UintFactory };
-use heap::Heap;
+use crate::heap::Heap;
 
 pub struct IndexFactory;
 

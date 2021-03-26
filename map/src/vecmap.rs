@@ -1,4 +1,20 @@
-
+//! 实现数据结构`VecMap`, 并为`VecMap`实现了`Map<K=usize,V=T>`
+//! 就像其名字描述的一样，`VecMap`以Vec作为数据结构，实现索引到值得映射。
+//! 与HashMap的区别是：
+//! * HashMap的key可以是任何实现了`Hash`的类型，`VecMap`的key一定是一个`usize`
+//! * 在性能方面，HashMap将key做hash运算，最后将值存储在该hash对应的一个数组或链表上；VecMap将key作为`Vec`的偏移,直接存放在数组的对应位置。VecMap具有更高的性能。
+//! * 正因为VecMap将key作为偏移，存储值到数组的对应位置，`VecMap`可能浪费更多内存空间；如当前仅在VecMap中存储两个值，key分别是`1`, `100`, 那么，数组的第1、100的位置将存储一个值，而2..99的位置将是浪费的空间
+//!
+//! 与Vec的区别是：
+//! * Vec不提供类似`Map`的接口来操作数据，如`insert`。
+//! 
+//! VecMap通常用于，存放的数据的key总是与某种数据结构的偏移相对应的情况。
+//! 比如在ecs系统中，实体的数据接口可以是slab，我们可以创建和销毁实体，对应在slab中的操作是，分配一个位置（偏移）和释放一个位置
+//! 而组件的数据接口，使用VecMap再合适不过，表示实体的数字，可以作为key，来映射一个组件的值。
+//! 同时，VecMap的数据也是基本连续的，十分符合ecs的设计思想
+//!
+//! 再决定使用VecMap前，你应该综合考虑这几个问题：访问性能、数据连续性、内存的浪费情况。
+//!
 use std::mem::{replace};
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::ops::{Index, IndexMut};
@@ -6,8 +22,9 @@ use std::slice::Iter;
 // use std::ops::Drop;
 // use std::ptr::write;
 
-use ::Map;
+use crate::Map;
 // TODO 改成类似slab的写法，用单独的vec<usize>的位记录是否为空。现在这种写法太费内存了
+/// 数据结构VecMap
 pub struct VecMap<T> {
     entries: Vec<Option<T>>,// Chunk of memory
     len: usize,// Number of Filled elements currently in the slab
@@ -28,10 +45,12 @@ impl<T: Clone> Clone for VecMap<T> {
 }
 impl<T> VecMap<T> {
 
+    /// 创建一个VecMap实例
     pub fn new() -> Self {
         VecMap::with_capacity(0)
     }
 
+    /// 创建一个VecMap实例, 并指定初始化容量
     pub fn with_capacity(capacity: usize) -> VecMap<T> {
         VecMap {
             entries: Vec::with_capacity(capacity),
@@ -39,10 +58,12 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 获取VecMap当前的容量
     pub fn capacity(&self) -> usize {
         self.entries.capacity()
     }
 
+    /// 扩充容量
     pub fn reserve(&mut self, additional: usize) {
         if self.capacity() - self.len >= additional {
             return;
@@ -51,7 +72,7 @@ impl<T> VecMap<T> {
         self.entries.reserve(need_add);
     }
 
-    
+    /// 扩充容量
     pub fn reserve_exact(&mut self, additional: usize) {
         if self.capacity() - self.len >= additional {
             return;
@@ -64,17 +85,20 @@ impl<T> VecMap<T> {
     //     self.entries.shrink_to_fit();
     //     self.vacancy_sign.shrink_to_fit();
     // }
-
+    
+    /// 清空数据
     pub fn clear(&mut self) {
         self.entries.clear();
         self.len = 0;
     }
 
+    /// 片段当前是否为空
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
 
+    /// 获取一个只读迭代器
     pub fn iter(&self) -> Iter<Option<T>> {
         self.entries.iter()
     }
@@ -88,11 +112,15 @@ impl<T> VecMap<T> {
     //         curr_len: 0,
     //     }
     // }
-
+    
+    /// 替换指定位置的值, 并返回旧值
+    /// 你应该确认，旧值一定存在，否则将会panic
     pub unsafe fn replace(&mut self, index: usize, value: T) -> T {
         replace(&mut self.entries[index - 1], Some(value)).unwrap()
     }
 
+
+    /// 取到某个偏移位置的只读值
     pub fn get(&self, index: usize) -> Option<&T> {
         if index == 0 || index > self.entries.len(){
             return None;
@@ -103,6 +131,7 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 取到某个偏移位置的可变值
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if index == 0 || index > self.entries.len(){
             return None;
@@ -113,14 +142,19 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 取到某个偏移位置的只读值
+    /// 如果该位置不存在值，将panic
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         self.entries[index - 1].as_ref().unwrap()
     }
 
+    /// 取到某个偏移位置的可变值
+    /// 如果该位置不存在值，将panic
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         self.entries[index - 1].as_mut().unwrap()
     }
 
+    /// 在指定位置插入一个值，并返回旧值，如果不存在旧值，返回None
     pub fn insert(&mut self, index:usize, val: T) -> Option<T>{
         let index = index - 1;
 		let len = self.entries.len();
@@ -141,6 +175,7 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 移除指定位置的值，返回被移除的值，如果该位置不存在一个值，返回None
     pub fn remove(&mut self, index: usize) -> Option<T> {
         if index > self.entries.len() {
             return None;
@@ -154,11 +189,13 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 移除指定位置的值，返回被移除的值，如果该位置不存在一个值将panic
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
         self.len -= 1;
         replace(&mut self.entries[index - 1], None).unwrap()
     }
 
+    /// 判断指定位置是否存在一个值
     pub fn contains(&self, index: usize) -> bool {
         if index == 0 || index > self.entries.len(){
             return false;
@@ -169,12 +206,14 @@ impl<T> VecMap<T> {
         }
     }
 
+    /// 取到VecMap的长度
     #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
 }
 
+/// 为VecMap实现Map
 impl<T> Map for VecMap<T> {
 	type Key = usize;
 	type Val = T;
