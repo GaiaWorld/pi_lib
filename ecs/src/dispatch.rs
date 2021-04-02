@@ -31,7 +31,7 @@ impl Dispatcher for SeqDispatcher {
                 None => panic!("system is not exist:{}", **k),
             };
             match sys.fetch_run() {
-                Some(run) => self.vec.borrow_mut().push_back(run),
+                Some(run) => self.vec.borrow_mut().push(run),
                 None => (),
             }
         }

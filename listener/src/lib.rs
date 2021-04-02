@@ -1,12 +1,13 @@
-extern crate im;
+// extern crate im;
 extern crate share;
 
 use std::{
     ops::{Deref, DerefMut},
     default::Default,
 };
-use im::vector::Vector;
+// use im::vector::Vector;
 use share::Share;
+// use std::vec::Vector;
 
 pub trait Listener<E> {
     fn listen(&self, e: &E);
@@ -36,20 +37,27 @@ impl<E> Clone for FnListener<E> {
 pub type FnListeners<E> = Listeners<FnListener<E>>;
 
 #[derive(Clone)]
-pub struct Listeners<T: Clone> (Vector<T>);
+pub struct Listeners<T: Clone> (Vec<T>);
 
 impl<T: Clone + PartialEq> Listeners<T> {
     pub fn mem_size(&self) -> usize {
         self.0.len() * std::mem::size_of::<T>()
     }
     pub fn delete(&mut self, listener: &T) -> bool {
-		match self.0.index_of(listener) {
-			Some(i) => {
+        for i in 0..self.0.len() {
+            if &self.0[i] == listener {
                 self.0.remove(i);
-                true
-            },
-			_ => false,
-		}
+                return true
+            }
+        }
+        return false;
+		// match self.0.index_of(listener) {
+		// 	Some(i) => {
+        //         self.0.remove(i);
+        //         true
+        //     },
+		// 	_ => false,
+		// }
     }
 }
 impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
@@ -66,12 +74,12 @@ impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
 
 impl<T: Clone> Default for Listeners<T> {
     fn default() -> Self{
-        Listeners(Vector::new())
+        Listeners(Vec::new())
     }
 }
 
 impl<T: Clone> Deref for Listeners<T> {
-    type Target=Vector<T>;
+    type Target=Vec<T>;
     fn deref(&self) -> &Self::Target{
         &self.0
     }

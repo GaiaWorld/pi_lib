@@ -31,17 +31,17 @@ impl NotifyImpl {
     pub fn add_create(&self, listener: CreateFn) {
         unsafe { &mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1) }
             .create
-            .push_back(listener)
+            .push(listener)
     }
     pub fn add_delete(&self, listener: DeleteFn) {
         unsafe { &mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1) }
             .delete
-            .push_back(listener)
+            .push(listener)
     }
     pub fn add_modify(&self, listener: ModifyFn) {
         unsafe { &mut *(self.0.as_ref() as *const NotifyImpl1 as *mut NotifyImpl1) }
             .modify
-            .push_back(listener)
+            .push(listener)
     }
 
     pub fn remove_create(&self, listener: &CreateFn) {
