@@ -76,7 +76,7 @@ impl<T: Res + 'static> ResMap<T> {
     }
     pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) -> (usize, usize, usize) {
         let old = self.cache.get_config();
-        self.cache.modify_config(min_capacity, max_capacity, timeout);
+        self.cache.set_config(min_capacity, max_capacity, timeout);
         old
     }
     // 获得指定键的资源

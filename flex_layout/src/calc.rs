@@ -176,7 +176,7 @@ pub struct LayoutR {
     pub padding: Rect<f32>,
 }
 
-#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Debug, Serialize)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) struct INodeState(usize);
 make_impl!(INodeState);
 // struct II {
@@ -221,7 +221,7 @@ pub enum INodeStateType {
 	SelfRect = 16384,// 自身区域不受父节点或子节点影响
 }
 // TODO max min aspect_ratio， RectStyle也可去掉了. 将start end改为left right。 将数据结构统一到标准结构下， 比如Rect Size Point
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CharNode {
     pub ch: char,                // 字符
     pub margin_start: f32, // margin
@@ -243,7 +243,7 @@ impl Default for CharNode {
 		}
 	}
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct INode {
     pub(crate) state: INodeState,
 	pub text: Vec<CharNode>, // 文字节点
