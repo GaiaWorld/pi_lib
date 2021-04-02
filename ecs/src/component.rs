@@ -5,11 +5,11 @@ use any::ArcAny;
 use listener::Listener;
 use map::Map;
 
-use cell::StdCell;
-use entity::CellEntity;
-use monitor::{CreateFn, DeleteEvent, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
-use system::{SystemData, SystemMutData};
-use {Fetch, Lend, LendMut, TypeIds, World};
+use crate::cell::StdCell;
+use crate::entity::CellEntity;
+use crate::monitor::{CreateFn, DeleteEvent, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
+use crate::system::{SystemData, SystemMutData};
+use crate::{Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait Component: Sized + 'static {
     type Storage: Map<Key = usize, Val = Self> + Default + Index<usize, Output=Self> + IndexMut<usize, Output=Self>;

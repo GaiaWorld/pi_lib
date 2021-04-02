@@ -1,41 +1,53 @@
+//! 二进制对象表示法 模块
+
+//! Binary Object Notation
+//!
+//! 本模块定义了一个使用二进制表示数据的协议，并实现该协议
+//!
+//! 模块提供写的接口，将数据按照协议序列化为二进制。 
+//!
+//! 提供读的接口，将满足协议的二进制反序列化为数据。
+//!
+//! TODO 为本协议实现Serializer、Deserializer
+//!
+//! 协议内容：
+//!
+//! 小端-非网络字节序，和quic一致
+//! 用于通讯的类型需要压缩表示，充分利用第一个字节
+//! 0=null
+//! 1=false
+//! 2=true
+//! 3=浮点数0.0，4=浮点数1.0，5=16位浮点数，6=32位浮点数，7=64位浮点数，8=128位浮点数;
+//! 9=8位负整数，10=16位负整数，11=32位负整数，12=48位负整数，13=64位负整数，14=128位负整数
+//! 15~35= -1~19
+//! 36=8位正整数，37=16位正整数，38=32位正整数，39=48位正整数，40=64位正整数，41=128位正整数
+
+//! 42-106=0-64长度的UTF8字符串，
+//! 107=8位长度的UTF8字符串，108=16位长度的UTF8字符串，109=32位长度的UTF8字符串，110=48位长度的UTF8字符串
+
+//! 111-175=0-64长度的二进制数据，
+//! 176=8位长度的二进制数据，177=16位长度的二进制数据，178=32位长度的二进制数据，179=48位长度的二进制数据
+
+//! 180-244=0-64长度的容器，包括对象、数组和map、枚举
+//! 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器
+//! 之后的一个4字节的整数表示类型。
+//! 类型：
+//! 	0 表示忽略
+//! 	1 通用对象
+//! 	2 通用数组
+//! 	3 通用map
+
+//! 如果是通用对象、数组、map，后面会有一个动态长度的整数，表示元素的数量。
+
+//! 容器，由于有总大小的描述，从而可以只对感兴趣的部分作反序列化
+//! TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
+
 #![allow(warnings)]
 
 #![feature(exclusive_range_pattern)]
 #![feature(test)]
 #[warn(unconditional_recursion)]
-// 二进制对象表示法 模块
-// Binary Object Notation
 
-// 小端-非网络字节序，和quic一致
-
-// 用于通讯的类型需要压缩表示，充分利用第一个字节
-// 0=null
-// 1=false
-// 2=true
-// 3=浮点数0.0，4=浮点数1.0，5=16位浮点数，6=32位浮点数，7=64位浮点数，8=128位浮点数;
-// 9=8位负整数，10=16位负整数，11=32位负整数，12=48位负整数，13=64位负整数，14=128位负整数
-// 15~35= -1~19
-// 36=8位正整数，37=16位正整数，38=32位正整数，39=48位正整数，40=64位正整数，41=128位正整数
-
-// 42-106=0-64长度的UTF8字符串，
-// 107=8位长度的UTF8字符串，108=16位长度的UTF8字符串，109=32位长度的UTF8字符串，110=48位长度的UTF8字符串
-
-// 111-175=0-64长度的二进制数据，
-// 176=8位长度的二进制数据，177=16位长度的二进制数据，178=32位长度的二进制数据，179=48位长度的二进制数据
-
-// 180-244=0-64长度的容器，包括对象、数组和map、枚举
-// 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器
-// 之后的一个4字节的整数表示类型。
-// 类型：
-// 	0 表示忽略
-// 	1 通用对象
-// 	2 通用数组
-// 	3 通用map
-
-// 如果是通用对象、数组、map，后面会有一个动态长度的整数，表示元素的数量。
-
-// 容器，由于有总大小的描述，从而可以只对感兴趣的部分作反序列化
-// TODO 定义一个全类型的枚举 enum BonType<T>， ReadNext WriteNext 的 T 应该为BonType。提供一个 read(&self) -> BonType<T>
 extern crate data_view;
 
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
@@ -50,57 +62,7 @@ use std::sync::Arc;
 
 use data_view::{GetView, SetView};
 
-pub enum EnumType {
-    Void,
-    Bool,
-    U8,
-    U16,
-    U32,
-    U64,
-    I8,
-    I16,
-    I32,
-    I64,
-    F32,
-    F64,
-    Str(u64),
-    Bin(u64),
-    Arr(u32, u64),
-    Map(u32, u64),
-    Struct(u64),
-}
-pub enum EnumValue {
-    Void,
-    Bool(bool),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
-    F32(f32),
-    F64(f64),
-    Str(String),
-    Bin(Vec<u8>),
-    Arr(Arc<Vec<EnumValue>>),
-    Map(HashMap<Arc<EnumValue>, Arc<EnumValue>>),
-    Struct(Arc<StructValue>),
-}
-
-pub struct StructValue {
-    pub hash: u32,
-    pub fields: Vec<FieldValue>,
-}
-
-pub struct FieldValue {
-    pub name: String,
-    pub fvalue: EnumValue,
-}
-
+/// ReadBuffer，用于将二进制反序列化为对应数据
 #[derive(Default, Clone, Debug)]
 pub struct ReadBuffer<'a> {
     // u8数组
@@ -109,6 +71,7 @@ pub struct ReadBuffer<'a> {
     pub head: usize,
 }
 
+/// 定义读时的错误
 #[derive(Clone, Debug)]
 pub enum ReadBonErr {
     Overflow {
@@ -249,12 +212,9 @@ impl<'a> Ord for ReadBuffer<'a> {
     }
 }
 
-// 180-244=0-64长度的容器，包括对象、数组和map、枚举
-// 245=8位长度的容器，246=16位长度的容器，247=32位长度的容器，248=48位长度的容器
-// 之后的一个4字节的整数表示类型。
-
 impl<'a> ReadBuffer<'a> {
-    //buf必须符合bon协议， 否则当调用其partial_cmp会直接panic
+    /// 创建ReadBuffer, buf必须符合bon协议， 否则当调用其partial_cmp会直接panic
+    /// head指定反序列化开始的位置
     pub fn new(buf: &[u8], head: usize) -> ReadBuffer {
         ReadBuffer {
             bytes: buf,
@@ -262,19 +222,23 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 获取ReadBuffer当前的读指针（读是从头部开始，即下一次调用read方法，将从self.head位置向后反序列化）
     pub fn head(&self) -> usize {
         self.head
     }
 
+    /// 二进制的长度
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
 
+    /// 获取接下来要反序列化的数据的类型
     pub fn get_type(&self) -> Result<u8, ReadBonErr> {
         self.probe_border(1)?;
         Ok(self.bytes.get_u8(self.head))
     }
 
+    /// 读一个布尔类型，如果二进制当前的值不是布尔类型，返回Err
     pub fn read_bool(&mut self) -> Result<bool, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -290,60 +254,73 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 读一个u8类型，如果二进制当前的值不是u8类型，返回Err
     pub fn read_u8(&mut self) -> Result<u8, ReadBonErr> {
         let r = self.read_integer::<u32>()?;
         Ok(r as u8)
     }
 
+    /// 读一个u16类型，如果二进制当前的值不是u16类型，返回Err
     pub fn read_u16(&mut self) -> Result<u16, ReadBonErr> {
         let r = self.read_integer::<u32>()?;
         Ok(r as u16)
     }
 
+    /// 读一个u32类型，如果二进制当前的值不是u32类型，返回Err
     pub fn read_u32(&mut self) -> Result<u32, ReadBonErr> {
         self.read_integer::<u32>()
     }
 
+    /// 读一个u64类型，如果二进制当前的值不是u64类型，返回Err
     pub fn read_u64(&mut self) -> Result<u64, ReadBonErr> {
         self.read_integer::<u64>()
     }
 
+    /// 读一个usize类型，如果二进制当前的值不是usize类型，返回Err
     pub fn read_usize(&mut self) -> Result<usize, ReadBonErr> {
         let r = self.read_integer::<u64>()?;
         Ok(r as usize)
     }
 
+    /// 读一个u128类型，如果二进制当前的值不是u128类型，返回Err
     pub fn read_u128(&mut self) -> Result<u128, ReadBonErr> {
         self.read_integer::<u128>()
     }
 
+    /// 读一个i8类型，如果二进制当前的值不是i8类型，返回Err
     pub fn read_i8(&mut self) -> Result<i8, ReadBonErr> {
         let r = self.read_integer::<i32>()?;
         Ok(r as i8)
     }
 
+    /// 读一个i16类型，如果二进制当前的值不是i16类型，返回Err
     pub fn read_i16(&mut self) -> Result<i16, ReadBonErr> {
         let r = self.read_integer::<i32>()?;
         Ok(r as i16)
     }
 
+    /// 读一个ui32类型，如果二进制当前的值不是i32类型，返回Err
     pub fn read_i32(&mut self) -> Result<i32, ReadBonErr> {
         self.read_integer::<i32>()
     }
 
+    /// 读一个i61类型，如果二进制当前的值不是i64类型，返回Err
     pub fn read_i64(&mut self) -> Result<i64, ReadBonErr> {
         self.read_integer::<i64>()
     }
 
+    /// 读一个isize类型，如果二进制当前的值不是isize类型，返回Err
     pub fn read_isize(&mut self) -> Result<isize, ReadBonErr> {
         let r = self.read_integer::<i64>()?;
         Ok(r as isize)
     }
 
+    /// 读一个i128类型，如果二进制当前的值不是i128类型，返回Err
     pub fn read_i128(&mut self) -> Result<i128, ReadBonErr> {
         self.read_integer::<i128>()
     }
 
+    /// 读一个f32类型，如果二进制当前的值不是f32类型，返回Err
     pub fn read_f32(&mut self) -> Result<f32, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -370,6 +347,7 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 读一个f64类型，如果二进制当前的值不是f64类型，返回Err
     pub fn read_f64(&mut self) -> Result<f64, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -400,10 +378,8 @@ impl<'a> ReadBuffer<'a> {
             }
         }
     }
-    /**
-     * @description 读出一个动态长度，正整数，不允许大于0x20000000
-     * @example
-     */
+
+    /// 读出一个动态长度，正整数，不允许大于0x20000000
     pub fn read_lengthen(&mut self) -> Result<u32, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -425,6 +401,7 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    // 读一个二进制类型，如果二进制当前的值不是二进制类型，返回Err
     pub fn read_bin(&mut self) -> Result<Vec<u8>, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -470,6 +447,7 @@ impl<'a> ReadBuffer<'a> {
         Ok(dst)
     }
 
+    /// 读一个utf8编码的字符串类型，如果二进制当前的值不是utf8编码的字符串类型类型，返回Err
     pub fn read_utf8(&mut self) -> Result<String, ReadBonErr> {
         self.probe_border(1)?;
         let t = self.bytes.get_u8(self.head);
@@ -518,6 +496,7 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 读一个容器类型，如果二进制当前的值不是容器类型，返回Err
     pub fn read_container<T, F>(&mut self, read_next: F) -> Result<T, ReadBonErr>
     where
         F: FnOnce(&mut ReadBuffer, u32, u64) -> Result<T, ReadBonErr>,
@@ -561,6 +540,7 @@ impl<'a> ReadBuffer<'a> {
         read_next(self, tt, len)
     }
 
+    /// 下一个值是否为None
     pub fn is_nil(&mut self) -> Result<bool, ReadBonErr> {
         self.probe_border(1)?;
         let first = self.bytes.get_u8(self.head);
@@ -572,6 +552,7 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 读下一个数据，已经读到最后，返回Err。否则，返回下一个数据
     pub fn read(&mut self) -> Result<EnumValue, ReadBonErr> {
         self.probe_border(1)?;
         let first = self.bytes.get_u8(self.head);
@@ -668,6 +649,7 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 
+    /// 读一个整数类型，如果二进制当前的值不是整数类型，返回Err
     fn read_integer<
         T: AsFrom<u32> + AsFrom<u64> + AsFrom<i32> + AsFrom<i64> + AsFrom<i128> + AsFrom<u128>,
     >(
@@ -756,10 +738,8 @@ impl<'a> ReadBuffer<'a> {
         }
     }
 }
-/**
- * @description 二进制数据缓存
- * @example
- */
+
+/// 用于对数据进行序列化
 #[derive(Default, Clone, Debug, Hash)]
 pub struct WriteBuffer {
     // u8数组
@@ -803,12 +783,15 @@ impl Ord for WriteBuffer {
 }
 
 impl WriteBuffer {
+    /// 创建WriteBuffer
     pub fn new() -> WriteBuffer {
         WriteBuffer {
             bytes: Vec::new(),
             tail: 0,
         }
     }
+
+    /// 使用现有的buffer创建WriteBuffer，并指定下一次写的指针位置，tail为下一次写的指针。
     pub fn with_bytes(buf: Vec<u8>, tail: usize) -> WriteBuffer {
         WriteBuffer {
             bytes: buf,
@@ -816,6 +799,7 @@ impl WriteBuffer {
         }
     }
 
+    /// 创建WriteBuffer，并指定容量
     pub fn with_capacity(size: usize) -> WriteBuffer {
         WriteBuffer {
             bytes: Vec::with_capacity(size),
@@ -823,67 +807,84 @@ impl WriteBuffer {
         }
     }
 
+    /// 下一次写的起始位置
     pub fn tail(&self) -> usize {
         self.tail
     }
+
+    /// 拿到当前WriteBuffer中的buffer的引用
     pub fn get_byte(&self) -> &Vec<u8> {
         &self.bytes
     }
 
+    /// 拿到当前WriteBuffer中的buffer的所有权
     pub fn unwrap(self) -> Vec<u8> {
         self.bytes
     }
 
+    /// 清空buffer
     pub fn clear(&mut self) {
         self.tail = 0;
     }
 
+    /// 写一个u8
     pub fn write_u8(&mut self, v: u8) {
         self.write_uint32(v as u32);
     }
 
+    /// 写一个u16
     pub fn write_u16(&mut self, v: u16) {
         self.write_uint32(v as u32);
     }
 
+    /// 写一个u32
     pub fn write_u32(&mut self, v: u32) {
         self.write_uint32(v);
     }
 
+    /// 写一个u64
     pub fn write_u64(&mut self, v: u64) {
         self.write_uint64(v);
     }
 
+    /// 写一个u128
     pub fn write_u128(&mut self, v: u128) {
         self.write_uint128(v);
     }
 
+    /// 写一个i8
     pub fn write_i8(&mut self, v: i8) {
         self.write_int32(v as i32);
     }
 
+    /// 写一个i16
     pub fn write_i16(&mut self, v: i16) {
         self.write_int32(v as i32);
     }
 
+    /// 写一个i32
     pub fn write_i32(&mut self, v: i32) {
         self.write_int32(v);
     }
 
+    /// 写一个i64
     pub fn write_i64(&mut self, v: i64) {
         self.write_int64(v);
     }
 
+    /// 写一个i128
     pub fn write_i128(&mut self, v: i128) {
         self.write_int128(v);
     }
 
+    /// 写一个None
     pub fn write_nil(&mut self) {
         self.try_extend_capity(1);
         self.bytes.set_u8(0, self.tail);
         self.tail += 1;
     }
 
+    /// 写一个bool
     pub fn write_bool(&mut self, v: bool) {
         self.try_extend_capity(1);
         self.bytes.set_u8(
@@ -896,6 +897,7 @@ impl WriteBuffer {
         self.tail += 1;
     }
 
+    /// 写一个f32
     pub fn write_f32(&mut self, v: f32) {
         if v == 0.0 {
             self.try_extend_capity(1);
@@ -915,6 +917,7 @@ impl WriteBuffer {
         self.tail += 5;
     }
 
+    /// 写一个f64
     pub fn write_f64(&mut self, v: f64) {
         if v == 0.0 {
             self.try_extend_capity(1);
@@ -933,13 +936,10 @@ impl WriteBuffer {
         self.bytes.set_lf64(v, self.tail + 1);
         self.tail += 9;
     }
-    /**
-     * @description 写入一个动态长度，正整数，不允许大于0x20000000。
-     * 1字节： 0xxxxxxx
-     * 2字节： 10xxxxxx xxxxxxxx
-     * 4字节： 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
-     * @example
-     */
+    /// 写入一个动态长度，正整数，不允许大于0x20000000。
+    /// * 1字节： 0xxxxxxx
+    /// * 2字节： 10xxxxxx xxxxxxxx
+    /// * 4字节： 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
     pub fn write_lengthen(&mut self, t: u32) {
         if t < 0x80 {
             self.try_extend_capity(1);
@@ -958,17 +958,17 @@ impl WriteBuffer {
         }
     }
 
-    //写字符串
+    ///写字符串
     pub fn write_utf8(&mut self, s: &str) {
         self.write_data(s.as_bytes(), 42);
     }
 
-    // 写二进制数据
+    /// 写二进制数据
     pub fn write_bin(&mut self, arr: &[u8], range: Range<usize>) {
         self.write_data(&arr[range], 111)
     }
 
-    //容器有数组，map，枚举，struct
+    /// 写容器。容器有数组，map，枚举，struct
     pub fn write_container<T, F>(&mut self, o: &T, write_next: F, estimated_size: Option<usize>)
     where
         F: Fn(&mut WriteBuffer, &T),
@@ -1074,6 +1074,7 @@ impl WriteBuffer {
         }
     }
 
+    // 扩容
     fn extend_capity(&mut self, len: usize) {
         let old_capacity = self.bytes.capacity();
         if old_capacity > 4194304 {
@@ -1084,13 +1085,14 @@ impl WriteBuffer {
         }
     }
 
+    // 尝试扩容
     fn try_extend_capity(&mut self, len: usize) {
         if self.bytes.len() + len > self.bytes.capacity() {
             self.extend_capity(len);
         }
     }
 
-    //写字符串和二进制
+    //写字符串或二进制
     fn write_data(&mut self, arr: &[u8], t: u8) {
         let length = arr.len();
         if length <= 64 {
@@ -1130,6 +1132,8 @@ impl WriteBuffer {
         self.tail += length;
     }
 
+    // 写32的整数
+    // 在32为平台依然高效
     fn write_int32(&mut self, mut v: i32) {
         if v >= -1 && v < 20 {
             self.write_common(v as i8);
@@ -1143,6 +1147,8 @@ impl WriteBuffer {
         self.writei_32(v as u32, t);
     }
 
+    // 写64位整数
+    // 在64位平台下依然高效
     fn write_int64(&mut self, mut v: i64) {
         if v >= -1 && v < 20 {
             self.write_common(v as i8);
@@ -1160,6 +1166,7 @@ impl WriteBuffer {
         }
     }
 
+    // 写128位整数
     fn write_int128(&mut self, mut v: i128) {
         if v >= -1 && v < 20 {
             self.write_common(v as i8);
@@ -1179,6 +1186,8 @@ impl WriteBuffer {
         }
     }
 
+    // 写一个32位正整数
+    // 在32位平台下依然高效
     fn write_uint32(&mut self, v: u32) {
         if v < 20 {
             self.write_common(v as i8);
@@ -1187,6 +1196,8 @@ impl WriteBuffer {
         }
     }
 
+    // 写一个64位正整数
+    // 在64位平台下依然高效
     fn write_uint64(&mut self, v: u64) {
         if v < 20 {
             self.write_common(v as i8);
@@ -1197,6 +1208,7 @@ impl WriteBuffer {
         }
     }
 
+    // 写一个128位的正整数
     fn write_uint128(&mut self, v: u128) {
         if v < 20 {
             self.write_common(v as i8);
@@ -1209,7 +1221,7 @@ impl WriteBuffer {
         }
     }
 
-    //写32数字, 不包括-1~19
+    // 写32数字, 不包括-1~19
     #[inline]
     fn writei_32(&mut self, v: u32, t: u8) {
         if v <= 0x7F {
@@ -1231,7 +1243,7 @@ impl WriteBuffer {
         }
     }
 
-    //写32数字, 不包括-1~19
+    //写32正整数, 不包括-1~19
     #[inline]
     fn writeu_32(&mut self, v: u32) {
         if v <= 0xFF {
@@ -1243,7 +1255,7 @@ impl WriteBuffer {
         }
     }
 
-    //写64位数字， 只有大于32位数字时调用此方法
+    //写64位正整数， 只有大于32位数字时调用此方法
     #[inline]
     fn writeu_64(&mut self, v: u64) {
         if v <= 0xFFFFFFFFFFFF {
@@ -1261,6 +1273,7 @@ impl WriteBuffer {
         self.tail += 1;
     }
 
+    // 写一个字节
     #[inline]
     fn write_8(&mut self, v: u8, t: u8) {
         self.try_extend_capity(2);
@@ -1269,6 +1282,7 @@ impl WriteBuffer {
         self.tail += 2;
     }
 
+    // 写2字节（小端）
     #[inline]
     fn write_16(&mut self, v: u16, t: u8) {
         self.try_extend_capity(3);
@@ -1277,6 +1291,7 @@ impl WriteBuffer {
         self.tail += 3;
     }
 
+    // 写4字节（小端）
     #[inline]
     fn write_32(&mut self, v: u32, t: u8) {
         self.try_extend_capity(5);
@@ -1285,6 +1300,7 @@ impl WriteBuffer {
         self.tail += 5;
     }
 
+    // 写6字节（小端）
     #[inline]
     fn write_48(&mut self, v: u64, t: u8) {
         self.try_extend_capity(7);
@@ -1294,6 +1310,7 @@ impl WriteBuffer {
         self.tail += 7;
     }
 
+    // 写8字节（小端）
     #[inline]
     fn write_64(&mut self, v: u64, t: u8) {
         self.try_extend_capity(9);
@@ -1302,6 +1319,7 @@ impl WriteBuffer {
         self.tail += 9;
     }
 
+    // 写16字节（小端）
     #[inline]
     fn write_128(&mut self, v: u128, t: u8) {
         self.try_extend_capity(17);
@@ -2198,6 +2216,57 @@ fn compare_contain<'a>(
     };
 
     return Some(Ordering::Equal);
+}
+
+pub enum EnumType {
+    Void,
+    Bool,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
+    Str(u64),
+    Bin(u64),
+    Arr(u32, u64),
+    Map(u32, u64),
+    Struct(u64),
+}
+pub enum EnumValue {
+    Void,
+    Bool(bool),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    F32(f32),
+    F64(f64),
+    Str(String),
+    Bin(Vec<u8>),
+    Arr(Arc<Vec<EnumValue>>),
+    Map(HashMap<Arc<EnumValue>, Arc<EnumValue>>),
+    Struct(Arc<StructValue>),
+}
+
+pub struct StructValue {
+    pub hash: u32,
+    pub fields: Vec<FieldValue>,
+}
+
+pub struct FieldValue {
+    pub name: String,
+    pub fvalue: EnumValue,
 }
 
 #[cfg(test)]

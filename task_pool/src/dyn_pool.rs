@@ -6,7 +6,7 @@ use wtree::wtree::WeightTree;
 use dyn_uint::{UintFactory, ClassFactory, SlabFactory};
 use deque::slab_deque::SlabDeque;
 
-use enums:: {IndexType, FreeSign};
+use crate::enums:: {IndexType, FreeSign};
 
 pub type AsyncPool<T> = WeightTree<T>;
 
@@ -23,8 +23,8 @@ impl<T: 'static> SyncPool<T>{
     #[inline]
     pub fn new() -> Self {
         SyncPool {
-            weight_queues: WeightTree::new(),
-            slab: SlabFactory::new(),
+            weight_queues: WeightTree::<()>::new(),
+            slab: SlabFactory::<IndexType, WeightQueue<(T, usize)>>::new(),
             len: 0,
         }
     }

@@ -2,7 +2,7 @@ use std::cmp::{Ord, Ordering};
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use dyn_uint::{SlabFactory, UintFactory};
-use heap::Heap;
+use crate::heap::Heap;
 
 pub struct SlabHeap<T> {
     index_factory: SlabFactory<(), ()>,

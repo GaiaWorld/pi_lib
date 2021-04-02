@@ -1,3 +1,8 @@
+//! 功能：
+//! * 定义了一个triat：`Map`
+//! * 定义了一个数据结构：`VecMap`，并为`VecMap`实现了`Map<K=usize,V=T>`
+//! * 定义了数据结构：`HashMap`，并为`HashMap`实现了`Map`
+
 #![feature(rustc_private)]
 #![feature(integer_atomics)]
 #![feature(asm,box_syntax,box_patterns)]
@@ -20,7 +25,7 @@ extern crate time;
 pub mod vecmap;
 pub mod hashmap;
 
-
+/// Map接口定义
 pub trait Map{
 	type Key;
 	type Val;

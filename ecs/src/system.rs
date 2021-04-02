@@ -1,7 +1,8 @@
 use atom::Atom;
 pub use listener::FnListener;
 use std::{any::TypeId, sync::Arc};
-use {Fetch, TypeIds, World};
+
+use crate::{Fetch, TypeIds, World};
 
 pub trait Runner<'a> {
     type ReadData: SystemData<'a>;

@@ -23,31 +23,18 @@ extern crate twox_hash;
 use std::hash::{BuildHasherDefault};
 use std::collections::{HashMap, HashSet};
 
-// 32位、fxhash算法
-#[cfg(not(feature = "xxhash"))]
-use fxhash::FxHasher32;
-// 64位、fxhash算法
-#[cfg(not(feature = "xxhash"))]
-use fxhash::FxHasher64;
-// 32位、xxhash算法
-#[cfg(feature = "xxhash")]
-use twox_hash::XxHash32;
-// 64位、xxhash算法
-#[cfg(feature = "xxhash")]
-use twox_hash::XxHash64;
-
-// 32位平台下的fxhash默认使用FxHasher32
+// 32位平台下， not(feature = "xxhash")时，默认使用FxHasher32
 #[cfg(all( not(feature = "xxhash") , target_pointer_width = "32"))]
-pub type DefaultHasher = FxHasher32;
-// 64位平台下的fxhash默认使用FxHasher64
+pub type DefaultHasher = fxhash::FxHasher32;
+// 64位平台下，not(feature = "xxhash")时，默认使用FxHasher64
 #[cfg(all( not(feature = "xxhash") , target_pointer_width = "64"))]
-pub type DefaultHasher = FxHasher64;
-// 32位平台下的xxhash默认使用XxHash32
+pub type DefaultHasher = fxhash::FxHasher64;
+// 32位平台下，feature = "xxhash"时，默认使用XxHash32
 #[cfg(all(feature = "xxhash", target_pointer_width = "32"))]
-pub type DefaultHasher = XxHash32;
-// 64位平台下的xxhash默认使用XxHash64
+pub type DefaultHasher = twox_hash::XxHash32;
+// 64位平台下，feature = "xxhash"时，默认使用XxHash64
 #[cfg(all(feature = "xxhash", target_pointer_width = "64"))]
-pub type DefaultHasher = XxHash64;
+pub type DefaultHasher = twox_hash::XxHash64;
 
 // 当前默认的HashMap和HashSet（使用根据平台字长、和feature来决定的DefaultHasher）
 pub type XHashMap<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;

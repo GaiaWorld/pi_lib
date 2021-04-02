@@ -7,7 +7,7 @@ use wtree::fast_wtree;
 
 use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
 
-use enums:: {IndexType, FreeSign};
+use crate::enums:: {IndexType, FreeSign};
 
 pub type AsyncPool<T> = fast_wtree::WeightTree<T>;
 

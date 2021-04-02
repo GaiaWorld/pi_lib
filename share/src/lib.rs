@@ -1,3 +1,21 @@
+//! 提供五个类型：`Share`， `ShareWeak`,，`ShareMutex`, `ShareRwLock`，`ShareCell`.
+//! 
+//! 在feature="rc"时：
+//! 
+//! * `Share`等同于`std::rc::Rc`
+//! * `ShareWeak`等同于`std::rc::Weak`
+//! * `ShareMutex`等同于`std::cell::RwCell`
+//! * `ShareRwLock`等同于`std::cell::RwCell`
+//! * `ShareCell`等同于`std::cell::RefCell`
+//! 
+//! 在feature="arc"时:
+//! 
+//! * `Share`等同于`std::sync::Arc`,
+//! * `ShareWeak`等同于`std::sync::Weak`.
+//! * `ShareMutex`等同于`std::sync::Mutex`
+//! * `ShareRwLock`等同于`std::sync::RwCell`
+//! * `ShareCell`等同于`cell::TrustCell`
+
 #[cfg(feature = "rc")]
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut, BorrowError, BorrowMutError};

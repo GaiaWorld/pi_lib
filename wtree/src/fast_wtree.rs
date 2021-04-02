@@ -1,6 +1,5 @@
-/**
- * 一个更快速的权重树，不支持索引删除
- */
+//! 权重树，不支持索引查询和删除，因此具有相比于wtree::WeightTree更快的速度
+
 use std::fmt::{Debug, Formatter, Result as FResult};
 use std::mem::transmute_copy;
 use std::ptr::write;
@@ -16,17 +15,17 @@ pub struct WeightTree<T>(Vec<Item<T>>);
 
 impl<T> WeightTree<T> {
 
-	//构建一颗权重树
+	/// 构建一颗权重树
 	pub fn new() -> Self{
         WeightTree(Vec::new())
 	}
 
-	//创建一颗权重树， 并初始容量
+	/// 创建一颗权重树， 并初始容量
 	pub fn with_capacity(capacity: usize) -> Self{
 		WeightTree(Vec::with_capacity(capacity))
 	}
 
-    //All element weights and
+    /// 取到权重树中任务的总权重
 	pub fn amount(&self) -> usize{
 		match self.0.len(){
 			0 => 0,
@@ -34,15 +33,17 @@ impl<T> WeightTree<T> {
 		}
 	}
 
+	/// 长度
     pub fn len(&self) -> usize{
 		self.0.len()
 	}
 
+	/// 清空权重树
 	pub fn clear(&mut self) {
 		self.0.clear();
 	}
 
-	//插入元素，返回该元素的位置
+	/// 插入元素，返回该元素的位置
 	pub fn push(&mut self, elem: T, weight: usize){
 		let len = self.0.len();
 		self.0.push(Item{
@@ -53,13 +54,13 @@ impl<T> WeightTree<T> {
 		self.up(len)
 	}
 
-	//remove a element by weight and returns it, Panics if weight >= self.amount()
+	/// 指定一个权重，弹出一个任务
 	pub fn pop(&mut self, weight: usize) -> (T, usize){
 		let index = self.find(weight, 0);
 	    self.delete(index)
 	}
 
-	//remove a element by weight, returns it, or None if weight >= self.amount()
+	//指定一个权重，尝试弹出一个任务， 如果指定权重大于权重树所有任务权重的总和，返回None
 	pub fn try_pop(&mut self, weight: usize) -> Option<(T, usize)>{
 		match self.0.len(){
 			0 => None,
@@ -73,7 +74,7 @@ impl<T> WeightTree<T> {
 		}
 	}
 
-	//Finding element index according to weight
+	//根据权重查询任务
 	#[inline]
 	fn find(&mut self, mut weight: usize, cur_index:usize) -> usize{
 		let cur_weight = self.0[cur_index].count;
@@ -97,6 +98,7 @@ impl<T> WeightTree<T> {
 		};
 	}
 
+	// 删除任务
 	#[inline]
 	fn delete(&mut self, index: usize) -> (T, usize){
         let len = self.0.len();

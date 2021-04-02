@@ -4,11 +4,11 @@ pub use any::ArcAny;
 // use pointer::cell::StdCell;
 use slab::{Slab, SlabIter};
 
-use cell::StdCell;
-use component::MultiCase;
-use monitor::{CreateFn, DeleteFn, ModifyFn, Notify, NotifyImpl};
-use system::{SystemData, SystemMutData};
-use {Fetch, Lend, LendMut, TypeIds, World};
+use crate::cell::StdCell;
+use crate::component::MultiCase;
+use crate::monitor::{CreateFn, DeleteFn, ModifyFn, Notify, NotifyImpl};
+use crate::system::{SystemData, SystemMutData};
+use crate::{Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait Entity: Notify + ArcAny {
     fn get_mask(&self) -> usize;

@@ -1,3 +1,9 @@
+//! LRU缓存区， 最近最少使用原则， 提供最大最小容量和超时处理。
+//! 常用的用法就是将不被使用的资源放入LRU缓存区，如果该资源被使用了，则需要从该缓存区中移除。
+//! 算法逻辑：当放入资源后，如果缓存区大小超过最大容量，则把最旧的资源依次移除，直到缓存区大小小于最大容量或最少保留1个资源。
+//! 定时整理，依次超时的资源移除，直到达到最小容量。
+//! 内部数据结构为一个slab队列，支持快速从中间删除。 一般被res模块使用，资源id依赖res模块的slab分配。
+
 extern crate deque;
 extern crate slab;
 
@@ -13,9 +19,7 @@ pub struct Entry<T> {
     pub cost: usize,
     timeout: usize,
 }
-/**
- * LRU 最近最少使用 缓冲
- */
+/// LRU缓存区
 #[derive(Clone)]
 pub struct LruCache<T> {
     deque: Deque<Entry<T>, Slab<Node<Entry<T>>>>,
@@ -32,9 +36,7 @@ impl<T> Default for LruCache<T> {
 }
 
 impl<T> LruCache<T> {
-    /**
-     * 根据配置新建LRU缓冲
-     */
+    /// 根据配置新建LRU缓冲区
     pub fn with_config(min_capacity: usize, max_capacity: usize, timeout: usize) -> Self {
         Self {
             deque: Deque::new(),
@@ -48,45 +50,23 @@ impl<T> LruCache<T> {
             size: 0,
         }
     }
-    /**
-     * 更改配置
-     */
-    pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) {
-        self.min_capacity = min_capacity;
-        self.timeout = timeout;
-        self.max_capacity = if max_capacity > min_capacity {
-            max_capacity
-        } else {
-            min_capacity
-        };
-    }
-    /**
-     * 获得配置
-     */
+    /// 获得配置
     pub fn get_config(&self) -> (usize, usize, usize) {
         (self.min_capacity, self.max_capacity, self.timeout)
     }
-    /**
-     * 获得最大容量
-     */
+    /// 获得最大容量
     pub fn get_max_capacity(&self) -> usize {
         self.max_capacity
     }
-    /**
-     * 获得当前大小
-     */
+    /// 获得当前资源大小
     pub fn size(&self) -> usize {
         self.size
     }
-    /**
-     * 获得配置
-     */
+    /// 获得当前资源数量
     pub fn len(&self) -> usize {
         self.deque.len()
     }
-    /**
-     * 配置
-     */
+    /// 设置配置
     pub fn set_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) {
         self.min_capacity = min_capacity;
         self.max_capacity = if max_capacity > self.min_capacity {
@@ -96,9 +76,7 @@ impl<T> LruCache<T> {
         };
         self.timeout = timeout;
     }
-    /**
-     * 设置最大容量
-     */
+    /// 设置最大容量
     pub fn set_max_capacity(&mut self, max_capacity: usize) {
         self.max_capacity = if max_capacity > self.min_capacity {
             max_capacity
@@ -106,10 +84,7 @@ impl<T> LruCache<T> {
             self.min_capacity
         };
     }
-    /**
-     * 添加一个新元素，返回该元素的id
-     * 注：如果缓冲满，根据LRU原则，移除旧元素并返回
-     */
+    /// 添加一个新资源，返回该资源的id。调用后，一般应该调用capacity_collect方法
     pub fn add(
         &mut self,
         value: T,
@@ -127,9 +102,7 @@ impl<T> LruCache<T> {
             slab,
         )
     }
-    /**
-     * 移除元素并返回
-     */
+    /// 移除资源并返回
     pub fn remove(&mut self, id: usize, slab: &mut Slab<Node<Entry<T>>>) -> Option<(T, usize)> {
         match self.deque.try_remove(id, slab) {
             Some(r) => {
@@ -139,16 +112,12 @@ impl<T> LruCache<T> {
             _ => None,
         }
     }
-    /**
-     * 清空原有的缓冲
-     */
+    /// 清空
     pub fn clear(&mut self, slab: &mut Slab<Node<Entry<T>>>) {
         self.deque.clear(slab);
         self.size = 0;
     }
-    /**
-     * 根据容量进行整理
-     */
+    /// 根据容量进行整理。如果缓冲满，根据LRU原则，返回被移除的资源。需要循环调用，直到返回None
     pub fn capacity_collect(&mut self, slab: &mut Slab<Node<Entry<T>>>) -> Option<(T, usize)> {
         if self.size <= self.max_capacity {
             return None;
@@ -157,9 +126,7 @@ impl<T> LruCache<T> {
         self.size -= r.cost;
         Some((r.value, r.cost))
     }
-    /**
-     * 根据超时进行整理
-     */
+    /// 根据超时进行整理，返回超时的资源。需要循环调用，直到返回None
     pub fn timeout_collect(
         &mut self,
         now: usize,

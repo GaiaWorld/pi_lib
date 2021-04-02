@@ -2,6 +2,7 @@
 name = "hash"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 fxhash = "0.2.1"
