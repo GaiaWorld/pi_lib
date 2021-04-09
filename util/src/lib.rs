@@ -108,14 +108,14 @@ impl<T: Default> FetchDefault for Option<T> {
 /// assert_eq!(cloned, opt_x.cloned().fetch_default());
 /// assert_eq!(None.fetch_clone(), 0);
 /// ```
-pub trait FetchClone {
+pub trait FetchCloneDefault {
     type Item: Default + Clone;
-    fn fetch_clone(&self) -> Self::Item;
+    fn fetch_clone_default(&self) -> Self::Item;
 }
-impl<T: Default + Clone> FetchClone for Option<T> {
+impl<T: Default + Clone> FetchCloneDefault for Option<T> {
     type Item = T;
     #[inline]
-    fn fetch_clone(&self) -> Self::Item {
+    fn fetch_clone_default(&self) -> Self::Item {
         match self {
             Some(t) => t.clone(),
             _ => Self::Item::default(),
