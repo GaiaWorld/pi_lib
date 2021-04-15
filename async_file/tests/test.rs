@@ -6,7 +6,7 @@ use std::time::Duration;
 use r#async::rt::multi_thread::{MultiTaskPool, MultiTaskRuntime};
 use async_file::file::{create_dir, rename, remove_file, remove_dir, AsyncFileOptions, WriteOptions, AsyncFile};
 
-// #[test]
+#[test]
 fn test_async_file() {
     //初始化异步运行时
     let pool = MultiTaskPool::new("TestAsyncRuntime".to_string(), 8, 1024 * 1024, 10, None);
