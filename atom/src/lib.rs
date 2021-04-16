@@ -5,10 +5,9 @@
 #![feature(pattern)]
 #![feature(weak_counts)]
 
-/**
- * 全局的线程安全的原子字符串池
- * 某些高频单次的Atom，可以在应用层增加一个cache来缓冲Atom，定期检查引用计数来判断是否缓冲。
- */
+//! 全局的线程安全的原子字符串池，减少相同字符串的内存占用，也用于hashmap的键
+//! 如果全局该字符串最后一个引用被释放， 则该字符串会释放。
+//! 为了减少不停的创建和放入池的次数，高频单次的Atom，可以在应用层增加一个cache来缓冲Atom，定期检查引用计数来判断是否缓冲。
 
 #[macro_use]
 extern crate lazy_static;
@@ -107,19 +106,16 @@ impl Atom {
 	// fn contain(s: Option<&String>, h: usize) -> Option<usize> {
 	// 	return None
 	// }
+	/// 获取该Atom的hash值
     #[inline(always)]
 	pub fn get_hash(&self) -> usize {
 		(*self.0).1
 	}
-
+	/// 根据hash获取Atom，由应用来保证hash和字符串的一一对应
 	pub fn get(hash: usize) -> Option<Atom> {
 		ATOM_MAP.get(hash)
 	}
 
-	// #[inline(always)]
-	// pub fn from_hash(hash: usize) -> Option<Atom> {
-		
-	// }
 }
 
 impl From<String> for Atom {

@@ -1,4 +1,5 @@
-// extern crate im;
+//! 事件监听器及监听器列表， 为ECS系统服务的
+
 extern crate share;
 
 use std::{
@@ -9,10 +10,13 @@ use std::{
 use share::Share;
 // use std::vec::Vector;
 
+/// 监听器定义
 pub trait Listener<E> {
+    /// 监听事件
     fn listen(&self, e: &E);
 }
 
+/// 闭包函数的监听器
 pub struct FnListener<E>(pub Share<dyn Fn(&E)>);
 
 unsafe impl<E> Sync for FnListener<E> {}
@@ -36,28 +40,24 @@ impl<E> Clone for FnListener<E> {
 
 pub type FnListeners<E> = Listeners<FnListener<E>>;
 
+/// 监听器列表
 #[derive(Clone)]
 pub struct Listeners<T: Clone> (Vec<T>);
 
 impl<T: Clone + PartialEq> Listeners<T> {
+    /// 获取监听器列表的内存大小
     pub fn mem_size(&self) -> usize {
         self.0.len() * std::mem::size_of::<T>()
     }
+    /// 移除一个监听器， 要求该监听器实现PartialEq
     pub fn delete(&mut self, listener: &T) -> bool {
         for i in 0..self.0.len() {
             if &self.0[i] == listener {
-                self.0.remove(i);
+                self.0.swap_remove(i);
                 return true
             }
         }
         return false;
-		// match self.0.index_of(listener) {
-		// 	Some(i) => {
-        //         self.0.remove(i);
-        //         true
-        //     },
-		// 	_ => false,
-		// }
     }
 }
 impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
