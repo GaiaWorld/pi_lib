@@ -26,10 +26,10 @@ native = ["native_cross_performance"]
 
 
 [target.'cfg(feature = "wasm-bindgen")'.dependencies]
-wasm_bindgen_cross_performance = { package = "cross_performance", path = "../cross_performance", optional = true }
+wasm_bindgen_cross_performance = { package = "cross_performance", path = "../cross_performance", features=["wasm-bindgen"], optional = true }
 
 [target.'cfg(feature = "native")'.dependencies]
-native_cross_performance = { package = "cross_performance", path = "../cross_performance", optional = true }
+native_cross_performance = { package = "cross_performance", path = "../cross_performance", features=["native"], optional = true }
 
 [[example]]
 name = "expanded"

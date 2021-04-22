@@ -11,13 +11,18 @@ extern crate any;
 extern crate hash;
 extern crate share;
 #[cfg(feature = "wasm-bindgen")]
-extern crate wasm_bindgen_cross_performance as cross_performance;
+extern crate wasm_bindgen_cross_performance;
 #[cfg(feature = "native")]
-extern crate native_cross_performance as cross_performance;
+extern crate native_cross_performance;
 // extern crate im;
 pub extern crate paste;
 
 pub extern crate time;
+
+#[cfg(feature = "wasm-bindgen")]
+pub use wasm_bindgen_cross_performance as cross_performance;
+#[cfg(feature = "native")]
+pub use native_cross_performance as cross_performance;
 
 pub mod cell;
 pub mod world;
