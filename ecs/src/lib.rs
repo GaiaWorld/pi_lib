@@ -10,8 +10,10 @@ extern crate slab;
 extern crate any;
 extern crate hash;
 extern crate share;
-extern crate cross_performance;
-
+#[cfg(feature = "wasm-bindgen")]
+extern crate wasm_bindgen_cross_performance as cross_performance;
+#[cfg(feature = "native")]
+extern crate native_cross_performance as cross_performance;
 // extern crate im;
 pub extern crate paste;
 
