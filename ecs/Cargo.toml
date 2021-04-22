@@ -13,7 +13,6 @@ pointer = {path="../pointer"}
 listener = {path="../listener"}
 hash = {path="../hash"}
 time = {path="../time"}
-cross_performance = {path="../cross_performance"}
 share = {path="../share"}
 paste = "0.1"
 lazy_static = "*"
