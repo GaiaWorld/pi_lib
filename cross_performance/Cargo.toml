@@ -1,0 +1,25 @@
+[package]
+name = "cross_performance"
+version = "0.1.0"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+lazy_static = "*"
+
+
+[dependencies.web-sys]
+version = "*"
+features = [
+	"Window",
+	"Performance"
+]
+
+[features]
+default = ["native"]
+native = []
+wasm-bindgen = []
+
+
+
+

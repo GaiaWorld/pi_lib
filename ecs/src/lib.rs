@@ -10,6 +10,7 @@ extern crate slab;
 extern crate any;
 extern crate hash;
 extern crate share;
+extern crate cross_performance;
 
 // extern crate im;
 pub extern crate paste;
