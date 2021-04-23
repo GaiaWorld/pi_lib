@@ -332,7 +332,7 @@ impl<O: Default + 'static> MultiTaskRuntime<O> {
             let index = (handle >> 40) as usize; //获取多线程定时异步任务所在定时器偏移
             let handle = handle & 0xffffffffff; //获取多线程定时异步任务句柄
             let (_, timer) = &timers[index];
-            timer.lock().timer.as_ref().borrow_mut().cancel(handle as usize);
+            timer.lock().cancel_timer(handle as usize);
         }
     }
 
@@ -440,7 +440,7 @@ impl<O: Default + 'static> MultiTaskPool<O> {
         //构建多线程任务队列
         let rt_uid = alloc_rt_uid();
         let mut queues = Vec::with_capacity(size);
-        let mut timers = if let Some(interval) = interval {
+        let mut timers = if let Some(_) = interval {
             Some(Vec::with_capacity(size))
         } else {
             None
@@ -592,27 +592,32 @@ fn timer_work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
     }
     queue.running_worker(); //设置队列工作者的状态为正在工作
 
-    let mut last_run_millis = 0;
+    let mut timer_run_millis = 0; //初始化定时器运行时长
     let rt = runtime.clone();
     let counter = &(runtime.0).3;
     loop {
         //设置新的定时任务，并唤醒已过期的定时任务
         timer.lock().consume();
-        let timing_task = timer.lock().pop();
-        match timing_task {
-            Some(AsyncTimingTask::Pended(expired)) => {
-                //唤醒休眠的异步任务
-                rt.wakeup(&expired);
-            },
-            Some(AsyncTimingTask::WaitRun(WaitRunTask::MultiTask(expired))) => {
-                //立即执行到期的定时异步任务
-                queue.push_recv_front(expired);
-            },
-            _ => {
-                //当前没有定时异步任务，则推动定时器
-                last_run_millis = timer.lock().poll();
-            },
+        while timer.lock().is_require_pop() {
+            let timing_task = timer.lock().pop();
+            match timing_task {
+                Some(AsyncTimingTask::Pended(expired)) => {
+                    //唤醒休眠的异步任务
+                    rt.wakeup(&expired);
+                    break;
+                },
+                Some(AsyncTimingTask::WaitRun(WaitRunTask::MultiTask(expired))) => {
+                    //立即执行到期的定时异步任务
+                    queue.push_recv_front(expired);
+                    break;
+                },
+                _ => {
+                    //当前没有定时异步任务，则继续尝试获取定时异步任务
+                    continue;
+                },
+            }
         }
+        timer_run_millis = run_millis(); //更新定时器运行时长
 
         match queue.consumer.try_recv(counter) {
             None => {
@@ -626,7 +631,7 @@ fn timer_work_loop<O: Default + 'static>(runtime: MultiTaskRuntime<O>,
                 }
 
                 //获取任务失败，则准备休眠
-                let diff_time = run_millis().checked_sub(last_run_millis).unwrap_or(0);
+                let diff_time = run_millis().checked_sub(timer_run_millis).unwrap_or(0);
                 let real_timeout = if timer.lock().len() == 0 {
                     //当前定时器没有未到期的任务，则休眠默认时长
                     DEFAULT_RUNTIME_SLEEP_TIME

@@ -1298,10 +1298,10 @@ fn test_futures_mutex() {
 
 #[test]
 fn test_spin_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     {
@@ -1602,10 +1602,10 @@ fn test_spin_lock_bench() {
 
 #[test]
 fn test_mutex_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     {
@@ -2522,10 +2522,10 @@ fn test_mutex_lock_bench() {
 
 #[test]
 fn test_rw_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(true);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     let rt0_ = rt0.clone();
@@ -2945,8 +2945,8 @@ fn test_empty_single_task() {
 
 #[test]
 fn test_empty_multi_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, None);
-    let rt = pool.startup(true);
+    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, Some(1));
+    let rt = pool.startup(false);
     let rt0 = rt.clone();
     let rt1 = rt.clone();
     let rt2 = rt.clone();
@@ -3051,7 +3051,7 @@ fn test_single_timing_task() {
     thread::sleep(Duration::from_millis(8000));
 
     //测试派发定时任务的性能
-    let mut handles = Vec::with_capacity(1000000);
+    let mut handles = Vec::with_capacity(10000000);
     let start = Instant::now();
     for index in 0..10000000 {
         match rt.spawn_timing(rt.alloc(), async move {
@@ -3079,8 +3079,8 @@ fn test_single_timing_task() {
 
 #[test]
 fn test_multi_timing_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, Some(10));
-    let rt = pool.startup(true);
+    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, Some(1));
+    let rt = pool.startup(false);
 
     //测试派发定时异步任务和取消定时异步任务的功能
     {
@@ -3102,7 +3102,7 @@ fn test_multi_timing_task() {
     thread::sleep(Duration::from_millis(6000));
 
     //测试派发定时任务的性能
-    let mut handles = Vec::with_capacity(1000000);
+    let mut handles = Vec::with_capacity(10000000);
     let start = Instant::now();
     for index in 0..10000000 {
         match rt.spawn_timing(rt.alloc(), async move {
@@ -3227,7 +3227,7 @@ fn test_async_wait_timeout() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(10));
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
     let counter = Arc::new(AtomicUsize::new(0));
@@ -3273,10 +3273,10 @@ fn test_async_wait() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     {
@@ -3385,7 +3385,7 @@ fn test_async_wait() {
             println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
         });
     }
-    thread::sleep(Duration::from_millis(30000));
+    thread::sleep(Duration::from_millis(60000));
 
     {
         let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
@@ -3430,10 +3430,10 @@ fn test_async_wait_any() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     {
@@ -3563,7 +3563,7 @@ fn test_async_wait_any() {
             println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
         });
     }
-    thread::sleep(Duration::from_millis(50000));
+    thread::sleep(Duration::from_millis(60000));
 
     {
         let rt_0 = rt.clone();
@@ -3697,10 +3697,10 @@ fn test_async_wait_all() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt0 = pool.startup(false);
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
+    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
     let rt1 = pool.startup(false);
 
     {
@@ -3857,7 +3857,7 @@ fn test_async_wait_all() {
         }
         println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
     }
-    thread::sleep(Duration::from_millis(20000));
+    thread::sleep(Duration::from_millis(30000));
 
     {
         let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
