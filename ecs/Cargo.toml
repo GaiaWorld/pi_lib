@@ -17,10 +17,17 @@ share = {path="../share"}
 paste = "0.1"
 lazy_static = "*"
 # im = "*"
+# [target.'cfg(feature = "wasm-bindgen")'.dependencies]
+# wasm_bindgen_cross_performance = { package = "cross_performance", path = "../cross_performance", features=["wasm-bindgen"], optional = true }
+
+# [target.'cfg(feature = "native")'.dependencies]
+# native_cross_performance = { package = "cross_performance", path = "../cross_performance", features=["native"], optional = true }
 
 [features]
 defualt = ["runtime"]
 runtime = []
+# wasm-bindgen = ["wasm_bindgen_cross_performance"]
+# native = ["native_cross_performance"]
 
 [[example]]
 name = "expanded"
