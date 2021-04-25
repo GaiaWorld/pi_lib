@@ -39,6 +39,15 @@ macro_rules! debug_println {
     }}
 }
 
+#[cfg(not(feature = "print"))]
+#[ macro_export ] 
+macro_rules! debug_println {
+    ($($ arg: tt)*)=>{{
+
+    }}
+}
+
+
 #[cfg(all(feature = "print", not(feature = "wasm-bindgen")))]
 #[ macro_export ] 
 macro_rules! debug_print {
@@ -50,8 +59,17 @@ macro_rules! debug_print {
 #[cfg(all(feature = "print", feature = "wasm-bindgen"))]
 #[ macro_export ] 
 macro_rules! debug_print {
-    ($($ arg: tt)*)=>{
+    ($($ arg: tt)*)=>{{
         let s = format!($($ arg)*);
         unsafe { $crate::web_sys::console::log_1( &s.into())};
-    }
+    }}
+}
+
+
+#[cfg(not(feature = "print"))]
+#[ macro_export ] 
+macro_rules! debug_print {
+    ($($ arg: tt)*)=>{{
+
+    }}
 }
