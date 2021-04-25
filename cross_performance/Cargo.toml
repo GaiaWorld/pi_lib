@@ -16,8 +16,7 @@ features = [
 ]
 
 [features]
-default = ["native"]
-native = []
+default = []
 wasm-bindgen = []
 
 

@@ -7,7 +7,7 @@ lazy_static! {
     static ref START: Instant = Instant::now();
 }
 
-#[cfg(feature = "native")]
+#[cfg(not(feature = "native"))]
 pub fn now() -> f64 {
     match Instant::now().checked_duration_since(START.clone()) {
         Some(r) => r.as_millis() as f64,
