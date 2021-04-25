@@ -12,6 +12,6 @@ features = [
 ]
 
 [features]
-default = ["wasm-bindgen"]
+default = []
 print=[]
 wasm-bindgen=["web-sys"]
