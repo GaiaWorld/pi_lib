@@ -20,9 +20,9 @@ pub extern crate paste;
 pub extern crate time;
 
 // #[cfg(feature = "wasm-bindgen")]
-// pub use wasm_bindgen_cross_performance as cross_performance;
+// pub crate use wasm_bindgen_cross_performance as cross_performance;
 // #[cfg(feature = "native")]
-// pub use native_cross_performance as cross_performance;
+// pub crate use native_cross_performance as cross_performance;
 
 pub mod cell;
 pub mod world;
