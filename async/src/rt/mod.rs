@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::future::Future;
-use std::time::Duration;
+use std::time::{Instant, Duration};
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
@@ -19,7 +19,7 @@ use futures::{future::BoxFuture, FutureExt};
 use parking_lot::{Mutex, Condvar};
 use crossbeam_channel::{Sender, Receiver, unbounded};
 
-use local_timer::LocalTimer;
+use local_timer::local_timer::LocalTimer;
 
 use single_thread::{SingleTask, SingleTaskRuntime};
 use multi_thread::{MultiTask, MultiTaskRuntime};
@@ -375,9 +375,10 @@ pub enum AsyncTimingTask<O: Default + 'static> {
 /// 异步任务本地定时器
 ///
 pub struct AsyncTaskTimer<O: Default + 'static> {
-    producor:   Sender<(usize, AsyncTimingTask<O>)>,            //定时任务生产者
-    consumer:   Receiver<(usize, AsyncTimingTask<O>)>,          //定时任务消费者
-    timer:      Arc<RefCell<LocalTimer<AsyncTimingTask<O>>>>,   //定时器
+    producor:   Sender<(usize, AsyncTimingTask<O>)>,                            //定时任务生产者
+    consumer:   Receiver<(usize, AsyncTimingTask<O>)>,                          //定时任务消费者
+    duration:   Instant,                                                        //定时器持续时间
+    timer:      Arc<RefCell<LocalTimer<AsyncTimingTask<O>, 1000, 60, 60, 24>>>, //定时器
 }
 
 unsafe impl<O: Default + 'static> Send for AsyncTaskTimer<O> {}
@@ -387,20 +388,24 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
     /// 构建异步任务本地定时器
     pub fn new() -> Self {
         let (producor, consumer) = unbounded();
+        let duration = Instant::now();
         AsyncTaskTimer {
             producor,
             consumer,
-            timer: Arc::new(RefCell::new(LocalTimer::new())),
+            duration,
+            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O>, 1000, 60, 60, 24>::new(1, duration.elapsed().as_millis() as u64))),
         }
     }
 
     /// 构建指定间隔的异步任务本地定时器
     pub fn with_interval(time: usize) -> Self {
         let (producor, consumer) = unbounded();
+        let duration = Instant::now();
         AsyncTaskTimer {
             producor,
             consumer,
-            timer: Arc::new(RefCell::new(LocalTimer::with_tick(time))),
+            duration,
+            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O>, 1000, 60, 60, 24>::new(time as u64, duration.elapsed().as_millis() as u64))),
         }
     }
 
@@ -416,12 +421,16 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
 
     /// 设置定时器
     pub fn set_timer(&self, task: AsyncTimingTask<O>, timeout: usize) -> usize {
-        self.timer.borrow_mut().set_timeout(task, timeout)
+        self.timer.borrow_mut().insert(task, timeout as u64)
     }
 
     /// 取消定时器
     pub fn cancel_timer(&self, timer_ref: usize) -> Option<AsyncTimingTask<O>> {
-        self.timer.borrow_mut().cancel(timer_ref)
+        if let Some(item) = self.timer.borrow_mut().try_remove(timer_ref) {
+            Some(item.elem)
+        } else {
+            None
+        }
     }
 
     /// 消费所有定时任务，返回定时任务数量
@@ -436,14 +445,18 @@ impl<O: Default + 'static> AsyncTaskTimer<O> {
         len
     }
 
-    /// 轮询定时器
-    pub fn poll(&self) -> u64 {
-        self.timer.borrow_mut().try_poll()
+    /// 判断是否需要继续弹出任务
+    pub fn is_require_pop(&self) -> bool {
+        self.timer.borrow().check_sleep(self.duration.elapsed().as_millis() as u64) == 0
     }
 
     /// 从定时器中弹出到期的一个任务
     pub fn pop(&self) -> Option<AsyncTimingTask<O>> {
-        self.timer.borrow_mut().try_pop()
+        if let Some((item, _index)) = self.timer.borrow_mut().pop(self.duration.elapsed().as_millis() as u64) {
+            Some(item.elem)
+        } else {
+            None
+        }
     }
 
     /// 清空定时器
