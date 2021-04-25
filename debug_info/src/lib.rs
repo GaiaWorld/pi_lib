@@ -25,6 +25,7 @@ pub extern crate web_sys;
 macro_rules! debug_println {
     ($($ arg: tt)*)=>(
         println!($($ arg)*);
+        return;
     )
 }
 
@@ -33,7 +34,8 @@ macro_rules! debug_println {
 macro_rules! debug_println {
     ($($ arg: tt)*)=>(
         let s = format!($($ arg)*);
-        unsafe { $crate::web_sys::console::log_1( &s.into()) };
+        unsafe { $crate::web_sys::console::log_1( &s.into());};
+        return;
     )
 }
 
@@ -42,6 +44,7 @@ macro_rules! debug_println {
 macro_rules! debug_print {
     ($($ arg: tt)*)=>(
         print!($($ arg)*);
+        return;
     )
 }
 
@@ -50,6 +53,7 @@ macro_rules! debug_print {
 macro_rules! debug_print {
     ($($ arg: tt)*)=>(
         let s = format!($($ arg)*);
-        unsafe { $crate::web_sys::console::log_1( &s.into()) };
+        unsafe { $crate::web_sys::console::log_1( &s.into());};
+        return;
     )
 }
