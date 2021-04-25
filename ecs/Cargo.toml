@@ -14,6 +14,7 @@ listener = {path="../listener"}
 hash = {path="../hash"}
 time = {path="../time"}
 share = {path="../share"}
+# debug_info = {path="../debug_info"}
 paste = "0.1"
 lazy_static = "*"
 # im = "*"

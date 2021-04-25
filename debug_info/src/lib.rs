@@ -15,12 +15,41 @@
 //!
 //! debug_print!("打印一个数字:{}", 5);
 
+
+#[cfg(feature = "web-sys")]
+extern crate web_sys;
+
+
+#[cfg(all(feature = "print", not(feature = "wasm-bindgen")))]
 #[ macro_export ] 
 macro_rules! debug_println {
-    ($($ arg: tt)*)=>(if cfg!(feature = "print"){ println!($($ arg)*);})
+    ($($ arg: tt)*)=>(
+        println!($($ arg)*);
+    )
 }
 
+#[cfg(all(feature = "print", feature = "wasm-bindgen"))]
+#[ macro_export ] 
+macro_rules! debug_println {
+    ($($ arg: tt)*)=>(
+        let s = format!($($ arg)*);
+        unsafe { web_sys::console::log_1( &s.into()) };
+    )
+}
+
+#[cfg(all(feature = "print", not(feature = "wasm-bindgen")))]
 #[ macro_export ] 
 macro_rules! debug_print {
-    ($($ arg: tt)*)=>(if cfg!(feature = "print"){ print!($($ arg)*);})
+    ($($ arg: tt)*)=>(
+        print!($($ arg)*);
+    )
+}
+
+#[cfg(all(feature = "print", feature = "wasm-bindgen"))]
+#[ macro_export ] 
+macro_rules! debug_print {
+    ($($ arg: tt)*)=>(
+        let s = format!($($ arg)*);
+        unsafe { web_sys::console::log_1( &s.into()) };
+    )
 }
