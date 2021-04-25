@@ -14,6 +14,8 @@
 //!### example
 //!
 //! debug_print!("打印一个数字:{}", 5);
+// #![feature(repr128)]
+// #![feature(format_args_nl)]
 
 
 #[cfg(feature = "wasm-bindgen")]
@@ -23,37 +25,33 @@ pub extern crate web_sys;
 #[cfg(all(feature = "print", not(feature = "wasm-bindgen")))]
 #[ macro_export ] 
 macro_rules! debug_println {
-    ($($ arg: tt)*)=>(
+    ($($ arg: tt)*)=>{
         println!($($ arg)*);
-        return;
-    )
+    }
 }
 
 #[cfg(all(feature = "print", feature = "wasm-bindgen"))]
 #[ macro_export ] 
 macro_rules! debug_println {
-    ($($ arg: tt)*)=>(
+    ($($ arg: tt)*) => {{
         let s = format!($($ arg)*);
-        unsafe { $crate::web_sys::console::log_1( &s.into());};
-        return;
-    )
+        unsafe { $crate::web_sys::console::log_1( &s.into())};
+    }}
 }
 
 #[cfg(all(feature = "print", not(feature = "wasm-bindgen")))]
 #[ macro_export ] 
 macro_rules! debug_print {
-    ($($ arg: tt)*)=>(
+    ($($ arg: tt)*)=>{
         print!($($ arg)*);
-        return;
-    )
+    }
 }
 
 #[cfg(all(feature = "print", feature = "wasm-bindgen"))]
 #[ macro_export ] 
 macro_rules! debug_print {
-    ($($ arg: tt)*)=>(
+    ($($ arg: tt)*)=>{
         let s = format!($($ arg)*);
-        unsafe { $crate::web_sys::console::log_1( &s.into());};
-        return;
-    )
+        unsafe { $crate::web_sys::console::log_1( &s.into())};
+    }
 }

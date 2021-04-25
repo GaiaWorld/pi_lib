@@ -4,5 +4,10 @@ extern crate debug_info;
 
 
 pub fn aa() {
-    debug_println!("xxx");
+    let r: Option<usize> = None;
+    let x = match r {
+        Some(r) => (),
+        None => debug_println!("xxx"),
+    };
+    // debug_println!("xxx");
 }
