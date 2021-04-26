@@ -1,8 +1,0 @@
-[package]
-name = "debug_info1"
-version = "0.1.0"
-authors = ["suncy <suncy@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-debug_info = {path="../debug_info", features=["wasm-bindgen", "print"]}

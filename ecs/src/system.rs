@@ -213,7 +213,8 @@ macro_rules! impl_system {
             // let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
 
-            debug_info::debug_println!("{:?}", cross_performance::now() - time);
+            unsafe { web_sys::console::log_2(&"time:".into(), &format!("{:?}", cross_performance::now() - time).into()) };
+            // debug_println!("{:?}", cross_performance::now() - time);
             runtime_ref[runtime_index].cost_time = std::time::Duration::from_millis((cross_performance::now() - time) as u64);
 			// match cross_performance::now().checked_duration_since(time) {
 			// 	Some(r) => runtime_ref[runtime_index].cost_time = r,

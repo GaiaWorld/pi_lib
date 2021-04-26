@@ -54,5 +54,4 @@ members = [
   "js_proxy_gen",
   "js_proxy_gen_macro",
   "cross_performance",
-  "debug_info1"
 ]
