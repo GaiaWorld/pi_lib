@@ -19,6 +19,8 @@ pub extern crate paste;
 
 pub extern crate time;
 
+pub extern crate web_sys;
+
 // #[cfg(feature = "wasm-bindgen")]
 // pub crate use wasm_bindgen_cross_performance as cross_performance;
 // #[cfg(feature = "native")]
