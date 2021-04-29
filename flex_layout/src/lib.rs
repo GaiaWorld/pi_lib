@@ -21,7 +21,6 @@ extern crate serde;
 
 mod geometry;
 mod number;
-mod result;
 pub mod style;
 mod tree;
 mod calc;
@@ -29,9 +28,7 @@ mod calc;
 
 pub use crate::tree::*;
 pub use crate::geometry::*;
-// pub use crate::node::*;
 pub use crate::number::*;
-pub use crate::result::*;
 pub use crate::style::*;
 pub use crate::tree::*;
 pub use crate::calc::*;

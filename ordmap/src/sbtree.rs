@@ -1,6 +1,3 @@
-/**
- * 写时复制的sbtree，支持单线程或多线程安全
- */
 
 use std::rc::Rc;
 #[macro_export]
@@ -20,6 +17,7 @@ use ordmap::{ActionResult, ActionResultType, Entry, ImOrdMap, Iter};
 pub fn new_tree<K: Clone, V: Clone>(n: Node<K, V>) -> Tree<K, V> {
 	Some($x::new(n))
 }
+/// 写时复制的sbtree，支持单线程或多线程安全
 pub type Tree<K, V> = Option<$x<Node<K, V>>>;
 
 pub struct Node<K: Clone, V: Clone> {

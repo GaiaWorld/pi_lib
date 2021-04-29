@@ -135,6 +135,15 @@ macro_rules! make_func {
             pub(crate) fn [<$name _false>](&mut self) {
                 self.0 &= !(INodeStateType::$type as usize)
             }
+            #[allow(dead_code)]
+            pub(crate) fn [<$name _set>](&mut self, v: bool) {
+                if v {
+                    self.0 |= INodeStateType::$type as usize
+                }else {
+                    self.0 &= !(INodeStateType::$type as usize)
+                }
+                
+            }
         }
     };
 }
@@ -669,10 +678,10 @@ impl Cache {
             }
         }
         // 如果自动大小， 则计算实际大小
-        if self.main.is_undefined() {
+        if !self.main.is_defined() {
             self.main_value = f32::max(line.main, self.main_value);
         }
-        if self.cross.is_undefined() {
+        if !self.cross.is_defined() {
 			// self.cross1 = line.cross + line.item.cross; ？？？
 			self.cross_value = f32::max(line.cross, self.cross_value);
         }
