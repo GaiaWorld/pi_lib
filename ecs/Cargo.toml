@@ -19,11 +19,11 @@ paste = "0.1"
 lazy_static = "*"
 # im = "*"
 
-[dependencies.web-sys]
-version = "*"
-features = [
-	"console",
-]
+# [dependencies.web-sys]
+# version = "*"
+# features = [
+# 	"console",
+# ]
 
 [features]
 defualt = ["runtime"]

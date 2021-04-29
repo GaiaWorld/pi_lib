@@ -71,20 +71,20 @@ fn test1() {
 		// world.register_multi::<Node, Velocity>();
 
 		// let transforms = world.fetch_multi::<Node, Transform>().unwrap();
-		// let positions = world.fetch_multi::<Node, Position>().unwrap();
+		let positions = world.fetch_multi::<Node, Position>().unwrap();
 		// let rotations = world.fetch_multi::<Node, Rotation>().unwrap();
 		// let velocitys = world.fetch_multi::<Node, Velocity>().unwrap();
-		// for _i in 0..10000 {
-		// 	let entity = world.create_entity::<Node>();
+		for _i in 0..10000 {
+			let entity = world.create_entity::<Node>();
 		// 	transforms.lend_mut().insert(entity, Transform(Matrix4::<f32>::from_scale(1.0)));
-		// 	positions.lend_mut().insert(entity, Position(Vector3::unit_x()));
+			positions.lend_mut().insert(entity, Position{x: 5.0, y: 5.0});
 		// 	rotations.lend_mut().insert(entity, Rotation(Vector3::unit_x()));
 		// 	velocitys.lend_mut().insert(entity, Velocity(Vector3::unit_x()));
 		// 	// world.fetch_multi::<Node, Transform>().unwrap().lend_mut().insert(entity, Transform(Matrix4::<f32>::from_scale(1.0)));
 		// 	// world.fetch_multi::<Node, Position>().unwrap().lend_mut().insert(entity, Position(Vector3::unit_x()));
 		// 	// world.fetch_multi::<Node, Rotation>().unwrap().lend_mut().insert(entity, Rotation(Vector3::unit_x()));
 		// 	// world.fetch_multi::<Node, Velocity>().unwrap().lend_mut().insert(entity, Velocity(Vector3::unit_x()));
-		// }
+		}
 	// }
 }
 
