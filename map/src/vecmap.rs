@@ -316,12 +316,6 @@ impl<T> Debug for VecMap<T> where T: Debug {
     }
 }
 
-impl<T> Drop for VecMap<T> {
-    fn drop(&mut self) {
-        println!("drop vecMap")
-    }
-}
-
 // pub struct SlabIter<'a, T: 'a> {
 //     signs: &'a Vec<usize>,
 //     entries: &'a Vec<T>,

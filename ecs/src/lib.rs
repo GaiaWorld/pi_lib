@@ -19,7 +19,7 @@ pub extern crate paste;
 
 pub extern crate time;
 
-pub extern crate web_sys;
+// pub extern crate web_sys;
 
 // #[cfg(feature = "wasm-bindgen")]
 // pub crate use wasm_bindgen_cross_performance as cross_performance;
@@ -46,6 +46,47 @@ pub use world::World;
 pub use cell::StdCell;
 
 use std::any::TypeId;
+
+use map::vecmap::VecMap;
+#[derive(Debug)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+}
+
+// Entry
+pub struct Node;
+
+impl Component for Position {
+    type Storage = VecMap<Self>;
+}
+#[test]
+fn test1() {
+    // for _i in 0..10000 {
+		let mut world = World::default();
+		world.register_entity::<Node>();
+		// world.register_multi::<Node, Transform>();
+		world.register_multi::<Node, Position>();
+		// world.register_multi::<Node, Rotation>();
+		// world.register_multi::<Node, Velocity>();
+
+		// let transforms = world.fetch_multi::<Node, Transform>().unwrap();
+		// let positions = world.fetch_multi::<Node, Position>().unwrap();
+		// let rotations = world.fetch_multi::<Node, Rotation>().unwrap();
+		// let velocitys = world.fetch_multi::<Node, Velocity>().unwrap();
+		// for _i in 0..10000 {
+		// 	let entity = world.create_entity::<Node>();
+		// 	transforms.lend_mut().insert(entity, Transform(Matrix4::<f32>::from_scale(1.0)));
+		// 	positions.lend_mut().insert(entity, Position(Vector3::unit_x()));
+		// 	rotations.lend_mut().insert(entity, Rotation(Vector3::unit_x()));
+		// 	velocitys.lend_mut().insert(entity, Velocity(Vector3::unit_x()));
+		// 	// world.fetch_multi::<Node, Transform>().unwrap().lend_mut().insert(entity, Transform(Matrix4::<f32>::from_scale(1.0)));
+		// 	// world.fetch_multi::<Node, Position>().unwrap().lend_mut().insert(entity, Position(Vector3::unit_x()));
+		// 	// world.fetch_multi::<Node, Rotation>().unwrap().lend_mut().insert(entity, Rotation(Vector3::unit_x()));
+		// 	// world.fetch_multi::<Node, Velocity>().unwrap().lend_mut().insert(entity, Velocity(Vector3::unit_x()));
+		// }
+	// }
+}
 
 // pub static mut PRINT_TIME: bool = false;
 

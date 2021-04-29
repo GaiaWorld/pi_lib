@@ -10,6 +10,12 @@ impl<T> StdCell<T> {
     }
 }
 
+impl<C> Drop for StdCell<C> {
+    fn drop(&mut self) {
+        println!("StdCell drop====")
+    }
+}
+
 impl<T> Deref for StdCell<T> {
     type Target = RefCell<T>;
     fn deref(&self) -> &Self::Target {
