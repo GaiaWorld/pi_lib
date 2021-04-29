@@ -21,7 +21,6 @@ impl_downcast_arc!(Entity);
 
 pub type CellEntity<T> = StdCell<EntityImpl<T>>;
 
-
 impl<T: 'static> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.add_create(listener);

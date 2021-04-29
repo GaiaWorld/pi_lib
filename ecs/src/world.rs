@@ -28,6 +28,15 @@ pub struct World {
 	pub capacity: usize,
 }
 
+impl Drop for World {
+    fn drop(&mut self) {
+        for (_, v) in self.entity.iter_mut() {
+            v.clear();
+        }
+        // std::mem::replace(&mut self.entity, XHashMap::default());
+    }
+}
+
 impl World {
     pub fn register_entity<E: 'static>(&mut self) {
         let id = TypeId::of::<E>();
