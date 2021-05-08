@@ -1,17 +1,25 @@
 [package]
-name = "debug_info"
+name = "cross_performance"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
+[dependencies]
+lazy_static = "*"
+
+
 [dependencies.web-sys]
 version = "*"
-optional = true
 features = [
-	"console",
+	"Window",
+	"Performance",
+	# "console",
 ]
 
 [features]
 default = []
-print=[]
-wasm-bindgen=["web-sys"]
+wasm-bindgen = []
+
+
+
+

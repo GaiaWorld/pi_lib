@@ -8,6 +8,7 @@ use std::future::Future;
 use std::time::SystemTime;
 use std::cell::{RefCell, Ref};
 use std::path::{Path, PathBuf};
+use std::slice::from_raw_parts;
 #[cfg(any(unix))]
 use std::os::unix::fs::FileExt;
 #[cfg(any(windows))]
@@ -601,13 +602,34 @@ impl<O: Default + 'static> AsyncFile<O> {
     }
 
     /// 从指定位置开始异步写指定字节
-    pub async fn write(&self, pos: u64, buf: Arc<[u8]>, options: WriteOptions) -> Result<usize> {
-        if buf.len() == 0 {
+    pub async fn write<B: AsRef<[u8]>>(&self,
+                                       pos: u64,
+                                       buf: B,
+                                       options: WriteOptions) -> Result<usize> {
+        let slice = buf.as_ref();
+        if slice.len() == 0 {
             //无效的字节数，则立即返回
             return Ok(0);
         }
 
-        AsyncWriteFile::new(self.0.runtime.clone(), buf, 0, self.clone(), pos, options, 0).await
+        let buf: Binary = slice.into();
+        AsyncWriteFile::new(self.0.runtime.clone(),
+                            buf,
+                            0,
+                            self.clone(),
+                            pos,
+                            options,
+                            0).await
+    }
+
+    /// 从指定位置开始异步批量写指定字节
+    pub async fn write_batch(&self, pos: u64, buf: Arc<Vec<Vec<u8>>>, options: WriteOptions) -> Result<usize> {
+        if buf.len() == 0 {
+            //无效的长度，则立即返回
+            return Ok(0);
+        }
+
+        AsyncWriteBatchFile::new(self.0.runtime.clone(), buf, 0, 0, self.clone(), pos, options, 0).await
     }
 }
 
@@ -827,6 +849,34 @@ impl<O: Default + 'static> AsyncReadFile<O> {
 }
 
 /*
+* 内部二进制分片
+*/
+#[derive(Clone)]
+struct Binary(*const u8, usize);
+
+unsafe impl Send for Binary {}
+unsafe impl Sync for Binary {}
+
+impl From<&[u8]> for Binary {
+    fn from(src: &[u8]) -> Self {
+        Binary(src.as_ptr(), src.len())
+    }
+}
+
+impl AsRef<[u8]> for Binary {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { from_raw_parts(self.0, self.1) }
+    }
+}
+
+impl Binary {
+    //获取内部二进制分片长度
+    pub fn len(&self) -> usize {
+        self.1
+    }
+}
+
+/*
 * 从指定位置开始异步写指定字节的结果
 */
 #[derive(Clone)]
@@ -836,11 +886,11 @@ unsafe impl Send for WriteFileResult {}
 unsafe impl Sync for WriteFileResult {}
 
 /*
-* 从指定位置开始异步读指定字节
+* 从指定位置开始异步写指定字节
 */
 struct AsyncWriteFile<O: Default + 'static> {
     runtime:    MultiTaskRuntime<O>,    //异步运行时
-    buf:        Arc<[u8]>,              //写缓冲
+    buf:        Binary,                 //写缓冲
     buf_pos:    u64,                    //写缓冲指针位置
     file:       AsyncFile<O>,           //文件
     pos:        u64,                    //文件指针位置
@@ -886,9 +936,9 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
             }
 
             #[cfg(any(unix))]
-            let r = file.0.inner.read().write_at(&buf[(buf_pos as usize)..], pos);
+            let r = file.0.inner.read().write_at(&buf.as_ref()[(buf_pos as usize)..], pos);
             #[cfg(any(windows))]
-            let r = file.0.inner.read().seek_write(&buf[(buf_pos as usize)..], pos);
+            let r = file.0.inner.read().seek_write(&buf.as_ref()[(buf_pos as usize)..], pos);
 
             match r {
                 Ok(writed_len) if writed_len < (buf.len() - buf_pos as usize) => {
@@ -952,10 +1002,171 @@ impl<O: Default + 'static> Future for AsyncWriteFile<O> {
 
 impl<O: Default + 'static> AsyncWriteFile<O> {
     //构建从指定位置开始异步读指定字节的方法
-    pub fn new(runtime: MultiTaskRuntime<O>, buf: Arc<[u8]>, buf_pos: u64, file: AsyncFile<O>, pos: u64, options: WriteOptions, writed: usize) -> Self {
+    pub fn new(runtime: MultiTaskRuntime<O>,
+               buf: Binary,
+               buf_pos: u64,
+               file: AsyncFile<O>, pos: u64, options: WriteOptions, writed: usize) -> Self {
         AsyncWriteFile {
             runtime,
             buf,
+            buf_pos,
+            file,
+            pos,
+            options,
+            writed,
+            result: WriteFileResult(Arc::new(RefCell::new(None))), //设置初始值
+        }
+    }
+}
+
+/*
+* 从指定位置开始异步批量写指定字节
+*/
+struct AsyncWriteBatchFile<O: Default + 'static> {
+    runtime:    MultiTaskRuntime<O>,    //异步运行时
+    buf:        Arc<Vec<Vec<u8>>>,      //写缓冲向量
+    buf_index:  usize,                  //写缓冲向量位置
+    buf_pos:    u64,                    //写缓冲指针位置
+    file:       AsyncFile<O>,           //文件
+    pos:        u64,                    //文件指针位置
+    options:    WriteOptions,           //写文件选项
+    writed:     usize,                  //已写入的字节数
+    result:     WriteFileResult,        //写入文件结果
+}
+
+unsafe impl<O: Default + 'static> Send for AsyncWriteBatchFile<O> {}
+unsafe impl<O: Default + 'static> Sync for AsyncWriteBatchFile<O> {}
+
+impl<O: Default + 'static> Future for AsyncWriteBatchFile<O> {
+    type Output = Result<usize>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if let Some(result) = self.as_ref().result.0.borrow_mut().take() {
+            //已写入指定的字节，则返回
+            return Poll::Ready(result);
+        }
+
+        //从指定位置开始异步读指定字节
+        let task_id = self.as_ref().runtime.alloc();
+        let task_id_copy = task_id.clone();
+        let runtime = self.as_ref().runtime.clone();
+        let bufs = self.as_ref().buf.clone();
+        let buf_index = self.as_ref().buf_index;
+        let buf_pos = self.as_ref().buf_pos;
+        let file = self.as_ref().file.clone();
+        let pos = self.as_ref().pos;
+        let options = self.as_ref().options.clone();
+        let writed = self.as_ref().writed;
+        let result = self.as_ref().result.clone();
+        let task = async move {
+            match file.0.options {
+                AsyncFileOptions::TruncateWrite | AsyncFileOptions::TruncateReadWrite => {
+                    //如果使用覆写模式，则每次写操作之前将覆写文件
+                    if let Err(e) = file.0.inner.read().set_len(0) {
+                        //覆写文件失败，则立即返回错误原因
+                        *result.0.borrow_mut() = Some(Err(e));
+                        return Default::default();
+                    }
+                },
+                _ => (),
+            }
+
+            let mut blocked = None;
+            let mut writed = writed;
+            for index in buf_index..bufs.len() {
+                let buf = &bufs[index];
+
+                #[cfg(any(unix))]
+                let r = file.0.inner.read().write_at(&buf[(buf_pos as usize)..], pos);
+                #[cfg(any(windows))]
+                let r = file.0.inner.read().seek_write(&buf[(buf_pos as usize)..], pos);
+
+                match r {
+                    Ok(writed_len) if writed_len < (buf.len() - buf_pos as usize) => {
+                        //写指定字节未完成，则继续写剩余字节
+                        blocked = Some((index, writed_len));
+                        break;
+                    },
+                    Ok(writed_len) => {
+                        //写指定字节完成，并设置等待异步写指定字节的任务的值
+                        writed += writed_len;
+                    },
+                    Err(ref e) if e.kind() == ErrorKind::Interrupted => {
+                        //需要尝试重写
+                        blocked = Some((index, 0));
+                        break;
+                    },
+                    Err(e) => {
+                        //写指定字节失败，则设置等待异步写指定字节的任务的值
+                        *result.0.borrow_mut() = Some(Err(e));
+                    },
+                }
+            }
+
+            if let Some((index, writed_len)) = blocked {
+                //写指定字节未完成或需要尝试重写，则继续写未写入的字节
+                *result.0.borrow_mut() = Some(Self::new(runtime.clone(),
+                                                        bufs,
+                                                        index,
+                                                        buf_pos + writed_len as u64,
+                                                        file,
+                                                        pos + writed_len as u64,
+                                                        options,
+                                                        writed + writed_len).await);
+            } else {
+                //写所有字节完成，则根据写选项同步文件
+                let sync_result = match options {
+                    WriteOptions::None => Ok(writed),
+                    WriteOptions::Flush => file.0.inner.write().flush().and(Ok(writed)),
+                    WriteOptions::Sync(true) => {
+                        let flush_result = file.0.inner.write().flush();
+                        flush_result
+                            .and_then(|_| file.0.inner.read().sync_data())
+                            .and(Ok(writed))
+                    },
+                    WriteOptions::Sync(false) => file.0.inner.read().sync_data().and(Ok(writed)),
+                    WriteOptions::SyncAll(true) => {
+                        let flush_result = file.0.inner.write().flush();
+                        flush_result
+                            .and_then(|_| file.0.inner.read().sync_all())
+                            .and(Ok(writed))
+                    },
+                    WriteOptions::SyncAll(false) => file.0.inner.read().sync_all().and(Ok(writed)),
+                };
+                *result.0.borrow_mut() = Some(sync_result);
+            }
+
+            //唤醒等待异步写指定字节的任务
+            runtime.wakeup(&task_id_copy);
+
+            //返回当前异步任务的默认值
+            Default::default()
+        };
+
+        //挂起当前任务，并返回值未就绪
+        self.as_ref().runtime.pending::<()>(&task_id, cx.waker().clone());
+        if let Err(e) = self.as_ref().runtime.spawn(task_id, task) {
+            //派发异步写指定字节的任务失败，则立即返回错误原因
+            return Poll::Ready(Err(Error::new(ErrorKind::Other, format!("Async Write File Error, path: {:?}, reason: {:?}", self.as_ref().file.0.path, e))));
+        }
+        Poll::Pending
+    }
+}
+
+impl<O: Default + 'static> AsyncWriteBatchFile<O> {
+    //构建从指定位置开始异步读指定字节的方法
+    pub fn new(runtime: MultiTaskRuntime<O>,
+               buf: Arc<Vec<Vec<u8>>>,
+               buf_index: usize,
+               buf_pos: u64,
+               file: AsyncFile<O>,
+               pos: u64,
+               options: WriteOptions,
+               writed: usize) -> Self {
+        AsyncWriteBatchFile {
+            runtime,
+            buf,
+            buf_index,
             buf_pos,
             file,
             pos,

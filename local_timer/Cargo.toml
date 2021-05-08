@@ -1,12 +1,11 @@
 [package]
 name = "local_timer"
 version = "0.1.0"
-authors = ["vmos <vmos@fairblock.io>"]
+authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-time = { path = "../time" }
-wheel = { path = "../wheel" }
-
-[dev-dependencies]
-crossbeam-channel = "0.4"
+heap = {path="../heap"}
+time = {path="../time"}
+dyn_uint = {path="../dyn_uint"}
+arrayvec = "0.7.0"

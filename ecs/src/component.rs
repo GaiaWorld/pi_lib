@@ -30,6 +30,7 @@ impl<E: 'static, C: Component> MultiCase for CellMultiCase<E, C> {
         self.borrow_mut().map.remove(&id);
     }
 }
+
 impl<E: 'static, C: Component> Notify for CellMultiCase<E, C> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.add_create(listener);

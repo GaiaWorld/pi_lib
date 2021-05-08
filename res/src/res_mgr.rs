@@ -1,6 +1,8 @@
-// 资源管理器， 管理多个资源表。有总内存上限的控制。
-// 初始化时，设置的每个资源表内的LRU的max_capacity和min_capacity的差，就是每个LRU的权重。
-// 如果有LRU有空闲， 则会减少其max_capacity, 按权重提高那些满的LRU的max_capacity
+//! 资源管理器， 管理多个资源表。有总内存上限的控制。
+//! 初始化时，设置的每个资源表内的LRU的max_capacity和min_capacity的差，就是每个LRU的权重。
+//! 如果有LRU有空闲， 则会减少其max_capacity, 按权重提高那些满的LRU的max_capacity
+//! 用一个资源会用不同的用途， 尤其是图片， 界面、人物、场景、特效等， 每种用途的优先级不同。
+//! 为了更好的缓存资源，因此我们将不同的用途定义为分组， 为每类每用途的资源创建资源表。
 
 use std::any::TypeId;
 
@@ -9,7 +11,7 @@ use share::Share;
 
 use super::res_map::{Res, ResCollect, ResMap, StateInfo};
 
-pub static CAPACITY: usize = 16 * 1024 * 1024;
+pub static CAPACITY: usize = 64 * 1024 * 1024;
 
 /// 资源管理器
 pub struct ResMgr {
@@ -31,6 +33,7 @@ impl Default for ResMgr {
 }
 
 impl ResMgr {
+    /// 用指定的最大内存容量创建资源管理器
     pub fn with_capacity(total_capacity: usize) -> Self {
         ResMgr {
             tables: XHashMap::default(),
@@ -39,7 +42,7 @@ impl ResMgr {
             min_capacity: 0,
         }
     }
-
+    /// 获得资源管理器的内存容量？？？
     pub fn mem_size(&self) -> usize {
         0
         // let mut r = 0;
@@ -48,7 +51,7 @@ impl ResMgr {
         // }
         // r
     }
-
+    /// 获得资源管理器的内存容量
     pub fn info(&self) -> usize {
         let mut r = 0;
         for (_, v) in self.tables.iter() {
@@ -79,7 +82,7 @@ impl ResMgr {
             })
             .or_insert(ResTable{res_map: Share::new(ResMap::<T>::with_config(name, min_capacity, max_capacity, timeout)), weight});
     }
-
+    /// 获取指定类型<T>和分组的资源表
     pub fn fetch_map<T: Res>(&self, group_i: usize) -> Option<Share<ResMap<T>>> {
         match self.tables.get(&(TypeId::of::<T>(), group_i)) {
             Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
@@ -89,7 +92,7 @@ impl ResMgr {
             _ => None,
         }
     }
-
+    /// 获得指定键和分组的资源
     pub fn get<T: Res + 'static>(&self, name: &<T as Res>::Key, group_i: usize) -> Option<Share<T>> {
         match self.tables.get(&(TypeId::of::<T>(), group_i)) {
             Some(i) => match i.res_map.clone().downcast::<ResMap<T>>() {
@@ -102,7 +105,7 @@ impl ResMgr {
             _ => None,
         }
     }
-
+    /// 创建资源，用指定的键，内容，内存大小，所在分组
     #[inline]
     pub fn create<T: Res + 'static>(
         &mut self,
@@ -119,7 +122,7 @@ impl ResMgr {
             None => panic!("TypeId not found!"),
         }
     }
-
+    /// 移除一个指定键及分组的资源
     #[inline]
     pub fn remove<T: Res + 'static>(&mut self, name: &<T as Res>::Key, group_i: usize) -> Option<Share<T>> {
         match self.tables.get(&(TypeId::of::<T>(), group_i)) {
@@ -130,8 +133,7 @@ impl ResMgr {
             _ => None,
         }
     }
-    // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
-    // 就是LruMgr有总内存上限， 按权重分给其下的LRU。 如果有LRU有空闲， 则会减少其max_size, 按权重提高那些满的LRU的max_size
+    /// 整理方法， 将无人使用的资源放入到LruCache， 清理超时的资源。LruMgr有总内存上限， 按权重分给其下的LRU。 如果有LRU有空闲， 则会减少其max_size, 按权重提高那些满的LRU的max_size
     pub fn collect(&mut self, now: usize) {
         let capacity = self.total_capacity as isize - self.min_capacity as isize;
         // println!(
@@ -145,7 +147,7 @@ impl ResMgr {
         let mut up_full = Vec::new(); // 超过权重并满了的map_index
         let mut up_ok = Vec::new(); // 超过权重并Ok的map_index
 
-        for v in self.tables.values() {
+        for (_, v) in self.tables.iter_mut() {
             let vm = &*(v.res_map);
             let map = unsafe { &mut *(vm as *const dyn ResCollect as *mut dyn ResCollect) };
             let state_info = map.collect(now);

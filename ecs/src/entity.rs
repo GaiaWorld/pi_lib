@@ -15,10 +15,12 @@ pub trait Entity: Notify + ArcAny {
     fn register_component(&mut self, component: Arc<dyn MultiCase>);
     fn create(&mut self) -> usize;
     fn delete(&mut self, id: usize);
+    fn clear(&self);
 }
 impl_downcast_arc!(Entity);
 
 pub type CellEntity<T> = StdCell<EntityImpl<T>>;
+
 impl<T: 'static> Notify for CellEntity<T> {
     fn add_create(&self, listener: CreateFn) {
         self.borrow_mut().notify.add_create(listener);
@@ -60,6 +62,11 @@ impl<T: 'static> Entity for CellEntity<T> {
     }
     fn delete(&mut self, id: usize) {
         self.borrow_mut().delete(id)
+    }
+    fn clear(&self) {
+        let r = unsafe{&mut *(self as *const Self as usize as *mut Self)};
+        r.borrow_mut().components.clear();
+        r.borrow_mut().slab.clear();
     }
 }
 

@@ -22,7 +22,7 @@ dirty = {path="../dirty"}
 heap = {path="../../pi_lib/heap"}
 map = {path="../map"}
 serde = { version = "1.0", features = ["derive"] }
-debug_info = {path="../debug_info", features = ["print"] }
+debug_info = {path="../debug_info" }
 slab = {path="../slab"}
 
 [features]

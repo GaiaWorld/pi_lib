@@ -1,4 +1,6 @@
-// 资源表
+//! 资源表， 为一类资源提供资源管理.
+//! 资源如果真正被使用，则用引用计数来管理。
+//! 如果不被使用了，则放入FifoCache中， 根据最大最小缓存和超时时间来决定释放。
 
 use std::hash::Hash;
 
@@ -11,30 +13,37 @@ use slab::Slab;
 
 /// 资源，放入资源表的资源必须实现该trait
 pub trait Res {
+    /// 关联键的类型
     type Key: Hash + Eq + Clone + std::fmt::Debug;
 }
 
+/// 资源整理接口
 pub trait ResCollect: RcAny {
+    /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
-
+    /// 计算资源的内存占用
     fn set_max_capacity(&mut self, max_capacity: usize);
-    // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
+    /// 整理方法， 将无人使用的资源放入到LruCache， 清理超时的资源
     fn collect(&mut self, now: usize) -> StateInfo;
-
-    // 整理容量，删除超出最大容量的资源
+    /// 整理容量，删除超出最大容量的资源
     fn capacity_collect(&mut self);
 }
 impl_downcast_rc!(ResCollect);
 
+///资源表的状态信息
 #[derive(Debug)]
 pub enum StateInfo {
-    None,                      // 不可用，没有放资源
-    Full(usize, usize), // 数值为当前最小最大容量。 容量已满， 指大小大于最大容量减平均资源大小的2倍
-    Ok(usize, usize), // 数值为当前最小最大容量。容量合适， 指大小小于最大容量减平均资源大小的2倍，大于最大容量减平均资源大小的4倍
-    Free(usize, usize, usize), // 数值为当前最小最大容量和可以释放出来的大小。空闲状态。等于最大容量减平均资源大小的4倍
+    /// 不可用，没有放资源
+    None,
+    /// 数值为当前最小最大容量。 容量已满， 指大小大于最大容量减平均资源大小的2倍
+    Full(usize, usize),
+    /// 数值为当前最小最大容量。容量合适， 指大小小于最大容量减平均资源大小的2倍，大于最大容量减平均资源大小的4倍
+    Ok(usize, usize),
+    /// 数值为当前最小最大容量和可以释放出来的大小。空闲状态。等于最大容量减平均资源大小的4倍
+    Free(usize, usize, usize),
 }
 
-//资源表
+/// 资源表
 pub struct ResMap<T: Res + 'static> {
     map: XHashMap<<T as Res>::Key, ResEntry<T>>,
     array: Vec<(KeyRes<T>, usize, usize)>,
@@ -55,7 +64,7 @@ impl<T: Res + 'static> Default for ResMap<T> {
     }
 }
 impl<T: Res + 'static> ResMap<T> {
-    // 所有资源（lru 和 正在使用得）
+    /// 返回所有资源的引用（lru 和 正在使用得）
     pub fn all_res(
         &self,
     ) -> (
@@ -64,7 +73,7 @@ impl<T: Res + 'static> ResMap<T> {
     ) {
         (&self.array, &self.slab)
     }
-
+    /// 用指定的名称，最大最小容量，超时时间来创建一个资源表
     pub fn with_config(name: String, min_capacity: usize, max_capacity: usize, timeout: usize) -> Self {
         ResMap {
             map: XHashMap::default(),
@@ -74,12 +83,13 @@ impl<T: Res + 'static> ResMap<T> {
             _name: name,
         }
     }
+    /// 修改最大最小容量和超时时间
     pub fn modify_config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize) -> (usize, usize, usize) {
         let old = self.cache.get_config();
-        self.cache.modify_config(min_capacity, max_capacity, timeout);
+        self.cache.set_config(min_capacity, max_capacity, timeout);
         old
     }
-    // 获得指定键的资源
+    /// 获得指定键的资源
     #[inline]
     pub fn get(&mut self, key: &<T as Res>::Key) -> Option<Share<T>> {
         match self.map.get_mut(key) {
@@ -95,7 +105,7 @@ impl<T: Res + 'static> ResMap<T> {
             None => None,
         }
     }
-    // 创建资源
+    /// 创建资源，用指定的键，内容，内存大小，所在分组
     #[inline]
     pub fn create(&mut self, key: T::Key, res: T, cost: usize, group_i: usize) -> Share<T> {
         // println!(
@@ -121,7 +131,7 @@ impl<T: Res + 'static> ResMap<T> {
         ));
         res
     }
-
+    /// 移除一个指定键的资源
     #[inline]
     pub fn remove(&mut self, key: &<T as Res>::Key) -> Option<Share<T>> {
         // println!("remove res================, key:{:?}", key);
@@ -149,7 +159,7 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
         self.cache.set_max_capacity(max_capacity);
     }
 
-    // 整理方法， 将无人使用的资源放入到LruCache， 清理过时的资源
+    // 整理方法， 将无人使用的资源放入到LruCache， 清理超时的资源
     fn collect(&mut self, now: usize) -> StateInfo {
         // 将无人使用的资源放入到LruCache
         let mut i = 0;
@@ -166,10 +176,9 @@ impl<T: Res + 'static> ResCollect for ResMap<T> {
             //     continue;
             // }
             let k = el.0.key.clone();
-            let id = self.cache.add(el.0, el.1, now, &mut self.slab);
             match self.map.get_mut(&k) {
                 Some(r) => {
-                    r.id = id;
+                    r.id = self.cache.add(el.0, el.1, now, &mut self.slab);
                 }
                 _ => (),
             }

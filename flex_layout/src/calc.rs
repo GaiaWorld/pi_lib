@@ -135,6 +135,15 @@ macro_rules! make_func {
             pub(crate) fn [<$name _false>](&mut self) {
                 self.0 &= !(INodeStateType::$type as usize)
             }
+            #[allow(dead_code)]
+            pub(crate) fn [<$name _set>](&mut self, v: bool) {
+                if v {
+                    self.0 |= INodeStateType::$type as usize
+                }else {
+                    self.0 &= !(INodeStateType::$type as usize)
+                }
+                
+            }
         }
     };
 }
@@ -176,7 +185,7 @@ pub struct LayoutR {
     pub padding: Rect<f32>,
 }
 
-#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Debug, Serialize)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) struct INodeState(usize);
 make_impl!(INodeState);
 // struct II {
@@ -221,7 +230,7 @@ pub enum INodeStateType {
 	SelfRect = 16384,// 自身区域不受父节点或子节点影响
 }
 // TODO max min aspect_ratio， RectStyle也可去掉了. 将start end改为left right。 将数据结构统一到标准结构下， 比如Rect Size Point
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CharNode {
     pub ch: char,                // 字符
     pub margin_start: f32, // margin
@@ -243,7 +252,7 @@ impl Default for CharNode {
 		}
 	}
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct INode {
     pub(crate) state: INodeState,
 	pub text: Vec<CharNode>, // 文字节点
@@ -669,10 +678,10 @@ impl Cache {
             }
         }
         // 如果自动大小， 则计算实际大小
-        if self.main.is_undefined() {
+        if !self.main.is_defined() {
             self.main_value = f32::max(line.main, self.main_value);
         }
-        if self.cross.is_undefined() {
+        if !self.cross.is_defined() {
 			// self.cross1 = line.cross + line.item.cross; ？？？
 			self.cross_value = f32::max(line.cross, self.cross_value);
         }

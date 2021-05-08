@@ -204,7 +204,7 @@ macro_rules! impl_system {
 		runtime_ref.push($crate::RunTime{sys_name: $sys_name.clone(), cost_time: std::time::Duration::from_millis(0)});
 
         $s.run_fn = Some($crate::monitor::FnListener(share::Share::new( move |e: &()| {
-            let time = std::time::Instant::now();
+            let time = cross_performance::now();
             let runtime_ref = unsafe { &mut *(runtime.as_ref() as *const Vec<$crate::RunTime> as *mut Vec<$crate::RunTime>) };
 
             let read_data = $crate::Lend::lend2(&read, &read_data);
@@ -213,13 +213,18 @@ macro_rules! impl_system {
             // let write_data = $crate::LendMut::lend_mut(&write);
             $me.borrow_mut1().run(read_data, write_data);
 
-			match std::time::Instant::now().checked_duration_since(time) {
-				Some(r) => runtime_ref[runtime_index].cost_time = r,
-				None => {
-					// runtime_ref[runtime_index].cost_time = std::time::Duration::from_millis(0);
-					// std::panic!("std::time::Instant later--------------------------");
-				},
-			};
+            // unsafe { $crate::web_sys::console::log_2(&"time:".into(), &std::format!("{:?}", time).into()) };
+            // unsafe { $crate::web_sys::console::log_2(&"now:".into(), &std::format!("{:?}", cross_performance::now()).into()) };
+            // unsafe { $crate::web_sys::console::log_2(&"timediff:".into(), &std::format!("{:?}", cross_performance::now() - time).into()) };
+            // debug_println!("{:?}", cross_performance::now() - time);
+            runtime_ref[runtime_index].cost_time = std::time::Duration::from_micros(((cross_performance::now() - time) * 1000.0) as u64);
+			// match cross_performance::now().checked_duration_since(time) {
+			// 	Some(r) => runtime_ref[runtime_index].cost_time = r,
+			// 	None => {
+			// 		// runtime_ref[runtime_index].cost_time = std::time::Duration::from_millis(0);
+			// 		// std::panic!("std::time::Instant later--------------------------");
+			// 	},
+			// };
 			// let n = std::time::Instant::now();
 			// std::println!("time---------------------{},{}", n.as_secs_f32(), time.as_secs_f32());
 			// runtime_ref[runtime_index].cost_time = std::time::Instant::now() - time;

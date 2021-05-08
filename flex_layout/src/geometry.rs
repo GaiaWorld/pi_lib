@@ -3,6 +3,7 @@
 use crate::number::Number;
 // use crate::style;
 
+/// 矩形， 采用start end top bottom定义矩形
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rect<T> {
     pub start: T,
@@ -89,6 +90,7 @@ pub struct Rect<T> {
 //     }
 // }
 
+/// 大小
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Size<T> {
     pub width: T,
@@ -148,6 +150,7 @@ impl Size<()> {
 //     }
 // }
 
+/// 点
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Point<T> {
     pub x: T,

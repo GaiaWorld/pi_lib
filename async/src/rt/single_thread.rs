@@ -198,7 +198,7 @@ impl<O: Default + 'static> SingleTaskRuntime<O> {
 
     /// 取消指定句柄的单线程定时异步任务
     pub fn cancel_timing(&self, handle: usize) {
-        let _ = (self.0).3.lock().timer.as_ref().borrow_mut().cancel(handle);
+        let _ = (self.0).3.lock().cancel_timer(handle);
     }
 
     /// 挂起指定唯一id的异步任务
@@ -327,20 +327,25 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
 
         //设置新的定时任务，并唤醒已过期的定时任务
         (self.runtime.0).3.lock().consume();
-        let timing_task = (self.runtime.0).3.lock().pop();
-        match timing_task {
-            Some(AsyncTimingTask::Pended(expired)) => {
-                //唤醒休眠的异步任务
-                self.runtime.wakeup(&expired);
-            },
-            Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
-                //立即执行到期的定时异步任务
-                (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
-            },
-            _ => {
-                //当前没有定时异步任务，则推动定时器
-                (self.runtime.0).3.lock().poll();
-            },
+        while (self.runtime.0).3.lock().is_require_pop() {
+            //需要执行定时异步任务
+            let timing_task = (self.runtime.0).3.lock().pop();
+            match timing_task {
+                Some(AsyncTimingTask::Pended(expired)) => {
+                    //唤醒休眠的异步任务
+                    self.runtime.wakeup(&expired);
+                    break;
+                },
+                Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
+                    //立即执行到期的定时异步任务
+                    (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
+                    break;
+                },
+                _ => {
+                    //当前没有定时异步任务，则继续尝试获取定时异步任务
+                    continue;
+                },
+            }
         }
 
         //执行异步任务
@@ -365,34 +370,42 @@ impl<O: Default + 'static> SingleTaskRunner<O> {
             return Err(Error::new(ErrorKind::Other, "Single thread runtime not running"));
         }
 
+        //获取当前任务队列中的所有任务
+        let mut tasks = (self.runtime.0).1.consumer.as_ref().borrow_mut().try_recv_all().into_iter();
+
         //设置新的定时任务，并唤醒已过期的定时任务
         (self.runtime.0).3.lock().consume();
         loop {
-            let timing_task = (self.runtime.0).3.lock().pop();
-            match timing_task {
-                Some(AsyncTimingTask::Pended(expired)) => {
-                    //唤醒休眠的异步任务
-                    self.runtime.wakeup(&expired);
-                },
-                Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
-                    //立即执行到期的定时异步任务
-                    (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
-                },
-                _ => {
-                    //当前没有定时异步任务，则推动定时器，并退出定时器处理循环
-                    (self.runtime.0).3.lock().poll();
-                    break;
-                },
+            while (self.runtime.0).3.lock().is_require_pop() {
+                //需要执行定时异步任务
+                let timing_task = (self.runtime.0).3.lock().pop();
+                match timing_task {
+                    Some(AsyncTimingTask::Pended(expired)) => {
+                        //唤醒休眠的异步任务
+                        self.runtime.wakeup(&expired);
+                        break;
+                    },
+                    Some(AsyncTimingTask::WaitRun(WaitRunTask::SingleTask(expired))) => {
+                        //立即执行到期的定时异步任务
+                        (self.runtime.0).1.consumer.as_ref().borrow_mut().push_front(expired);
+                        break;
+                    },
+                    _ => {
+                        //当前没有定时异步任务，则继续尝试获取定时异步任务
+                        continue;
+                    },
+                }
+            }
+
+            //执行异步任务
+            if let Some(task) = tasks.next() {
+                (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
+                run_task(task);
+            } else {
+                //没有需要获取的定时任务，且当前异步任务队列中的任务已执行完，则退出
+                return Ok((self.runtime.0).1.consumer.as_ref().borrow().len());
             }
         }
-
-        //执行异步任务
-        for task in (self.runtime.0).1.consumer.as_ref().borrow_mut().try_recv_all() {
-            (self.runtime.0).1.consume_count.fetch_add(1, Ordering::Relaxed);
-            run_task(task);
-        }
-
-        Ok((self.runtime.0).1.consumer.as_ref().borrow().len())
     }
 }
 
