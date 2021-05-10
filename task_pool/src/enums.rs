@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+/// 索引类型
 #[derive(Debug, Clone)]
 pub enum IndexType{
     Sync, //不可删除的同步任务
@@ -30,12 +31,14 @@ pub enum Direction {
     Back,
 }
 
+/// 任务
 #[derive(Debug)]
 pub enum Task<T: Debug> {
     Sync(T, isize),
     Async(T),
 }
 
+/// 释放标记
 #[derive(Debug)]
 pub enum FreeSign {
     Success,
@@ -43,6 +46,7 @@ pub enum FreeSign {
     Ignore,
 }
 
+/// 队列类型
 #[derive(Debug)]
 pub enum QueueType {
     DynSync,

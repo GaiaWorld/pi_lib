@@ -1,3 +1,6 @@
+//! 不可删除的任务池
+//! 单例任务使用快速的权重树（不可删除）作为数据结构；队列任务的每队列，使用双端队列作为数据结构
+
 use std::collections::VecDeque;
 use std::marker::Send;
 use std::fmt;
