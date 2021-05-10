@@ -1,6 +1,3 @@
-//! # 用于性能采集的计数器
-//!
-
 use std::time;
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -12,6 +9,7 @@ use parking_lot::RwLock;
 use crossbeam_queue::ArrayQueue;
 
 use atom::Atom;
+
 
 /*
 * 最小动态计数器容量
@@ -33,23 +31,23 @@ const MIN_STATIC_COUNTER_CAPACITY: usize = 1;
 */
 const DEFAULT_STATIC_COUNTER_CAPACITY: usize = 1000;
 
-///
-/// 全局并发性能采集
-///
+/*
+* 全局并发性能采集
+*/
 lazy_static! {
     pub static ref GLOBAL_PREF_COLLECT: PrefCollect = PrefCollect::new(DEFAULT_DYNAMIC_COUNTER_CAPACITY, DEFAULT_STATIC_COUNTER_CAPACITY);
 }
 
-///
-/// 检查指定计数器名称与计数器id是否匹配
-///
+/*
+* 检查指定计数器名称与计数器id是否匹配
+*/
 pub fn check_counter(name: &str, cid: u64) -> bool {
     Atom::from(name).get_hash() as u64 == cid 
 }
 
-///
-/// 并发性能计数器
-///
+/*
+* 并发性能计数器
+*/
 #[derive(Debug, Clone)]
 pub struct PrefCounter(Arc<AtomicUsize>);
 
@@ -57,30 +55,27 @@ unsafe impl Send for PrefCounter {}
 unsafe impl Sync for PrefCounter {}
 
 impl PrefCounter {
-    /// 获取
+    //获取
     pub fn get(&self) -> usize {
         self.0.load(Ordering::SeqCst)
     }
 
-    /// 重置
+    //重置
     pub fn set(&self, count: usize) {
         self.0.store(count, Ordering::SeqCst);
     }
 
-    /// 计数
+    //计数
     pub fn sum(&self, count: usize) {
         self.0.fetch_add(count, Ordering::Relaxed);
     }
 }
 
-///
-/// 并发性能计时器
-///
+/*
+* 并发性能计时器
+*/
 type StartTime = time::Instant;
 
-///
-/// 性能定时器
-///
 #[derive(Debug, Clone)]
 pub struct PrefTimer(Arc<AtomicUsize>);
 
@@ -88,25 +83,25 @@ unsafe impl Send for PrefTimer {}
 unsafe impl Sync for PrefTimer {}
 
 impl PrefTimer {
-    /// 获取
+    //获取
     pub fn get(&self) -> usize {
         self.0.load(Ordering::Relaxed)
     }
 
-    /// 开始计时
+    //开始计时
     pub fn start(&self) -> StartTime {
         StartTime::now()
     }
 
-    /// 计时
+    //计时
     pub fn timing(&self, start: StartTime) {
         self.0.fetch_add((StartTime::now() - start).as_micros() as usize, Ordering::Relaxed);
     }
 }
 
-///
-/// 动态计数器队列迭代器
-///
+/*
+* 动态计数器队列迭代器
+*/
 pub struct DynamicIterator {
     inner: Arc<InnerCollect>,
     cache: Vec<(u64, Arc<AtomicUsize>)>,
@@ -142,9 +137,9 @@ impl Iterator for DynamicIterator {
     }
 }
 
-///
-/// 静态计数器队列迭代器
-///
+/*
+* 静态计数器队列迭代器
+*/
 pub struct StaticIterator {
     inner: Arc<InnerCollect>,
     cache: Vec<(u64, Arc<AtomicUsize>)>,
@@ -173,9 +168,9 @@ impl Iterator for StaticIterator {
     }
 }
 
-///
-/// 并发性能采集
-///
+/*
+* 并发性能采集
+*/
 #[derive(Clone)]
 pub struct PrefCollect(Arc<InnerCollect>);
 
@@ -190,7 +185,7 @@ struct InnerCollect {
 }
 
 impl PrefCollect {
-    /// 构建并发性能采集
+    //构建并发性能采集
     pub fn new(dynamic_capacity: usize, static_capacity: usize) -> Self {
         if dynamic_capacity < MIN_DYNAMIC_COUNTER_CAPACITY {
             panic!("invalid dynamic capacity");
@@ -207,17 +202,17 @@ impl PrefCollect {
         }))
     }
 
-    /// 动态计数器队列是否已满
+    //动态计数器队列是否已满
     pub fn dynamic_is_full(&self) -> bool {
         self.0.dynamic_collect.is_full()
     }
 
-    /// 动态计数器数量
+    //动态计数器数量
     pub fn dynamic_size(&self) -> usize {
         self.0.dynamic_collect.len()
     }
 
-    /// 构建指定性能指标和初始值的动态计数器
+    //构建指定性能指标和初始值的动态计数器
     pub fn new_dynamic_counter(&self, target: Atom, init: usize) -> Option<PrefCounter> {
         if self.0.dynamic_collect.is_full() {
             //动态计数器队列已满
@@ -237,7 +232,7 @@ impl PrefCollect {
         Some(PrefCounter(counter))
     }
 
-    /// 构建指定性能指标和初始值的动态计时器
+    //构建指定性能指标和初始值的动态计时器
     pub fn new_dynamic_timer(&self, target: Atom, init: usize) -> Option<PrefTimer> {
         if self.0.dynamic_collect.is_full() {
             //动态计数器队列已满
@@ -257,7 +252,7 @@ impl PrefCollect {
         Some(PrefTimer(counter))
     }
 
-    /// 获取动态计数器的迭代器
+    //获取动态计数器的迭代器
     pub fn dynamic_iter(&self) -> DynamicIterator {
         DynamicIterator {
             inner: self.0.clone(),
@@ -265,17 +260,17 @@ impl PrefCollect {
         }
     }
 
-    /// 静态计数器队列是否已满
+    //静态计数器队列是否已满
     pub fn static_is_full(&self) -> bool {
         self.0.static_collect.is_full()
     }
 
-    /// 静态计数器数量
+    //静态计数器数量
     pub fn static_size(&self) -> usize {
         self.0.static_collect.len()
     }
 
-    /// 构建指定性能指标和初始值的静态计数器
+    //构建指定性能指标和初始值的静态计数器
     pub fn new_static_counter(&self, target: Atom, init: usize) -> Option<PrefCounter> {
         if self.0.static_init.load(Ordering::SeqCst) {
             //初始化已完成，则忽略
@@ -288,7 +283,7 @@ impl PrefCollect {
         Some(PrefCounter(counter))
     }
 
-    /// 构建指定性能指标和初始值的静态计时器
+    //构建指定性能指标和初始值的静态计时器
     pub fn new_static_timer(&self, target: Atom, init: usize) -> Option<PrefTimer> {
         if self.0.static_init.load(Ordering::SeqCst) {
             //初始化已完成，则忽略
@@ -301,13 +296,13 @@ impl PrefCollect {
         Some(PrefTimer(counter))
     }
 
-    /// 初始化静态计数器队列完成，返回静态计数器队列长度
+    //初始化静态计数器队列完成，返回静态计数器队列长度
     pub fn static_init_ok(&self) -> usize {
         self.0.static_init.compare_and_swap(false, true, Ordering::SeqCst);
         self.0.static_collect.len()
     }
 
-    /// 获取静态计数器的迭代器
+    //获取静态计数器的迭代器
     pub fn static_iter(&self) -> StaticIterator {
         StaticIterator {
             inner: self.0.clone(),
