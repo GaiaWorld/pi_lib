@@ -53,5 +53,5 @@ members = [
   "flex_layout",
   "js_proxy_gen",
   "js_proxy_gen_macro",
-  "cross_performance"
+  "cross_performance",
 ]

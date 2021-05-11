@@ -12,12 +12,12 @@ lazy_static = "*"
 version = "*"
 features = [
 	"Window",
-	"Performance"
+	"Performance",
+	# "console",
 ]
 
 [features]
-default = ["native"]
-native = []
+default = []
 wasm-bindgen = []
 
 

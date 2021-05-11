@@ -263,7 +263,7 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
                             let ty = &field.ty;
                             // set field def
                             tokens.extend(quote! {
-                                fn #set_name(&mut self, #ty);
+                                fn #set_name(&mut self, ty: #ty);
                             });
                         }
                     },
@@ -274,7 +274,7 @@ impl<'a> ToTokens for SetGetFuncs<'a> {
                             let ty = &field.ty;
                             // set index def
                             tokens.extend(quote! {
-                                fn #set_name(&mut self, #ty);
+                                fn #set_name(&mut self, ty: #ty);
                             });
                             i += 1;
                         }

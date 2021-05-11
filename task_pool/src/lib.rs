@@ -1,3 +1,17 @@
+//! 任务池
+//! 可以向任务池中插入不同优先级的任务，任务池提供弹出功能，任务池大概率会弹出优先级高的任务。
+//! 任务池支持的任务可以大致分为两类：
+//!     1. 队列任务：插入队列任务需要先创建队列，插入到同一个队列的任务，会按顺序弹出。即便一个优先级很高的任务，
+//!        如果它所在的队列头部还存在任务，也需要等待这些任务弹出后才能被弹出。尽管队列任务的优先级在本队列中并不生效，
+//!        但是可以提高整个队列的优先级。如果向一个队列插入一个优先级很高的任务，接下来，弹出该队列头部的任务的概率会变高。
+//!     2. 单例任务：在任务池中，如果不是队列任务，那一定是一个单例任务。
+//!        单列任务与队列任务的区别是，单例任务不需要排队，单例任务的优先级越高，弹出的概率越大。
+//! 尽管任务池中的任务仅分为两类（队列任务，单例任务），但每类任务又可以分为可删除的任务、和不可删除的任务。
+//! 一些任务在弹出前，如果不会被取消，推荐插入不可删任务。不可删除的任务在任务池内部使用了更高效的数据结构。
+//! 
+//! 除此以外，任务池还可以插入一个延时的任务，该任务先被缓存在定时器中，超时后，才能有机会被弹出
+//!
+
 #![feature(proc_macro_hygiene)]
 extern crate rand;
 
@@ -32,24 +46,55 @@ use dyn_uint::{SlabFactory, UintFactory, ClassFactory};
 
 use enums:: {QueueType, IndexType, Direction, Task, FreeSign};
 
+/// 任务池
+///
+/// # Examples
+/// ```
+/// let task_pool: TaskPool<usize> = TaskPool::new(Timer::new(10), Arc::new(|_ty, _n| {}));//创建任务池实例（任务池需要一个定时器，来缓存定时任务）
+/// struct Task(pub String);
+///
+/// let asyncIndex1 = task_pool.push_dyn_async(Task(String::from("可删除的单例任务1")), 5); // 在任务池中插入一个可删除的单例任务
+/// task_pool.push_static_async(Task(String::from("不可删除的单例任务1")), 7); // 在任务池中插入一个不可删除的单例任务
+///
+/// let dyn_queue = task_pool.create_dyn_queue(3); // 创建一个任务队列，该队列中的任务可删除；该队列中的任务，默认优先级为3
+/// let static_queue = task_pool.create_dyn_queue(4); // 创建一个任务队列，该队列中的任务不可删除；该队列中的任务，默认优先级为4
+///
+/// let syncIndex1 = task_pool.push_dyn_back(Task(String::from("可删除的队列任务1")), dyn_queue); // 在队列尾部插入一个可删除的队列任务
+/// task_pool.push_static_back(Task(String::from("不可删除的队列任务1")), static_queue);// 在队列尾部插入一个不可删除的队列任务
+///
+/// assert!(task_pool.remove_async(asyncIndex1).0 == Task(String::from("可删除的单例任务1"))) ; // 移除单例任务
+/// assert!(task_pool.remove_sync(dyn_queue, syncIndex1) == Task(String::from("可删除的队列任务1")));// 移除队列任务
+///
+/// println!("弹出任务：{:?}",  task_pool.pop().0); // 弹出任务
+/// println!("弹出任务：{:?}",  task_pool.pop().0); // 弹出任务
 pub struct TaskPool<T: Debug + 'static>{
+    // 不可删除的队列任务
     static_sync_pool: Arc<(AtomicUsize, Mutex<static_pool::SyncPool<T>>)>,
     // static_lock_queues: Arc<Mutex<Slab<WeightQueue<T>>>>,
 
+    // 可删除的队列任务
     sync_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>)>)>,
     //lock_queues: Arc<Mutex<Slab<WeightQueueD<T>>>>,
 
+    // 不可删除的单例任务
     static_async_pool: Arc<(AtomicUsize, Mutex<static_pool::AsyncPool<T>>)>,
+
+    /// 可删除的单例任务
     async_pool: Arc<(AtomicUsize, Mutex<(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>)>)>,
 
+    // 延时任务
     delay_queue: Timer<DelayTask<T>>,
 
+    // 
     handler: Arc<dyn Fn(QueueType, usize)>,
+    // 当前任务总数
     count: AtomicUsize,
+    // 
     rng: Arc<Mutex<SmallRng>>,
 }
 
 impl<T: Debug + 'static> TaskPool<T> {
+    /// 创建任务池实例
     pub fn new(timer: Timer<DelayTask<T>>, handler: Arc<dyn Fn(QueueType, usize)>) -> Self {
         // let timer = Timer::new(10);
         // timer.run();
@@ -72,28 +117,22 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
+    /// 
     pub fn set_count(&self, count: usize) {
         self.count.store(count, AOrd::Relaxed);
     }
 
-    // create sync queues, return true, or false if id is exist
+    // 创建可删除任务的任务队列，返回队列id
     pub fn create_dyn_queue(&self, weight: usize) -> isize {
         to_queue_id(self.sync_pool.1.lock().unwrap().0.create_queue(weight))
     }
 
+    // 创建不可删除任务的任务队列，返回队列id
     pub fn create_static_queue(&self, weight: usize) -> isize {
         to_static_queue_id(self.static_sync_pool.1.lock().unwrap().create_queue(weight))
     }
 
-    // // delete sync queues, return true, or false if id is not exist
-    // pub fn delete_dny_queue(&self, id: isize) -> bool{
-    //     self.sync_pool.1.lock().unwrap().0.remove_queue(from_queue_id(id));
-    // }
-
-    // // // delete sync queues, return true, or false if id is not exist
-    // pub fn delete_static_queue(&self, id: isize) {
-    //     self.static_sync_pool.1.lock().unwrap().remove_queue(from_static_queue_id(id));
-    // }
+    // 删除一个任务队列，如果删除成功，返回true， 否则返回false
     pub fn delete_queue(&self, id: isize) -> bool {
         if is_queue(id) {
             self.sync_pool.1.lock().unwrap().0.try_remove_queue(from_queue_id(id));
@@ -106,7 +145,8 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
-    // push a sync task, return Ok(index), or Err if queue id is exist
+    /// 指定一个队列，在该队列尾部插入一个可删除的任务，返回该任务在任务池中的索引。
+    /// 如果指定的队列不是一个可删除任务的队列，将panic。
     pub fn push_dyn_back(&self, task: T, queue_id: isize) -> isize {
         let (id, opt) = {
             let mut sync_pool = self.sync_pool.1.lock().unwrap();
@@ -129,7 +169,8 @@ impl<T: Debug + 'static> TaskPool<T> {
         to_sync_id(id)
     }
 
-    // // push a sync task, return Ok(index), or Err if queue id is exist
+    /// 指定一个队列，在该队列头部插入一个可删除的任务，返回该任务在任务池中的索引。
+    /// 如果指定的队列不是一个可删除任务的队列，将panic。
     pub fn push_dyn_front(&self, task: T, queue_id: isize) -> isize {
         let (id, opt) = {
             let mut sync_pool = self.sync_pool.1.lock().unwrap();
@@ -149,7 +190,8 @@ impl<T: Debug + 'static> TaskPool<T> {
         to_sync_id(id)
     }
 
-    // push a sync task, return Ok(index), or Err if queue id is exist
+    /// 指定一个队列，在该队列尾部插入一个不可删除的任务。
+    /// 如果指定的队列不是一个不可删除任务的队列，将panic。
     pub fn push_static_back(&self, task: T, queue_id: isize) {
         let opt = {
             let id = from_static_queue_id(queue_id);
@@ -169,7 +211,8 @@ impl<T: Debug + 'static> TaskPool<T> {
 //        println!("!!!!!!push static sync queue start");
     }
 
-    // // push a sync task, return Ok(index), or Err if queue id is exist
+    /// 指定一个队列，在该队列头部插入一个不可删除的任务。
+    /// 如果指定的队列不是一个不可删除任务的队列，将panic。
     pub fn push_static_front(&self, task: T, queue_id: isize) {
         let opt = {
             let id = from_static_queue_id(queue_id);
@@ -187,7 +230,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
-    // // push a async task
+    /// 插入一个可删除的单例任务，并指定任务优先级，返回该任务在任务池中的索引。
     pub fn push_dyn_async(&self, task: T, priority: usize) -> isize {
         let (index, len) = {
             let mut lock = self.async_pool.1.lock().unwrap();
@@ -203,6 +246,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         to_async_id(index)
     }
 
+    /// 插入一个不可删除的单例任务，并指定任务优先级。
     pub fn push_static_async(&self, task: T, priority: usize) {
         let len = {
             let mut lock = self.static_async_pool.1.lock().unwrap();
@@ -215,7 +259,8 @@ impl<T: Debug + 'static> TaskPool<T> {
 //        println!("!!!!!!push dyn async queue finish");
     }
 
-    //push a delay task, return Arc<AtomicUsize> as index
+    /// 插入一个可删除的延时队列任务， 返回该任务在任务池中的索引
+    /// task: 任务实例，queue_id：队列id， direc：表明时插入到头部还是尾部， ms：延时时长
     pub fn push_sync_delay(&self, task: T, queue_id: isize, direc: Direction, ms: u32) -> isize{
         let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
 
@@ -232,6 +277,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         to_sync_id(index)
     }
 
+    /// 插入一个可删除的延时单例任务， 返回该任务在任务池中的索引
     pub fn push_async_delay(&self, task: T, priority: usize, ms: u32) -> isize{
         let index = self.sync_pool.1.lock().unwrap().1.create(0, IndexType::Delay, ());
         let task = DelayTask::Async {
@@ -246,7 +292,9 @@ impl<T: Debug + 'static> TaskPool<T> {
         to_async_id(index)
     }
 
-    //pop a task
+    /// 弹出一个任务，如果任务存在，返回Some(Task), 否则返回None
+    /// 如果该任务是一个队列任务，也不对该任务所在的队列加锁
+    /// 使用该方法，无法严格保证队列任务的执行顺序。外部应该确保，弹出任务执行完毕后，再弹出下一个任务
     pub fn pop_unlock(&self) -> Option<T>{
         let (async_w, sync_w, static_async_w, static_sync_w, r, mut w) = self.weight_rng();
 
@@ -303,6 +351,9 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
+    /// 弹出一个任务，如果任务存在，返回任务, 否则返回None
+    /// 如果该任务是一个队列任务，会对该任务所在的队列加锁，此后，该队列的任务无法弹出，
+    /// 直到外部调用free_queue方法解锁该队列，该队列的任务在后续的弹出过程中才有机会被弹出
     pub fn pop(&self) -> Option<Task<T>>{
         let (async_w, sync_w, static_async_w, static_sync_w, r, mut w) = self.weight_rng();
 //        println!("w--------------{:?}", (async_w, sync_w, static_async_w, static_sync_w, r, w));
@@ -370,7 +421,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
-    //只弹出动态同步和所有异步任务
+    /// 只弹出可删除的队列任务和所有单例任务
     pub fn pop_inner(&self) -> Option<Task<T>>{
         let (async_w, sync_w, static_async_w, r, mut w) = self.weight_rng_inner();
 
@@ -420,6 +471,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
+    /// 移除一个队列任务， 返回被移除的任务，如果该任务不存在，则panic
     pub fn remove_sync(&self, queue_id: isize, id: isize) -> T {
         let mut lock = self.sync_pool.1.lock().unwrap();
         let (pool, indexs): &mut(dyn_pool  ::SyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
@@ -429,6 +481,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         elem
     }
 
+    /// 尝试移除一个队列任务，返回被移除的任务，如果任务不存在，则返回None
     pub fn try_remove_sync(&self, queue_id: isize, id: isize) -> Option<T> {
         if is_queue(queue_id) && is_sync(id){
             let mut lock = self.sync_pool.1.lock().unwrap();
@@ -446,6 +499,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
+    /// 移除一个单例任务， 返回被移除的任务，如果该任务不存在，则panic
     pub fn remove_async(&self, id: isize) -> T {
         let mut lock = self.async_pool.1.lock().unwrap();
         let (pool, indexs): &mut(dyn_pool  ::AsyncPool<T>, SlabFactory<IndexType, ()>) = &mut *lock;
@@ -455,6 +509,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         elem
     }
 
+    /// 尝试移除一个单例任务，返回被移除的任务，如果该任务不存在，则返回None
     pub fn try_remove_async(&self, id: isize) -> Option<T> {
         if is_async(id){
             let mut lock = self.async_pool.1.lock().unwrap();
@@ -473,7 +528,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         None
     }
 
-    //check queue locked
+    /// 检查指定队列是否被锁住
     pub fn is_locked(&self, id: isize) -> bool {
         if is_queue(id) {
             self.sync_pool.1.lock().unwrap().0.is_locked(id as usize)
@@ -484,7 +539,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
-    //lock sync_queue
+    /// 为指定队列加锁
     pub fn lock_queue(&self, id: isize) -> bool {
         if is_queue(id){
             let mut lock = self.sync_pool.1.lock().unwrap();
@@ -505,7 +560,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
-    //free lock sync_queue
+    /// 释放队列的锁，成功释放，则但会true， 否则返回false
     pub fn free_queue(&self, id: isize) -> bool{
         if is_queue(id){
             let (r, len) = {
@@ -541,6 +596,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         }
     }
 
+    /// 清空任务池
     pub fn clear(&self) {
         let mut sync_pool = self.sync_pool.1.lock().unwrap();
         sync_pool.0.clear();
@@ -559,22 +615,27 @@ impl<T: Debug + 'static> TaskPool<T> {
         self.delay_queue.clear();
     }
 
+    /// 取到可删除的队列任务个数
     pub fn dyn_sync_len(&self) -> usize {
         self.sync_pool.1.lock().unwrap().0.len()
     }
 
+    /// 取到不可删除的队列任务个数
     pub fn static_sync_len(&self) -> usize {
         self.static_sync_pool.1.lock().unwrap().len()
     }
 
+    /// 取到可删除的单例任务个数
     pub fn dyn_async_len(&self) -> usize {
         self.async_pool.1.lock().unwrap().0.len()
     }
 
+    /// 取到不可删除的单例任务个数
     pub fn static_async_len(&self) -> usize {
         self.static_async_pool.1.lock().unwrap().len()
     }
 
+    /// 取到所有任务的个数
     pub fn len(&self) -> usize {
         let len1 = self.sync_pool.1.lock().unwrap().0.len();
         let len2 = self.static_async_pool.1.lock().unwrap().len();
@@ -583,6 +644,7 @@ impl<T: Debug + 'static> TaskPool<T> {
         len1 + len2 + len3 + len4
     }
 
+    // 当某类任务的数量改变，则发出通知
     fn notify(&self, task_type: QueueType, task_size: usize) {
         if task_size <= self.count.load(AOrd::Relaxed) {
             (self.handler)(task_type, task_size)
@@ -659,7 +721,7 @@ static_async_pool: ({:?},{:?}),
 
 
 
-
+/// 延时任务
 pub enum DelayTask<T: 'static> {
     Async{
         priority: usize,
@@ -678,6 +740,7 @@ pub enum DelayTask<T: 'static> {
     }//同步任务Sync(队列id, push方向)
 }
 
+/// 为延时任务实现Runer
 impl<T: 'static> Runer for DelayTask<T> {
     fn run(self, _key: usize){
         match self {
@@ -712,8 +775,6 @@ impl<T: 'static> Runer for DelayTask<T> {
         }
     }
 }
-
-
 
 unsafe impl<T> Send for DelayTask<T> {}
 

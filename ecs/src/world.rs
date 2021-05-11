@@ -1,4 +1,4 @@
-use std::{any::TypeId, intrinsics::type_name, sync::Arc};
+use std::{any::TypeId, intrinsics::type_name, mem, sync::Arc};
 
 use hash::XHashMap;
 // use im::hashmap::HashMap;
@@ -26,6 +26,15 @@ pub struct World {
     // #[cfg(feature = "runtime")]
 	pub runtime: Share<Vec<RunTime>>,
 	pub capacity: usize,
+}
+
+impl Drop for World {
+    fn drop(&mut self) {
+        for (_, v) in self.entity.iter_mut() {
+            v.clear();
+        }
+        // std::mem::replace(&mut self.entity, XHashMap::default());
+    }
 }
 
 impl World {
