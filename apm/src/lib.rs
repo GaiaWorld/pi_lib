@@ -8,7 +8,7 @@
 
 extern crate fnv;
 extern crate sysinfo;
-extern crate netstat;
+extern crate netstat2;
 extern crate backtrace;
 extern crate parking_lot;
 extern crate crossbeam_queue;
@@ -16,11 +16,12 @@ extern crate crossbeam_queue;
 #[macro_use]
 extern crate lazy_static;
 
-#[cfg(any(unix))]
+// TODO: 为安卓生成so时,不能编译部分代码,需要全局搜索"#[cfg(any(unix))]"替换成unix但不包括Android(类似但不是:#[cfg(all(unix, not(android)))]),以排除这些代码.
+#[cfg(all(unix, not(target_os="android")))]
 extern crate libc;
-#[cfg(any(unix))]
+#[cfg(all(unix, not(target_os="android")))]
 extern crate psutil;
-#[cfg(any(unix))]
+#[cfg(all(unix, not(target_os="android")))]
 extern crate walkdir;
 
 extern crate atom;
@@ -92,7 +93,7 @@ pub trait SysSpecialStat {
 
 pub mod common;
 
-#[cfg(any(unix))]
+#[cfg(all(unix, not(target_os="android")))]
 pub mod linux;
 
 pub mod allocator;
