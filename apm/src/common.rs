@@ -10,11 +10,11 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 
 use fnv::FnvHashMap;
-use netstat::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, SocketInfo, get_sockets_info, iterate_sockets_info};
+use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, SocketInfo, get_sockets_info, iterate_sockets_info};
 use sysinfo::{NetworkExt, System, SystemExt, ProcessorExt, ProcessExt, ProcessStatus, DiskExt};
 
 use ::SysSpecialStat;
-#[cfg(any(unix))]
+#[cfg(all(unix, not(target_os="android")))]
 use linux::LinuxSysStat;
 
 /*
@@ -149,9 +149,9 @@ impl SysStat {
         }
     }
 
-    #[cfg(any(unix))]
+    #[cfg(all(unix, not(target_os="android")))]
     pub fn new() -> Self {
-        SysStat {
+    	SysStat {
             inner: Arc::new(RefCell::new(System::new())),
             special: Some(Arc::new(LinuxSysStat::new(DEFAULT_INTERVAL))),
         }
