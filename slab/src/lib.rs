@@ -91,7 +91,8 @@ impl<T> Slab<T> {
 
     pub fn clear(&mut self) {
         self.clear_entries();
-        //self.entries.clear();
+        // 如果T实现了drop，则clear_entries负责销毁T，但是，如果T没有实现drop，则clear_entries什么都没做，人需要手动设置entries的长度为0
+        unsafe {self.entries.set_len(0)}
         self.vacancy_sign.clear();
         self.len = 0;
         self.next = 0;

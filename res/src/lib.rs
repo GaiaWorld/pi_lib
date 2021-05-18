@@ -7,6 +7,8 @@ extern crate slab;
 #[macro_use]
 extern crate any;
 
+// extern crate web_sys;
+
 mod res_map;
 mod res_mgr;
 

@@ -7,6 +7,8 @@
 extern crate deque;
 extern crate slab;
 
+use std::ops::Deref;
+
 use deque::deque::{Deque, Node};
 use slab::Slab;
 
@@ -17,8 +19,16 @@ pub static TIMEOUT: usize = 3 * 60 * 1000;
 pub struct Entry<T> {
     value: T,
     pub cost: usize,
-    timeout: usize,
+    pub timeout: usize,
 }
+
+impl<T> Deref for Entry<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
 /// FIFO缓存区
 #[derive(Clone)]
 pub struct LruCache<T> {
@@ -55,9 +65,15 @@ impl<T> LruCache<T> {
         (self.min_capacity, self.max_capacity, self.timeout)
     }
     /// 获得最大容量
-    pub fn get_max_capacity(&self) -> usize {
+    pub fn max_capacity(&self) -> usize {
         self.max_capacity
     }
+
+    /// 获得最大容量
+    pub fn min_capacity(&self) -> usize {
+        self.min_capacity
+    }
+
     /// 获得当前资源大小
     pub fn size(&self) -> usize {
         self.size
