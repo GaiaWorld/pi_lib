@@ -330,7 +330,7 @@ impl<O: Default + 'static, V: Send + 'static> AsyncValue<O, V> {
 ///
 /// 等待异步任务运行的结果
 ///
-pub struct AsyncWaitResult<V: Send + 'static>(Arc<RefCell<Option<Result<V>>>>);
+pub struct AsyncWaitResult<V: Send + 'static>(pub Arc<RefCell<Option<Result<V>>>>);
 
 unsafe impl<V: Send + 'static> Send for AsyncWaitResult<V> {}
 unsafe impl<V: Send + 'static> Sync for AsyncWaitResult<V> {}
@@ -344,7 +344,7 @@ impl<V: Send + 'static> Clone for AsyncWaitResult<V> {
 ///
 /// 等待异步任务运行的结果集
 ///
-pub struct AsyncWaitResults<V: Send + 'static>(Arc<RefCell<Option<Vec<Result<V>>>>>);
+pub struct AsyncWaitResults<V: Send + 'static>(pub Arc<RefCell<Option<Vec<Result<V>>>>>);
 
 unsafe impl<V: Send + 'static> Send for AsyncWaitResults<V> {}
 unsafe impl<V: Send + 'static> Sync for AsyncWaitResults<V> {}

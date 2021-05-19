@@ -140,6 +140,10 @@ impl ResMgr {
         //     "resmgr collect1============now: {}, total_capacity:{}, min_capacity:{}, capacity:{}",
         //     now, self.total_capacity as isize, self.min_capacity as isize, capacity
         // );
+
+        // unsafe {
+        //     web_sys::console::log_3(&"collect".into(), &(self.total_capacity as u32).into(), &(self.min_capacity as u32).into());
+        // }
         let capacity = if capacity < 0 { 0 } else { capacity as usize };
         let mut up_size = 0; // 超过权重的总大小
         let mut down_size = 0; // 小于权重的总大小

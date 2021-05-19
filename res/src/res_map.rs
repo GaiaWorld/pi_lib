@@ -3,6 +3,7 @@
 //! 如果不被使用了，则放入FifoCache中， 根据最大最小缓存和超时时间来决定释放。
 
 use std::hash::Hash;
+use std::ops::Deref;
 
 use any::RcAny;
 use deque::deque::Node;
@@ -67,14 +68,15 @@ impl<T: Res + 'static> ResMap<T> {
     /// 返回所有资源的引用（lru 和 正在使用得）
     pub fn all_res(
         &self,
-    ) -> (
-        &Vec<(KeyRes<T>, usize, usize)>,
-        &Slab<Node<Entry<KeyRes<T>>>>,
-    ) {
-        (&self.array, &self.slab)
+    ) -> (&Vec<(KeyRes<T>, usize, usize)>, &Slab<Node<Entry<KeyRes<T>>>>, &XHashMap<<T as Res>::Key, ResEntry<T>>) {
+        (&self.array, &self.slab, &self.map)
     }
     /// 用指定的名称，最大最小容量，超时时间来创建一个资源表
     pub fn with_config(name: String, min_capacity: usize, max_capacity: usize, timeout: usize) -> Self {
+        // unsafe {
+        //     web_sys::console::log_2(&"xxxxxxxxxxxxxxx".into(), &name.clone().into());
+        //     web_sys::console::log_3(&(min_capacity as u32).into(), &(max_capacity as u32).into(), &(timeout as u32).into());
+        // }
         ResMap {
             map: XHashMap::default(),
             array: Vec::new(),
@@ -230,8 +232,33 @@ pub struct KeyRes<T: Res + 'static> {
     key: T::Key,
     res: ShareWeak<T>,
 }
+
+impl<T: Res + 'static> KeyRes<T> {
+    pub fn get_key(&self) -> &T::Key {
+        &self.key
+    }
+    pub fn get_res(&self) -> &ShareWeak<T> {
+        &self.res
+    }
+}
 pub struct ResEntry<T: Res + 'static> {
     res: Share<T>,
     group_i: usize,
     id: usize,
+}
+
+impl<T: Res + 'static> Deref for ResEntry<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.res
+    }
+}
+
+impl<T: Res + 'static> ResEntry<T> {
+    pub fn get_group_i(&self) -> &usize {
+        &self.group_i
+    }
+    pub fn get_id(&self) -> &usize {
+        &self.id
+    }
 }

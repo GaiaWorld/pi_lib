@@ -11,3 +11,9 @@ any = {path="../any"}
 share = { path = "../share", features=["rc"]}
 hash = {path="../hash"}
 atom = {path="../atom"}
+
+# [dependencies.web-sys]
+# version = "*"
+# features = [
+# 	"console",
+# ]
