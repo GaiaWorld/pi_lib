@@ -1,4 +1,13 @@
 #![deny(unsafe_code)]
+//! https://github.com/fkoep/downcast-rs
+//! 该库参考了[downcast-rs](https://github.com/fkoep/downcast-rs), 为Box<dyn Trait>、Rc<dyn Trait>、Arc<dyn Trait>实现了downcast接口（向下造型）
+//!
+//! 为什么不直接使用[downcast-rs](https://github.com/fkoep/downcast-rs)?
+//! downcast-rs仅为Box<dyn Trait>、Rc<dyn Trait>提供了`downcast`,未提供Arc<dyn Trait>的`downcast`方法
+//! 
+//! 补充：你不应该再使用本库，后续可能删除本库，因为最新的[downcast-rs](https://github.com/fkoep/downcast-rs)已经提供了Arc<dyn Trait>的downcast接口（2021.5.21）
+//!
+//! 下面的注释，拷贝了[downcast-rs](https://github.com/fkoep/downcast-rs)的README.md, 并不说明本库的用法。
 //! Rust enums are great for types where all variations are known beforehand. But in
 //! the case where you want to implement a container of user-defined types, an
 //! open-ended type like a **trait object** is needed. In some cases, it is useful to

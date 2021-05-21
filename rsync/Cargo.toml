@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 crc = "1.8.1"
-adler32 = {path="../adler32"}
+adler32 = "*"
