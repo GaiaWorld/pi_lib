@@ -5,7 +5,7 @@ extern crate crossbeam_channel;
 extern crate twox_hash;
 extern crate dashmap;
 extern crate tokio;
-extern crate r#async_new;
+extern crate r#async;
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -34,7 +34,7 @@ use future_parking_lot::{mutex::{Mutex as FutureMutex, FutureLockable}, rwlock::
 use tokio::runtime::Builder as TokioRtBuilder;
 use async_stream::stream;
 
-use r#async_new::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+use r#async::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
                   lock::{mpmc_deque::MpmcDeque,
                          mpsc_deque::mpsc_deque,
                          spin_lock::SpinLock,
