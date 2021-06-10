@@ -9,8 +9,6 @@ extern crate parking_lot;
 extern crate log;
 extern crate local_timer;
 
-extern crate time;
-
 pub mod lock;
 pub mod rt;
 pub mod task;
