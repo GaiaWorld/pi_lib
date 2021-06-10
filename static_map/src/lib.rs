@@ -4,7 +4,7 @@
 //！2、然后再不断尝试大于数组的素数p2，保证临时列表的数不冲突，在结果列表中记录该数的位置。如果p2超过p1，则将p1增加，重新尝试。
 //！在65535范围内，有6542个素数。2*3*5*7*11*13*17*19*23*29就超过2**32.
 //! 测试get性能大概StaticMap为5ns, 标准的HashMap大概为12ns
-//! 测试StaticMap::new的性能， 30个kv为700ns，100个kv为2700~5200ns，500个kv大概为1ms，
+//! 测试StaticMap::new的性能， 30个kv为700ns，100个kv为2700~5200ns，500个kv大概为1ms，1000个kv大概为8~13ms，
 //! 数组长度上， 30个kv为80~100，100个kv为400，500个kv大概为2400~3000
 
 #![feature(test)]
@@ -177,9 +177,9 @@ mod test_mod {
 
     #[bench]
     fn bench_make(b: &mut Bencher) {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(2222222);
+        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222222);
         let mut arr = Vec::new();
-        for _ in 0..500 {
+        for _ in 0..1000 {
             let k = rng.next_u32() as usize;
             arr.push((k, k + 1));
         }

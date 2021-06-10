@@ -55,4 +55,5 @@ members = [
   "js_proxy_gen_macro",
   "cross_performance",
   "invalid",
+  "static_map",
 ]
