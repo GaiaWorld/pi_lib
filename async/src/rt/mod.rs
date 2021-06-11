@@ -74,20 +74,11 @@ pub struct AsyncTask<O: Default + 'static, P: AsyncTaskPool<O>> {
     uid:        TaskId,                                     //任务唯一id
     future:     UnsafeCell<Option<BoxFuture<'static, O>>>,  //异步任务
     pool:       Arc<P>,                                     //异步任务池
-    context:    Option<(AtomicUsize, AtomicUsize)>,         //异步任务上下文
+    context:    Option<UnsafeCell<Box<dyn Any>>>,           //异步任务上下文
 }
 
 unsafe impl<O: Default + 'static, P: AsyncTaskPool<O>> Send for AsyncTask<O, P> {}
 unsafe impl<O: Default + 'static, P: AsyncTaskPool<O>> Sync for AsyncTask<O, P> {}
-
-impl<O: Default + 'static, P: AsyncTaskPool<O>> Drop for AsyncTask<O, P> {
-    fn drop(&mut self) {
-        if let Some((x, y)) = self.context.take() {
-            //当前异步任务有上下文，则释放
-            unsafe { let _: Arc<dyn Any> = transmute((x.load(Ordering::Relaxed), y.load(Ordering::Relaxed))); }
-        }
-    }
-}
 
 impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>> ArcWake for AsyncTask<O, P> {
     fn wake_by_ref(arc_self: &Arc<Self>) {
@@ -148,18 +139,17 @@ impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
     }
 
     /// 使用指定上下文构建单线程任务
-    pub fn with_context<C: Drop + Send + Sync + 'static>(uid: TaskId,
-                                                         pool: Arc<P>,
-                                                         future: Option<BoxFuture<'static, O>>,
-                                                         context: C) -> AsyncTask<O, P> {
-        let any: Arc<dyn Any> = Arc::new(context);
-        let (x, y): (usize, usize) = unsafe { transmute(any) };
+    pub fn with_context<C: 'static>(uid: TaskId,
+                                    pool: Arc<P>,
+                                    future: Option<BoxFuture<'static, O>>,
+                                    context: C) -> AsyncTask<O, P> {
+        let any = Box::new(context);
 
         AsyncTask {
             uid,
             future: UnsafeCell::new(future),
             pool,
-            context: Some((AtomicUsize::new(x), AtomicUsize::new(y))),
+            context: Some(UnsafeCell::new(any)),
         }
     }
 
@@ -183,42 +173,42 @@ impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
         self.context.is_some()
     }
 
-    //获取异步任务上下文
-    pub fn get_context<C: Drop + Send + Sync + 'static>(&self) -> Option<Weak<C>> {
-        if let Some((context_x, context_y)) = &self.context {
-            //存在上下文，则获取上下文的弱引用
-            let any: Arc<dyn Any + Send + Sync + 'static> = unsafe { transmute((context_x.load(Ordering::Relaxed), context_y.load(Ordering::Relaxed))) };
-            let shared: Arc<C> = Arc::downcast(any).unwrap();
-            let weak = Arc::downgrade(&shared);
-            Arc::into_raw(shared); //防止提前被回收
+    //获取异步任务上下文的只读引用
+    pub fn get_context<C: 'static>(&self) -> Option<&C> {
+        if let Some(context) = &self.context {
+            //存在上下文
+            let any = unsafe { &*context.get() };
+            let r = <dyn Any>::downcast_ref::<C>(&**any).unwrap();
 
-            return Some(weak);
+            return Some(r);
+        }
+
+        None
+    }
+
+    //获取异步任务上下文的可写引用
+    pub fn get_context_mut<C: 'static>(&self) -> Option<&mut C> {
+        if let Some(context) = &self.context {
+            //存在上下文
+            let any = unsafe { &mut *context.get() };
+            let r = <dyn Any>::downcast_mut::<C>(&mut **any).unwrap();
+
+            return Some(r);
         }
 
         None
     }
 
     //设置异步任务上下文，返回上一个异步任务上下文
-    pub fn set_context<C: Drop + Send + Sync + 'static>(&self, new: C) -> Option<C> {
-        if let Some((context_x, context_y)) = &self.context {
-            //存在上下文，则获取上一个上下文
-            let any: Arc<dyn Any + Send + Sync + 'static> = unsafe { transmute((context_x.load(Ordering::Relaxed), context_y.load(Ordering::Relaxed))) };
-            let shared: Arc<C> = Arc::downcast(any).unwrap();
+    pub fn set_context<C: 'static>(&self, new: C) {
+        if let Some(context) = &self.context {
+            //存在上一个上下文，则释放上一个上下文
+            let _ = unsafe { &*context.get() };
 
             //设置新的上下文
-            let any: Arc<dyn Any> = Arc::new(new);
-            let (x, y): (usize, usize) = unsafe { transmute(any) };
-            context_x.store(x, Ordering::SeqCst);
-            context_y.store(y, Ordering::SeqCst);
-
-            if let Ok(context) = Arc::try_unwrap(shared) {
-                return Some(context);
-            } else {
-                return None;
-            }
+            let any: Box<dyn Any + 'static> = Box::new(new);
+            unsafe { *context.get() = any; }
         }
-
-        None
     }
 
     //获取异步任务的任务池
@@ -230,7 +220,7 @@ impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
 ///
 /// 异步任务池
 ///
-pub trait AsyncTaskPool<O: Default + 'static>: Send + Sync + 'static {
+pub trait AsyncTaskPool<O: Default + 'static>: Default + Send + Sync + 'static {
     type Pool: AsyncTaskPool<O>;
 
     /// 获取绑定的线程唯一id
@@ -318,7 +308,7 @@ pub trait AsyncRuntimeExt<O: Default + 'static> {
                                 future: F,
                                 context: C) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static;
+              C: 'static;
 
     /// 派发一个在指定时间后执行的异步任务到异步运行时，并指定异步任务的初始化上下文，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
     fn spawn_timing_with_context<F, C>(&self,
@@ -327,7 +317,7 @@ pub trait AsyncRuntimeExt<O: Default + 'static> {
                                        context: C,
                                        time: usize) -> Result<u64>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static;
+              C: 'static;
 
     /// 立即创建一个指定任务池的异步运行时，并执行指定的异步任务，阻塞当前线程，等待异步任务完成后返回
     fn block_on<RP, F>(&self, future: F) -> Result<F::Output>
@@ -379,7 +369,7 @@ impl<
                                 future: F,
                                 context: C) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         match self {
             AsyncRuntime::Local(rt) => rt.spawn_with_context(task_id, future, context),
             AsyncRuntime::Multi(rt) => rt.spawn_with_context(task_id, future, context),
@@ -393,7 +383,7 @@ impl<
                                        context: C,
                                        time: usize) -> Result<u64>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         match self {
             AsyncRuntime::Local(rt) => rt.spawn_timing_with_context(task_id, future, context, time),
             AsyncRuntime::Multi(rt) => rt.spawn_timing_with_context(task_id, future, context, time),

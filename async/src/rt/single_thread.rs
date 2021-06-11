@@ -66,6 +66,24 @@ impl<O: Default + 'static> Clone for SingleTaskPool<O> {
     }
 }
 
+impl<O: Default + 'static> Default for SingleTaskPool<O> {
+    fn default() -> Self {
+        let rt_uid = alloc_rt_uid();
+        let (producer, consumer) = mpsc_deque();
+        let consume_count = Arc::new(AtomicUsize::new(0));
+        let produce_count = Arc::new(AtomicUsize::new(0));
+
+        SingleTaskPool {
+            id: (rt_uid << 8) & 0xffff | 1,
+            consumer: Arc::new(RefCell::new(consumer)),
+            producer: Arc::new(producer),
+            consume_count,
+            produce_count,
+            thread_waker: Some(Arc::new((AtomicBool::new(false), Mutex::new(()), Condvar::new()))),
+        }
+    }
+}
+
 impl<O: Default + 'static> AsyncTaskPool<O> for SingleTaskPool<O> {
     type Pool = SingleTaskPool<O>;
 
@@ -169,7 +187,7 @@ impl<
                                 future: F,
                                 context: C) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         let boxed = Box::new(future).boxed();
         if let Err(e) = (self.0)
             .1
@@ -189,7 +207,7 @@ impl<
                                        context: C,
                                        time: usize) -> Result<u64>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         let boxed = Box::new(future).boxed();
         let handle = (self.0)
             .3
@@ -409,21 +427,7 @@ unsafe impl<
 
 impl<O: Default + 'static> Default for SingleTaskRunner<O> {
     fn default() -> Self {
-        let rt_uid = alloc_rt_uid();
-        let (producer, consumer) = mpsc_deque();
-        let consume_count = Arc::new(AtomicUsize::new(0));
-        let produce_count = Arc::new(AtomicUsize::new(0));
-
-        let pool = SingleTaskPool {
-            id: (rt_uid << 8) & 0xffff | 1,
-            consumer: Arc::new(RefCell::new(consumer)),
-            producer: Arc::new(producer),
-            consume_count,
-            produce_count,
-            thread_waker: Some(Arc::new((AtomicBool::new(false), Mutex::new(()), Condvar::new()))),
-        };
-
-        SingleTaskRunner::new(pool)
+        SingleTaskRunner::new(SingleTaskPool::default())
     }
 }
 

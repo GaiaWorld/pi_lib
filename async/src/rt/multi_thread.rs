@@ -116,6 +116,13 @@ pub struct ComputationalTaskPool<O: Default + 'static> {
 unsafe impl<O: Default + 'static> Send for ComputationalTaskPool<O> {}
 unsafe impl<O: Default + 'static> Sync for ComputationalTaskPool<O> {}
 
+impl<O: Default + 'static> Default for ComputationalTaskPool<O> {
+    fn default() -> Self {
+        let core_len = num_cpus::get(); //工作者任务池数据等于本机逻辑核数
+        ComputationalTaskPool::new(core_len)
+    }
+}
+
 impl<O: Default + 'static> AsyncTaskPool<O> for ComputationalTaskPool<O> {
     type Pool = ComputationalTaskPool<O>;
 
@@ -299,6 +306,12 @@ pub struct StealableTaskPool<O: Default + 'static> {
 
 unsafe impl<O: Default + 'static> Send for StealableTaskPool<O> {}
 unsafe impl<O: Default + 'static> Sync for StealableTaskPool<O> {}
+
+impl<O: Default + 'static> Default for StealableTaskPool<O> {
+    fn default() -> Self {
+        StealableTaskPool::new()
+    }
+}
 
 impl<O: Default + 'static> AsyncTaskPool<O> for StealableTaskPool<O> {
     type Pool = StealableTaskPool<O>;
@@ -629,7 +642,7 @@ impl<
                                 future: F,
                                 context: C) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         let boxed = Box::new(future).boxed();
         let task = Arc::new(AsyncTask::with_context(
             task_id,
@@ -688,7 +701,7 @@ impl<
                                        context: C,
                                        time: usize) -> Result<u64>
         where F: Future<Output = O> + Send + 'static,
-              C: Drop + Send + Sync + 'static {
+              C: 'static {
         if let Some(timers) = &(self.0).2 {
             let mut index: usize = (self.0).3.fetch_add(1, Ordering::Relaxed) % timers.len(); //随机选择一个线程的队列和定时器
             let (_, timer) = &timers[index];
