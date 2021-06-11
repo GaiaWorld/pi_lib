@@ -258,9 +258,10 @@ fn parse_async_main(mut input: syn::ItemFn,
         AsyncRuntimeType::SingleThread(pool_type) => {
             if let Some(pool_type) = pool_type {
                 //指定了任务池
+                let pool_type_name = syn::Ident::new(&pool_type, Span::call_site());
                 quote_spanned! {last_stmt_start_span=>
-                    let pool = #pool_type::default();
-                    let runner = r#async::rt::single_thread::SingleTaskRunner::new(pool);
+                    let pool = #pool_type_name::default();
+                    let runner = r#async::rt::single_thread::SingleTaskRunner::<(), _>::new(pool);
                 }
             } else {
                 //未指定任务池
@@ -272,8 +273,9 @@ fn parse_async_main(mut input: syn::ItemFn,
         AsyncRuntimeType::MultiThread(pool_type) => {
             if let Some(pool_type) = pool_type {
                 //指定了任务池
+                let pool_type_name = syn::Ident::new(&pool_type, Span::call_site());
                 quote_spanned! {last_stmt_start_span=>
-                    let pool = #pool_type::default();
+                    let pool = #pool_type_name::default();
                     r#async::rt::multi_thread::MultiTaskRuntimeBuilder::<(), _>::new(pool)
                 }
             } else {
@@ -284,6 +286,7 @@ fn parse_async_main(mut input: syn::ItemFn,
             }
         },
     };
+
     if let Some(worker_size) = config.worker_size {
         //生成设置多线程运行时的初始工作者和工作者数量限制的代码
         rt_builder = quote! { #rt_builder.init_worker_size(#worker_size).set_worker_limit(#worker_size, #worker_size) };
@@ -309,6 +312,7 @@ fn parse_async_main(mut input: syn::ItemFn,
 
             if let Some(pool_type) = pool_type {
                 //指定了任务池
+                let pool_type_name = syn::Ident::new(&pool_type, Span::call_site());
                 syn::parse2(quote_spanned! {last_stmt_end_span =>
                     {
                         #rt_builder
@@ -332,7 +336,7 @@ fn parse_async_main(mut input: syn::ItemFn,
                             move || {
                                 rt_copy.len()
                             });
-                            rt.block_on::<#pool_type<()>, _>(async #body);
+                            rt.block_on::<#pool_type_name<()>, _>(async #body);
                     }
                 }).unwrap()
             } else {
@@ -369,9 +373,10 @@ fn parse_async_main(mut input: syn::ItemFn,
             //生成启动多线程运行时和执行异步主入口的代码
             if let Some(pool_type) = pool_type {
                 //指定了任务池
+                let pool_type_name = syn::Ident::new(&pool_type, Span::call_site());
                 syn::parse2(quote_spanned! {last_stmt_end_span=>
                     {
-                        #rt_builder.block_on::<#pool_type<()>, _>(async #body);
+                        #rt_builder.block_on::<#pool_type_name<()>, _>(async #body);
                     }
                 }).unwrap()
             } else {
