@@ -3,14 +3,14 @@ use std::sync::Arc;
 use std::io::{ErrorKind, Write};
 use std::time::Duration;
 
-use r#async::rt::multi_thread::{MultiTaskPool, MultiTaskRuntime};
+use r#async::rt::multi_thread::{MultiTaskRuntimeBuilder, MultiTaskRuntime};
 use async_file::file::{create_dir, rename, remove_file, remove_dir, AsyncFileOptions, WriteOptions, AsyncFile};
 
 #[test]
 fn test_async_file() {
     //初始化异步运行时
-    let pool = MultiTaskPool::new("TestAsyncRuntime".to_string(), 8, 1024 * 1024, 10, None);
-    let rt = pool.startup(true);
+    let builder = MultiTaskRuntimeBuilder::default();
+    let rt: MultiTaskRuntime<()> = builder.build();
 
     let rt_copy = rt.clone();
     let vec = Vec::from("Hello 什么是 Async File 异步文件?");
@@ -78,8 +78,8 @@ fn test_async_file() {
 #[test]
 fn test_async_file_truncate_read_write() {
     //初始化异步运行时
-    let pool = MultiTaskPool::new("TestAsyncRuntime".to_string(), 8, 1024 * 1024, 10, None);
-    let rt = pool.startup(true);
+    let builder = MultiTaskRuntimeBuilder::default();
+    let rt: MultiTaskRuntime<()> = builder.build();
 
     let rt_copy = rt.clone();
     let vec = Vec::from("Hello 什么是 Async File 异步文件?");
