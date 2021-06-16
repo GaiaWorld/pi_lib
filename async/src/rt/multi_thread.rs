@@ -513,9 +513,14 @@ impl<O: Default + 'static> AsyncTaskPoolExt<O> for StealableTaskPool<O> {
 
     #[inline]
     fn worker_len(&self) -> usize {
-        self
-            .workers
-            .len()
+        let mut workers_len = 0usize;
+        for worker in &self.workers {
+            if worker.read().is_some() {
+                workers_len += 1;
+            }
+        }
+
+        workers_len
             .checked_sub(self.frees.len())
             .or(Some(0))
             .unwrap()
