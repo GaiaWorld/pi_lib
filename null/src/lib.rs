@@ -142,7 +142,7 @@ impl Null for f64 {
 }
 impl Null for &str {
     fn null() -> Self {
-        NULL_STR
+        ""
     }
     fn is_null(&self) -> bool {
         self.is_empty()
@@ -156,7 +156,7 @@ impl Null for String {
         self.is_empty()
     }
 }
-pub static NULL_STR: &'static str = "";
+
 #[test]
 fn test() {
     let s = Some(1);
