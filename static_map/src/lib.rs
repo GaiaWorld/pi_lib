@@ -10,22 +10,25 @@
 #![feature(test)]
 extern crate test;
 
-extern crate invalid;
+extern crate core;
+
+extern crate null;
 
 use std::mem;
+use core::ops::{Index, IndexMut};
 
-use invalid::Invalid;
+use null::Null;
 
 /// 静态hash表，要求k一定为不重复的usize
-pub struct StaticMap<V: Invalid> {
-    /// 值数组，空位为Invalid的V
+pub struct StaticMap<V: Null> {
+    /// 值数组，空位为Null的V
     array: Vec<V>,
     /// 第一个素数
     p1: usize,
     /// 第二个素数
     p2: usize,
 }
-impl<V: Invalid> StaticMap<V> {
+impl<V: Null> StaticMap<V> {
     /// 用指定的kv键创建静态hash表
     pub fn new<F>(mut arr: Vec<(usize, V)>, invalid_func: F) -> Self where 
     F: Fn() -> V {
@@ -100,7 +103,7 @@ impl<V: Invalid> StaticMap<V> {
     /// 获得指定键的只读引用
     pub fn get(&self, k: usize) -> &V {
         let r = &self.array[k % self.p1];
-        if r.is_invalid() {
+        if r.is_null() {
             &self.array[self.p1 + k % self.p2]
         }else{
             r
@@ -109,11 +112,24 @@ impl<V: Invalid> StaticMap<V> {
     /// 获得指定键的可写引用
     pub fn get_mut(&mut self, k: usize) -> &mut V {
         let i = k % self.p1;
-        if self.array[i].is_invalid() {
+        if self.array[i].is_null() {
             &mut self.array[self.p1 + k % self.p2]
         }else{
             &mut self.array[i]
         }
+    }
+}
+impl<V: Null> Index<usize> for StaticMap<V> {
+    type Output = V;
+
+    fn index(&self, key: usize) -> &V {
+        self.get(key)
+    }
+}
+
+impl<V: Null> IndexMut<usize> for StaticMap<V> {
+    fn index_mut(&mut self, key: usize) -> &mut V {
+        self.get_mut(key)
     }
 }
 
@@ -170,8 +186,8 @@ mod test_mod {
         let map: StaticMap<usize> = StaticMap::new(arr.clone(), || {usize::MAX});
         println!("map len:{}", map.len());
         for (k, v) in arr {
-            let n = map.get(k);
-            assert_eq!(*n, v);
+            let n = map[k];
+            assert_eq!(n, v);
         }
     }
 
