@@ -612,7 +612,7 @@ pub struct MultiTaskRuntime<
     Option<Vec<(Sender<(usize, AsyncTimingTask<O, P>)>, Arc<Mutex<AsyncTaskTimer<O, P>>>)>>,    //休眠的异步任务生产者和本地定时器
     AtomicUsize,                                                                                //定时任务计数器
     Arc<ArrayQueue<Arc<(AtomicBool, Mutex<()>, Condvar)>>>,                                     //待唤醒的工作者唤醒器队列
-    (String, usize, usize, u64),                                                                //当前运行时配置参数
+    (String, usize, usize, u64, Option<usize>),                                                 //当前运行时配置参数
 )>);
 
 unsafe impl<
@@ -678,6 +678,7 @@ impl<
                                             self.clone(),
                                             ((self.0).5).1,
                                             ((self.0).5).3,
+                                            ((self.0).5).4,
                                             Some(timer.clone()));
                     } else {
                         //分派一个没有定时器的工作者线程
@@ -686,6 +687,7 @@ impl<
                                             self.clone(),
                                             ((self.0).5).1,
                                             ((self.0).5).3,
+                                            ((self.0).5).4,
                                             None);
                     }
                 }
@@ -850,6 +852,7 @@ impl<
                                             self.clone(),
                                             ((self.0).5).1,
                                             ((self.0).5).3,
+                                            ((self.0).5).4,
                                             Some(timer.clone()));
                     } else {
                         //分派一个没有定时器的工作者线程
@@ -858,6 +861,7 @@ impl<
                                             self.clone(),
                                             ((self.0).5).1,
                                             ((self.0).5).3,
+                                            ((self.0).5).4,
                                             None);
                     }
                 }
@@ -1150,7 +1154,7 @@ impl<
             timers,
             AtomicUsize::new(0),
             waits,
-            (self.prefix.clone(), self.min, self.stack_size, self.timeout),
+            (self.prefix.clone(), self.min, self.stack_size, self.timeout, self.interval),
         )));
 
         //构建初始化线程数量的线程构建器
@@ -1175,7 +1179,7 @@ impl<
                 None
             };
 
-            spawn_worker_thread(builder, index, runtime, min, timeout, timer);
+            spawn_worker_thread(builder, index, runtime, min, timeout, interval, timer);
         }
 
         runtime
@@ -1191,6 +1195,7 @@ fn spawn_worker_thread<
   runtime: MultiTaskRuntime<O, P>,
   min: usize,
   timeout: u64,
+  interval: Option<usize>,
   timer: Option<Arc<Mutex<AsyncTaskTimer<O, P>>>>) {
     if let Some(timer) = timer {
         //设置了定时器
@@ -1218,6 +1223,7 @@ fn spawn_worker_thread<
                             index,
                             min,
                             timeout,
+                            interval.unwrap() as u64,
                             timer);
         });
     } else {
@@ -1255,6 +1261,7 @@ fn timer_work_loop<
   index: usize,
   min: usize,
   sleep_timeout: u64,
+  timer_interval: u64,
   timer: Arc<Mutex<AsyncTaskTimer<O, P>>>) {
     //初始化当前线程的线程id和线程活动状态
     let pool = (runtime.0).1.clone();
@@ -1262,29 +1269,35 @@ fn timer_work_loop<
 
     let mut sleep_count = 0; //连续休眠计数器
     loop {
-        //设置新的定时任务，并唤醒已过期的定时任务
+        //设置新的定时异步任务，并唤醒已到期的定时异步任务
         let mut timer_run_millis = SystemTime::now(); //重置定时器运行时长
         timer.lock().consume();
-        while timer.lock().is_require_pop() {
-            let timing_task = timer.lock().pop();
-            match timing_task {
-                Some(AsyncTimingTask::Pended(expired)) => {
-                    //唤醒休眠的异步任务
-                    runtime.wakeup(&expired);
-                    break;
-                },
-                Some(AsyncTimingTask::WaitRun(expired)) => {
-                    //立即执行到期的定时异步任务
-                    (runtime.0).1.push_timed_out(expired);
-                    break;
-                },
-                _ => {
-                    //当前没有定时异步任务，则继续尝试获取定时异步任务
-                    continue;
-                },
+        let current_time = timer.lock().is_require_pop();
+        if let Some(current_time) = current_time {
+            //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
+            while let Some(timing_task) = timer.lock().pop(current_time) {
+                match timing_task {
+                    AsyncTimingTask::Pended(expired) => {
+                        //唤醒休眠的异步任务，不需要立即在本工作者中执行，因为休眠的异步任务无法取消
+                        runtime.wakeup(&expired);
+                    },
+                    AsyncTimingTask::WaitRun(expired) => {
+                        //执行到期的定时异步任务，需要立即在本工作者中执行，因为定时异步任务可以取消
+                        (runtime.0).1.push_timed_out(expired);
+                        if let Some(task) = pool.try_pop() {
+                            run_task(task);
+                        }
+                    },
+                }
+
+                if let Some(task) = pool.try_pop() {
+                    //执行当前工作者任务池中的异步任务，避免定时异步任务占用当前工作者的所有工作时间
+                    run_task(task);
+                }
             }
         }
 
+        //继续执行当前工作者任务池中的异步任务
         match pool.try_pop() {
             None => {
                 if runtime.len() > 0 {
@@ -1318,16 +1331,16 @@ fn timer_work_loop<
                             .unwrap_or(Duration::from_millis(0))
                             .as_millis() as u64; //获取定时器运行时长
                         let real_timeout = if timer.lock().len() == 0 {
-                            //当前定时器没有未到期的任务，则休眠默认时长
-                            DEFAULT_RUNTIME_SLEEP_TIME
+                            //当前定时器没有未到期的任务，则休眠指定时长
+                            sleep_timeout
                         } else {
                             //当前定时器还有未到期的任务，则计算需要休眠的时长
-                            if diff_time >= sleep_timeout {
+                            if diff_time >= timer_interval {
                                 //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
                                 continue;
                             } else {
                                 //定时器内部时间与当前时间差距不大，则休眠差值时间
-                                sleep_timeout - diff_time
+                                timer_interval - diff_time
                             }
                         };
 

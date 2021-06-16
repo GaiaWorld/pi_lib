@@ -542,28 +542,30 @@ impl<
 
         //设置新的定时任务，并唤醒已过期的定时任务
         (self.runtime.0).3.lock().consume();
-        while (self.runtime.0).3.lock().is_require_pop() {
-            //需要执行定时异步任务
-            let timing_task = (self.runtime.0).3.lock().pop();
-            match timing_task {
-                Some(AsyncTimingTask::Pended(expired)) => {
-                    //唤醒休眠的异步任务
-                    self.runtime.wakeup(&expired);
-                    break;
-                },
-                Some(AsyncTimingTask::WaitRun(expired)) => {
-                    //立即执行到期的定时异步任务
-                    (self.runtime.0).1.push_timed_out(expired);
-                    break;
-                },
-                _ => {
-                    //当前没有定时异步任务，则继续尝试获取定时异步任务
-                    continue;
-                },
+        let current_time = (self.runtime.0).3.lock().is_require_pop();
+        if let Some(current_time) = current_time {
+            //当前有到期的定时异步任务，则只处理到期的一个定时异步任务
+            if let Some(timing_task) = (self.runtime.0).3.lock().pop(current_time) {
+                match timing_task {
+                    AsyncTimingTask::Pended(expired) => {
+                        //唤醒休眠的异步任务，并立即执行
+                        self.runtime.wakeup(&expired);
+                        if let Some(task) = (self.runtime.0).1.try_pop() {
+                            run_task(task);
+                        }
+                    },
+                    AsyncTimingTask::WaitRun(expired) => {
+                        //立即执行到期的定时异步任务，并立即执行
+                        (self.runtime.0).1.push_timed_out(expired);
+                        if let Some(task) = (self.runtime.0).1.try_pop() {
+                            run_task(task);
+                        }
+                    },
+                }
             }
         }
 
-        //执行异步任务
+        //继续执行当前任务池中的一个异步任务
         match (self.runtime.0).1.try_pop() {
             None => {
                 //当前没有异步任务，则立即返回
@@ -584,34 +586,41 @@ impl<
             return Err(Error::new(ErrorKind::Other, "Single thread runtime not running"));
         }
 
-        //获取当前任务池中的所有任务
+        //获取当前任务池中的所有异步任务
         let mut tasks = (self.runtime.0).1.try_pop_all();
 
         //设置新的定时任务，并唤醒已过期的定时任务
         (self.runtime.0).3.lock().consume();
-        loop {
-            while (self.runtime.0).3.lock().is_require_pop() {
-                //需要执行定时异步任务
-                let timing_task = (self.runtime.0).3.lock().pop();
+        let current_time = (self.runtime.0).3.lock().is_require_pop();
+        if let Some(current_time) = current_time {
+            //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
+            while let Some(timing_task) = (self.runtime.0).3.lock().pop(current_time) {
                 match timing_task {
-                    Some(AsyncTimingTask::Pended(expired)) => {
-                        //唤醒休眠的异步任务
+                    AsyncTimingTask::Pended(expired) => {
+                        //唤醒休眠的异步任务，并立即执行
                         self.runtime.wakeup(&expired);
-                        break;
+                        if let Some(task) = (self.runtime.0).1.try_pop() {
+                            run_task(task);
+                        }
                     },
-                    Some(AsyncTimingTask::WaitRun(expired)) => {
-                        //立即执行到期的定时异步任务
+                    AsyncTimingTask::WaitRun(expired) => {
+                        //立即执行到期的定时异步任务，并立即执行
                         (self.runtime.0).1.push_timed_out(expired);
-                        break;
-                    },
-                    _ => {
-                        //当前没有定时异步任务，则继续尝试获取定时异步任务
-                        continue;
+                        if let Some(task) = (self.runtime.0).1.try_pop() {
+                            run_task(task);
+                        }
                     },
                 }
-            }
 
-            //执行异步任务
+                if let Some(task) = tasks.next() {
+                    //执行当前所有异步任务中的一个异步任务，避免定时异步任务占用当前运行时的所有执行时间
+                    run_task(task);
+                }
+            }
+        }
+
+        loop {
+            //继续执行剩余的异步任务
             if let Some(task) = tasks.next() {
                 run_task(task);
             } else {

@@ -1027,14 +1027,19 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
         len
     }
 
-    /// 判断是否需要继续弹出任务
-    pub fn is_require_pop(&self) -> bool {
-        self.timer.borrow().check_sleep(self.duration.elapsed().as_millis() as u64) == 0
+    /// 判断当前时间是否有可以弹出的任务，如果有可以弹出的任务，则返回当前时间，否则返回空
+    pub fn is_require_pop(&self) -> Option<u64> {
+        let current_time = self.duration.elapsed().as_millis() as u64;
+        if self.timer.borrow().check_sleep(current_time) == 0 {
+            Some(current_time)
+        } else {
+            None
+        }
     }
 
-    /// 从定时器中弹出到期的一个任务
-    pub fn pop(&self) -> Option<AsyncTimingTask<O, P>> {
-        if let Some((item, _index)) = self.timer.borrow_mut().pop(self.duration.elapsed().as_millis() as u64) {
+    /// 从定时器中弹出指定时间的一个到期任务
+    pub fn pop(&self, current_time: u64) -> Option<AsyncTimingTask<O, P>> {
+        if let Some((item, _index)) = self.timer.borrow_mut().pop(current_time) {
             Some(item.elem)
         } else {
             None
@@ -1051,10 +1056,10 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
 /// 等待指定超时
 ///
 pub struct AsyncWaitTimeout<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> {
-    rt:         AsyncRuntime<O, P>,                             //当前运行时
-    producor:   Sender<(usize, AsyncTimingTask<O, P>)>,  //超时请求生产者
-    timeout:    usize,                                          //超时时长，单位ms
-    expired:    bool,                                           //是否已过期
+    rt:         AsyncRuntime<O, P>,                     //当前运行时
+    producor:   Sender<(usize, AsyncTimingTask<O, P>)>, //超时请求生产者
+    timeout:    usize,                                  //超时时长，单位ms
+    expired:    bool,                                   //是否已过期
 }
 
 unsafe impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> Send for AsyncWaitTimeout<O, P> {}
