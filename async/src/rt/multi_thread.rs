@@ -1290,6 +1290,7 @@ fn timer_work_loop<
                         //执行到期的定时异步任务，需要立即在本工作者中执行，因为定时异步任务可以取消
                         (runtime.0).1.push_timed_out(expired);
                         if let Some(task) = pool.try_pop() {
+                            sleep_count = 0; //重置连续休眠次数
                             run_task(task);
                         }
                     },
@@ -1297,6 +1298,7 @@ fn timer_work_loop<
 
                 if let Some(task) = pool.try_pop() {
                     //执行当前工作者任务池中的异步任务，避免定时异步任务占用当前工作者的所有工作时间
+                    sleep_count = 0; //重置连续休眠次数
                     run_task(task);
                 }
             }
