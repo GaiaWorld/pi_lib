@@ -56,4 +56,7 @@ members = [
   "cross_performance",
   "null",
   "static_map",
+  "index_slotmap",
+  "deletable_heap",
+  "ext_heap",
 ]

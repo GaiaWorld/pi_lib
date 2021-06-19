@@ -1,0 +1,8 @@
+[package]
+name = "index_slotmap"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+slotmap = "1.0"
+
