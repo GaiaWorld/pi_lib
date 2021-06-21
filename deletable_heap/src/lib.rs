@@ -145,11 +145,9 @@ fn test(){
     sorted.reverse();
     for i in sorted {
         assert_eq!(heap.pop_index(&mut slot).unwrap().el, i);
-        if i == 9 {
-            let arr = heap.as_slice();
-            for i in 0..arr.len() {
-                assert_eq!(slot[arr[i].key].index, i);
-            }
+        let arr = heap.as_slice();
+        for j in 0..arr.len() {
+            assert_eq!(slot[arr[j].key].index, j);
         }
     }
 }

@@ -1,0 +1,9 @@
+[package]
+name = "weight"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+ext_heap = {path="../ext_heap"}
+
