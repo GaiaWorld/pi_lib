@@ -74,8 +74,8 @@ pub trait HeapAction<T: Ord, I> {
     fn pop_index(&mut self, slotmap: &mut IndexSlotMap<I>) -> Option<KeyItem<T>>;
     /// 移除指定位置的元素并维护反向位置索引
     fn remove_index(&mut self, index: usize, slotmap: &mut IndexSlotMap<I>) -> KeyItem<T>;
-    /// 修改指定位置的元素并维护反向位置索引
-    fn modify_index(&mut self, index: usize, f: &mut impl FnMut(&mut KeyItem<T>) -> Ordering, slotmap: &mut IndexSlotMap<I>);
+    /// 修复指定位置的元素并维护反向位置索引
+    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>);
     /// 放入元素并维护反向位置索引
     fn push_index(&mut self, item: KeyItem<T>, slotmap: &mut IndexSlotMap<I>);
 }
@@ -100,8 +100,8 @@ impl<T: Ord + fmt::Debug, I> HeapAction<T, I> for ExtHeap<KeyItem<T>> {
         item
     }
 
-    fn modify_index(&mut self, index: usize, f: &mut impl FnMut(&mut KeyItem<T>) -> Ordering, slotmap: &mut IndexSlotMap<I>) {
-        self.modify(index, f, &mut |arr, loc|{
+    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>) {
+        self.repair(index, ord, &mut |arr, loc|{
             let i = &arr[loc];
             slotmap[i.key].index = loc;
         });

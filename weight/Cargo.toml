@@ -7,3 +7,7 @@ edition = "2018"
 [dependencies]
 ext_heap = {path="../ext_heap"}
 
+
+[dev-dependencies]
+pcg_rand = "0.13"
+rand_core = "0.6"

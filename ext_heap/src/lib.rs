@@ -366,12 +366,12 @@ impl<T: Ord> ExtHeap<T> {
     /// The worst case cost of `pop` on a heap containing *n* elements is *O*(log(*n*)).
     pub fn remove(&mut self, index: usize, func: &mut impl FnMut(&mut [T], usize)) -> T {
         let item = self.data.swap_remove(index);
-        if !self.is_empty() {
-            unsafe { self.sift_down_to_bottom(index, func) };
+        if index < self.len() {
+            unsafe { self.sift_down_range(index, self.len(), func) };
         }
         item
     }
-/// Removes the greatest item from the binary heap and returns it, or `None` if it
+    /// Removes the greatest item from the binary heap and returns it, or `None` if it
     /// is empty.
     ///
     /// # Examples
@@ -381,18 +381,48 @@ impl<T: Ord> ExtHeap<T> {
     /// ```
     /// use pi::ext_heap::ExtHeap;
     /// let mut heap = ExtHeap::from(vec![1, 3, 4]);
-    /// heap.modify(1, |a|{*a = 5; Ordering::Greater})
+    ///
+    /// assert_eq!(*heap.get_unchecked_mut(1), 3);
+    /// assert_eq!(*heap.get_unchecked_mut(2), 4);
+    /// assert_eq!(heap.pop(), Some(1));
+    /// ```
+    ///
+    /// # Time complexity
+    ///
+    /// The worst case cost of `pop` on a heap containing *n* elements is *O*(log(*n*)).
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+        self.data.get_unchecked_mut(index)
+    }
+    /// Removes the greatest item from the binary heap and returns it, or `None` if it
+    /// is empty.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use pi::ext_heap::ExtHeap;
+    /// let mut heap = ExtHeap::from(vec![1, 3, 4]);
+    /// heap.repair(1, Ordering::Greater})
     /// assert_eq!(heap.pop(), Some(5));
     /// ```
     ///
     /// # Time complexity
     ///
     /// The worst case cost of `pop` on a heap containing *n* elements is *O*(log(*n*)).
-    pub fn modify(&mut self, index: usize, f: &mut impl FnMut(&mut T) -> Ordering, func: &mut impl FnMut(&mut [T], usize)) {
-        match f(&mut self.data[index]) {
-            Ordering::Greater => if index > 0 {unsafe { self.sift_up(0, index, func); }},
-            Ordering::Less => if index < self.len() - 1 {unsafe { self.sift_down(index, func) }},
-            _ => ()
+    pub fn repair(&mut self, index: usize, ord: Ordering, func: &mut impl FnMut(&mut [T], usize)) -> usize {
+        match ord {
+            Ordering::Greater => if index > 0 {
+                unsafe { self.sift_up(0, index, func) }
+            }else {
+                0
+            },
+            Ordering::Less => if index < self.len() - 1 {
+                unsafe { self.sift_down(index, func) }
+            }else{
+                self.len() - 1
+            },
+            _ => index
         }
     }
     /// Pushes an item onto the binary heap.
@@ -427,12 +457,12 @@ impl<T: Ord> ExtHeap<T> {
     /// The worst case cost of a *single* call to `push` is *O*(*n*). The worst case
     /// occurs when capacity is exhausted and needs a resize. The resize cost
     /// has been amortized in the previous figures.
-    pub fn push(&mut self, item: T, func: &mut impl FnMut(&mut [T], usize)) {
+    pub fn push(&mut self, item: T, func: &mut impl FnMut(&mut [T], usize)) -> usize {
         let old_len = self.len();
         self.data.push(item);
         // SAFETY: Since we pushed a new item it means that
         //  old_len = self.len() - 1 < self.len()
-        unsafe { self.sift_up(0, old_len, func) };
+        unsafe { self.sift_up(0, old_len, func) }
     }
 
     /// Consumes the `ExtHeap` and returns a vector in sorted
@@ -515,7 +545,7 @@ impl<T: Ord> ExtHeap<T> {
     /// # Safety
     ///
     /// The caller must guarantee that `pos < end <= self.len()`.
-    unsafe fn sift_down_range(&mut self, pos: usize, end: usize, func: &mut impl FnMut(&mut [T], usize)) {
+    unsafe fn sift_down_range(&mut self, pos: usize, end: usize, func: &mut impl FnMut(&mut [T], usize)) -> usize {
         // SAFETY: The caller guarantees that pos < end <= self.len().
         let mut hole = Hole::new(&mut self.data, pos);
         let mut child = 2 * hole.pos() + 1;
@@ -535,7 +565,10 @@ impl<T: Ord> ExtHeap<T> {
             // SAFETY: child is now either the old child or the old child+1
             //  We already proven that both are < self.len() and != hole.pos()
             if hole.element() >= hole.get(child) {
-                return;
+                let pos = hole.pos();
+                drop(hole);
+                func(self.data.as_mut_slice(), pos);
+                return pos;
             }
 
             // SAFETY: same as above.
@@ -550,18 +583,20 @@ impl<T: Ord> ExtHeap<T> {
             //  child == 2 * hole.pos() + 1 != hole.pos().
             hole.move_to(child, func);
         }
+        let pos = hole.pos();
         drop(hole);
         func(self.data.as_mut_slice(), pos);
+        return pos;
     }
 
     /// # Safety
     ///
     /// The caller must guarantee that `pos < self.len()`.
-    unsafe fn sift_down(&mut self, pos: usize, func: &mut impl FnMut(&mut [T], usize)) {
+    unsafe fn sift_down(&mut self, pos: usize, func: &mut impl FnMut(&mut [T], usize)) -> usize {
         let len = self.len();
         // SAFETY: pos < len is guaranteed by the caller and
         //  obviously len = self.len() <= self.len().
-        self.sift_down_range(pos, len, func);
+        self.sift_down_range(pos, len, func)
     }
 
     /// Take an element at `pos` and move it all the way down the heap,
@@ -1440,7 +1475,7 @@ impl<T: Ord> ExtHeap<T> {
 
         self.reserve(lower);
 
-        iterator.for_each(move |elem| self.push(elem, func));
+        iterator.for_each(move |elem| {self.push(elem, func);});
     }
 }
 
