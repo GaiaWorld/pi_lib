@@ -20,6 +20,7 @@ use futures::stream::{Stream, BoxStream};
 pub mod single_thread;
 pub mod multi_thread;
 
+use libc;
 use futures::{future::{FutureExt, BoxFuture}, task::ArcWake};
 use parking_lot::{Mutex, Condvar};
 use crossbeam_channel::{Sender, Receiver, unbounded};
@@ -70,17 +71,23 @@ impl Debug for TaskId {
 ///
 /// 异步任务
 ///
-pub struct AsyncTask<O: Default + 'static, P: AsyncTaskPool<O>> {
+pub struct AsyncTask<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> {
     uid:        TaskId,                                     //任务唯一id
     future:     UnsafeCell<Option<BoxFuture<'static, O>>>,  //异步任务
     pool:       Arc<P>,                                     //异步任务池
     context:    Option<UnsafeCell<Box<dyn Any>>>,           //异步任务上下文
 }
 
-unsafe impl<O: Default + 'static, P: AsyncTaskPool<O>> Send for AsyncTask<O, P> {}
-unsafe impl<O: Default + 'static, P: AsyncTaskPool<O>> Sync for AsyncTask<O, P> {}
+unsafe impl<
+    O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>
+> Send for AsyncTask<O, P> {}
+unsafe impl<
+    O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>
+> Sync for AsyncTask<O, P> {}
 
-impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>> ArcWake for AsyncTask<O, P> {
+impl<
+    O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>
+> ArcWake for AsyncTask<O, P> {
     fn wake_by_ref(arc_self: &Arc<Self>) {
         let pool = arc_self.get_pool();
         let _ = pool.push_keep(arc_self.clone());
@@ -125,7 +132,9 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>> 
     }
 }
 
-impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
+impl<
+    O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>
+> AsyncTask<O, P> {
     /// 构建单线程任务
     pub fn new(uid: TaskId,
                pool: Arc<P>,
@@ -149,6 +158,20 @@ impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
             uid,
             future: UnsafeCell::new(future),
             pool,
+            context: Some(UnsafeCell::new(any)),
+        }
+    }
+
+    /// 使用指定异步运行时和上下文构建单线程任务
+    pub fn with_runtime_and_context<C: 'static>(runtime: &AsyncRuntime<O, P>,
+                                                future: Option<BoxFuture<'static, O>>,
+                                                context: C) -> AsyncTask<O, P> {
+        let any = Box::new(context);
+
+        AsyncTask {
+            uid: runtime.alloc(),
+            future: UnsafeCell::new(future),
+            pool: runtime.shared_pool(),
             context: Some(UnsafeCell::new(any)),
         }
     }
@@ -221,7 +244,7 @@ impl<O: Default + 'static, P: AsyncTaskPool<O, Pool = P>> AsyncTask<O, P> {
 /// 异步任务池
 ///
 pub trait AsyncTaskPool<O: Default + 'static>: Default + Send + Sync + 'static {
-    type Pool: AsyncTaskPool<O>;
+    type Pool: AsyncTaskPoolExt<O> + AsyncTaskPool<O>;
 
     /// 获取绑定的线程唯一id
     fn get_thread_id(&self) -> usize;
@@ -233,7 +256,7 @@ pub trait AsyncTaskPool<O: Default + 'static>: Default + Send + Sync + 'static {
     fn push(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()>;
 
     /// 将已超时的异步任务加入任务池
-    fn push_timed_out(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()>;
+    fn push_timed_out(&self, index: u64, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()>;
 
     /// 异步任务被唤醒时，将异步任务继续加入异步任务池
     fn push_keep(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()>;
@@ -286,6 +309,11 @@ pub trait AsyncTaskPoolExt<O: Default + 'static>: Send + Sync + 'static {
         0
     }
 
+    /// 设置当前绑定本地线程的唤醒器
+    fn set_thread_waker(&mut self, _thread_waker: Arc<(AtomicBool, Mutex<()>, Condvar)>) {
+        //默认不设置
+    }
+
     /// 复制当前绑定本地线程的唤醒器
     fn clone_thread_waker(&self) -> Option<Arc<(AtomicBool, Mutex<()>, Condvar)>> {
         //默认不复制
@@ -310,12 +338,12 @@ pub trait AsyncRuntimeExt<O: Default + 'static> {
         where F: Future<Output = O> + Send + 'static,
               C: 'static;
 
-    /// 派发一个在指定时间后执行的异步任务到异步运行时，并指定异步任务的初始化上下文，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
+    /// 派发一个在指定时间后执行的异步任务到异步运行时，并指定异步任务的初始化上下文，时间单位ms
     fn spawn_timing_with_context<F, C>(&self,
                                        task_id: TaskId,
                                        future: F,
                                        context: C,
-                                       time: usize) -> Result<u64>
+                                       time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
               C: 'static;
 
@@ -381,7 +409,7 @@ impl<
                                        task_id: TaskId,
                                        future: F,
                                        context: C,
-                                       time: usize) -> Result<u64>
+                                       time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
               C: 'static {
         match self {
@@ -410,6 +438,15 @@ impl<
     O: Default + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
 > AsyncRuntime<O, P> {
+    /// 共享运行时内部任务池
+    pub(crate) fn shared_pool(&self) -> Arc<P> {
+        match self {
+            AsyncRuntime::Local(rt) => rt.shared_pool(),
+            AsyncRuntime::Multi(rt) => rt.shared_pool(),
+            AsyncRuntime::Worker(_, _, rt) => rt.shared_pool(),
+        }
+    }
+
     /// 获取当前异步运行时的唯一id
     pub fn get_id(&self) -> usize {
         match self {
@@ -464,17 +501,12 @@ impl<
         }
     }
 
-    /// 派发一个在指定时间后执行的异步任务到异步运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
-    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<usize>
+    /// 派发一个在指定时间后执行的异步任务到异步运行时，时间单位ms
+    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         match self {
             AsyncRuntime::Local(rt) => rt.spawn_timing(task_id, future, time),
-            AsyncRuntime::Multi(rt) => {
-                match rt.spawn_timing(task_id, future, time) {
-                    Err(e) => Err(e),
-                    Ok(handle) => Ok(handle as usize),
-                }
-            },
+            AsyncRuntime::Multi(rt) => rt.spawn_timing(task_id, future, time),
             AsyncRuntime::Worker(worker_status, worker_waker, rt) => {
                 if !worker_status.load(Ordering::SeqCst) {
                     return Err(Error::new(ErrorKind::Other, "Spawn timing async task failed, reason: worker already closed"));
@@ -484,15 +516,6 @@ impl<
                 wakeup_worker_thread(worker_waker, rt);
                 result
             },
-        }
-    }
-
-    /// 取消指定句柄的定时异步任务
-    pub fn cancel_timing(&self, handle: usize) {
-        match self {
-            AsyncRuntime::Local(rt) => rt.cancel_timing(handle),
-            AsyncRuntime::Multi(rt) => rt.cancel_timing(handle as u64),
-            AsyncRuntime::Worker(_, _, rt) => rt.cancel_timing(handle),
         }
     }
 
@@ -938,14 +961,6 @@ impl<V: Send + 'static> Clone for AsyncWaitResults<V> {
 }
 
 ///
-/// 等待执行的定时任务
-///
-// pub enum WaitRunTask<O: Default + 'static, P: AsyncTaskPool<O>> {
-//     SingleTask(Arc<SingleTask<O, P>>), //单线程定时任务
-//     MultiTask(Arc<MultiTask<O>>),   //多线程定时任务
-// }
-
-///
 /// 异步定时器任务
 ///
 pub enum AsyncTimingTask<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> {
@@ -992,11 +1007,13 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
     }
 
     /// 获取定时任务生产者
-    pub fn get_producor(&self) -> Sender<(usize, AsyncTimingTask<O, P>)> {
-        self.producor.clone()
+    #[inline]
+    pub fn get_producor(&self) -> &Sender<(usize, AsyncTimingTask<O, P>)> {
+        &self.producor
     }
 
     /// 获取剩余未到期的定时器任务数量
+    #[inline]
     pub fn len(&self) -> usize {
         self.timer.as_ref().borrow().len()
     }
@@ -1038,9 +1055,9 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
     }
 
     /// 从定时器中弹出指定时间的一个到期任务
-    pub fn pop(&self, current_time: u64) -> Option<AsyncTimingTask<O, P>> {
-        if let Some((item, _index)) = self.timer.borrow_mut().pop(current_time) {
-            Some(item.elem)
+    pub fn pop(&self, current_time: u64) -> Option<(usize, AsyncTimingTask<O, P>)> {
+        if let Some((item, index)) = self.timer.borrow_mut().pop(current_time) {
+            Some((index, item.elem))
         } else {
             None
         }
@@ -1692,4 +1709,64 @@ pub fn wakeup_worker_thread<O: Default + 'static, P: AsyncTaskPoolExt<O> + Async
         is_sleep.store(false, Ordering::SeqCst); //设置为未休眠
         let _ = condvar.notify_one();
     }
+}
+
+///单调递增时间
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MontonicTime {
+    Normal(Instant),    //标准单调递增时间
+    Fast((i64, i64)),   //快速单调递增时间，只支持类Linux系统
+}
+
+unsafe impl Send for MontonicTime {}
+unsafe impl Sync for MontonicTime {}
+
+impl MontonicTime {
+    /// 构建一个单调递增时间
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    pub fn now() -> Self {
+        MontonicTime::Normal(Instant::now())
+    }
+
+    /// 构建一个单调递增时间
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn now() -> Self {
+        MontonicTime::Fast(now_monotonic())
+    }
+
+    /// 获取从构建单调递增时间开始已过去的时间
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    pub fn elapsed(&self) -> Duration {
+        if let MontonicTime::Normal(now) = self {
+            now.elapsed()
+        } else {
+            panic!("Take elapsed failed, reason: invalid target os");
+        }
+    }
+
+    /// 获取从构建单调递增时间开始已过去的时间，精度为ms
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub fn elapsed(&self) -> Duration {
+        if let MontonicTime::Fast((sec0, nsec0)) = self {
+            let(sec1, nsec1) = now_monotonic;
+            Duration::new((sec1 - sec0) as u64, (nsec1 - nsec0) as u32)
+        } else {
+            panic!("Take elapsed failed, reason: invalid target os");
+        }
+    }
+}
+
+/// 快速获取单调时间
+#[inline]
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn now_monotonic() -> (i64, i64) {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+
+    let ret = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_COARSE, &mut time) };
+    assert!(ret == 0);
+
+    (time.tv_sec, time.tv_nsec)
 }

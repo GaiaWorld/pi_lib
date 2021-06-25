@@ -161,7 +161,7 @@ impl<O: Default + 'static> AsyncTaskPool<O> for ComputationalTaskPool<O> {
     }
 
     #[inline]
-    fn push_timed_out(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
+    fn push_timed_out(&self, _index: u64, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
         let id = self.get_thread_id();
         let worker = &self.workers[id];
         worker.stack.push(task);
@@ -351,7 +351,7 @@ impl<O: Default + 'static> AsyncTaskPool<O> for StealableTaskPool<O> {
     }
 
     #[inline]
-    fn push_timed_out(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
+    fn push_timed_out(&self, _index: u64, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
         let id = self.get_thread_id();
         if let Some(worker) = &*(&self.workers[id]).read() {
             worker.stack.push(task);
@@ -706,14 +706,14 @@ impl<
                                        task_id: TaskId,
                                        future: F,
                                        context: C,
-                                       time: usize) -> Result<u64>
+                                       time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
               C: 'static {
         if let Some(timers) = &(self.0).2 {
             let mut index: usize = (self.0).3.fetch_add(1, Ordering::Relaxed) % timers.len(); //随机选择一个线程的队列和定时器
             let (_, timer) = &timers[index];
             let boxed = Box::new(future).boxed();
-            let handle = timer
+            timer
                 .lock()
                 .set_timer(AsyncTimingTask::WaitRun(Arc::new(AsyncTask::with_context(task_id,
                                                                                      (self.0).1.clone(),
@@ -721,7 +721,7 @@ impl<
                                                                                      context))),
                            time); //为定时器设置定时异步任务
 
-            return Ok(((index as u64) << 40) | (handle as u64)); //定时器偏移加上定时异步任务的句柄
+            return Ok(());
         }
 
         Err(Error::new(ErrorKind::Other, format!("Spawn timing task failed, task_id: {:?}, reason: timer not exist", task_id)))
@@ -770,6 +770,11 @@ impl<
     O: Default + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
 > MultiTaskRuntime<O, P> {
+    /// 共享运行时内部任务池
+    pub(crate) fn shared_pool(&self) -> Arc<P> {
+        (self.0).1.clone()
+    }
+
     /// 获取当前运行时的唯一id
     pub fn get_id(&self) -> usize {
         (self.0).0
@@ -876,33 +881,23 @@ impl<
         result
     }
 
-    /// 派发一个在指定时间后执行的异步任务到异步多线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
-    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<u64>
+    /// 派发一个在指定时间后执行的异步任务到异步多线程运行时，时间单位ms
+    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         if let Some(timers) = &(self.0).2 {
             let mut index: usize = (self.0).3.fetch_add(1, Ordering::Relaxed) % timers.len(); //随机选择一个线程的队列和定时器
             let (_, timer) = &timers[index];
-            let handle = timer
+            timer
                 .lock()
                 .set_timer(AsyncTimingTask::WaitRun(Arc::new(AsyncTask::new(task_id,
                                                                             (self.0).1.clone(),
                                                                             Some(Box::new(future).boxed())))),
                            time); //为定时器设置定时异步任务
 
-            return Ok(((index as u64) << 40) | (handle as u64)); //定时器偏移加上定时异步任务的句柄
+            return Ok(());
         }
 
         Err(Error::new(ErrorKind::Other, format!("Spawn timing task failed, task_id: {:?}, reason: timer not exist", task_id)))
-    }
-
-    /// 取消指定句柄的多线程定时异步任务
-    pub fn cancel_timing(&self, handle: u64) {
-        if let Some(timers) = &(self.0).2 {
-            let index = (handle >> 40) as usize; //获取多线程定时异步任务所在定时器偏移
-            let handle = handle & 0xffffffffff; //获取多线程定时异步任务句柄
-            let (_, timer) = &timers[index];
-            timer.lock().cancel_timer(handle as usize);
-        }
     }
 
     /// 挂起指定唯一id的异步任务
@@ -1276,31 +1271,42 @@ fn timer_work_loop<
     loop {
         //设置新的定时异步任务，并唤醒已到期的定时异步任务
         let mut timer_run_millis = SystemTime::now(); //重置定时器运行时长
-        timer.lock().consume();
-        let current_time = timer.lock().is_require_pop();
-        if let Some(current_time) = current_time {
-            //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
-            while let Some(timing_task) = timer.lock().pop(current_time) {
-                match timing_task {
-                    AsyncTimingTask::Pended(expired) => {
-                        //唤醒休眠的异步任务，不需要立即在本工作者中执行，因为休眠的异步任务无法取消
-                        runtime.wakeup(&expired);
-                    },
-                    AsyncTimingTask::WaitRun(expired) => {
-                        //执行到期的定时异步任务，需要立即在本工作者中执行，因为定时异步任务可以取消
-                        (runtime.0).1.push_timed_out(expired);
+        timer.lock().consume(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+        loop {
+            let current_time = timer.lock().is_require_pop(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+            if let Some(current_time) = current_time {
+                //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
+                loop {
+                    let timed_out = timer.lock().pop(current_time); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+                    if let Some((handle, timing_task)) = timed_out {
+                        match timing_task {
+                            AsyncTimingTask::Pended(expired) => {
+                                //唤醒休眠的异步任务，不需要立即在本工作者中执行，因为休眠的异步任务无法取消
+                                runtime.wakeup(&expired);
+                            },
+                            AsyncTimingTask::WaitRun(expired) => {
+                                //执行到期的定时异步任务，需要立即在本工作者中执行，因为定时异步任务可以取消
+                                (runtime.0).1.push_timed_out(handle as u64, expired);
+                                if let Some(task) = pool.try_pop() {
+                                    sleep_count = 0; //重置连续休眠次数
+                                    run_task(task);
+                                }
+                            },
+                        }
+
                         if let Some(task) = pool.try_pop() {
+                            //执行当前工作者任务池中的异步任务，避免定时异步任务占用当前工作者的所有工作时间
                             sleep_count = 0; //重置连续休眠次数
                             run_task(task);
                         }
-                    },
+                    } else {
+                        //当前所有的到期任务已处理完，则退出本次定时异步任务处理
+                        break;
+                    }
                 }
-
-                if let Some(task) = pool.try_pop() {
-                    //执行当前工作者任务池中的异步任务，避免定时异步任务占用当前工作者的所有工作时间
-                    sleep_count = 0; //重置连续休眠次数
-                    run_task(task);
-                }
+            } else {
+                //当前没有到期的定时异步任务，则退出本次定时异步任务处理
+                break;
             }
         }
 

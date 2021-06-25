@@ -112,7 +112,7 @@ impl<O: Default + 'static> AsyncTaskPool<O> for SingleTaskPool<O> {
     }
 
     #[inline]
-    fn push_timed_out(&self, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
+    fn push_timed_out(&self, _index: u64, task: Arc<AsyncTask<O, Self::Pool>>) -> Result<()> {
         self.consumer.as_ref().borrow_mut().push_front(task);
         self.produce_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -145,7 +145,11 @@ impl<O: Default + 'static> AsyncTaskPool<O> for SingleTaskPool<O> {
     }
 }
 
-impl<O: Default + 'static> AsyncTaskPoolExt<O> for SingleTaskPool<O> {}
+impl<O: Default + 'static> AsyncTaskPoolExt<O> for SingleTaskPool<O> {
+    fn set_thread_waker(&mut self, thread_waker: Arc<(AtomicBool, Mutex<()>, Condvar)>) {
+        self.thread_waker = Some(thread_waker);
+    }
+}
 
 ///
 /// 异步单线程任务运行时
@@ -205,11 +209,11 @@ impl<
                                        task_id: TaskId,
                                        future: F,
                                        context: C,
-                                       time: usize) -> Result<u64>
+                                       time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static,
               C: 'static {
         let boxed = Box::new(future).boxed();
-        let handle = (self.0)
+        (self.0)
             .3
             .lock()
             .set_timer(AsyncTimingTask::WaitRun(Arc::new(AsyncTask::with_context(task_id.clone(),
@@ -217,7 +221,7 @@ impl<
                                                                                  Some(boxed),
                                                                                  context))), time);
 
-        Ok(handle as u64)
+        Ok(())
     }
 
     fn block_on<RP, F>(&self, future: F) -> Result<F::Output>
@@ -263,6 +267,11 @@ impl<
     O: Default + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
 > SingleTaskRuntime<O, P> {
+    /// 共享运行时内部任务池
+    pub(crate) fn shared_pool(&self) -> Arc<P> {
+        (self.0).1.clone()
+    }
+
     /// 获取当前运行时的唯一id
     pub fn get_id(&self) -> usize {
         (self.0).0
@@ -294,18 +303,13 @@ impl<
         Ok(())
     }
 
-    /// 派发一个在指定时间后执行的异步任务到异步单线程运行时，返回定时异步任务的句柄，可以在到期之前使用句柄取消异步任务的执行，时间单位ms
-    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<usize>
+    /// 派发一个在指定时间后执行的异步任务到异步单线程运行时，时间单位ms
+    pub fn spawn_timing<F>(&self, task_id: TaskId, future: F, time: usize) -> Result<()>
         where F: Future<Output = O> + Send + 'static {
         let boxed = Box::new(future).boxed();
-        let handle = (self.0).3.lock().set_timer(AsyncTimingTask::WaitRun(Arc::new(AsyncTask::new(task_id.clone(), (self.0).1.clone(), Some(boxed)))), time);
+        (self.0).3.lock().set_timer(AsyncTimingTask::WaitRun(Arc::new(AsyncTask::new(task_id.clone(), (self.0).1.clone(), Some(boxed)))), time);
 
-        Ok(handle)
-    }
-
-    /// 取消指定句柄的单线程定时异步任务
-    pub fn cancel_timing(&self, handle: usize) {
-        let _ = (self.0).3.lock().cancel_timer(handle);
+        Ok(())
     }
 
     /// 挂起指定唯一id的异步任务
@@ -472,17 +476,13 @@ impl<
                                    true,
                                    Ordering::SeqCst,
                                    Ordering::SeqCst) {
-            Err(e) => {
-                //启动失败
-                panic!("Startup single task runtime failed, reason: {:?}", e);
-            }
-            Ok(true) => {
-                //已启动，则忽略
-                None
-            },
             Ok(false) => {
                 //未启动，则启动，并返回单线程异步运行时
                 Some(self.runtime.clone())
+            }
+            _ => {
+                //已启动，则忽略
+                None
             }
         }
     }
@@ -541,27 +541,33 @@ impl<
         }
 
         //设置新的定时任务，并唤醒已过期的定时任务
-        (self.runtime.0).3.lock().consume();
-        let current_time = (self.runtime.0).3.lock().is_require_pop();
-        if let Some(current_time) = current_time {
-            //当前有到期的定时异步任务，则只处理到期的一个定时异步任务
-            if let Some(timing_task) = (self.runtime.0).3.lock().pop(current_time) {
-                match timing_task {
-                    AsyncTimingTask::Pended(expired) => {
-                        //唤醒休眠的异步任务，并立即执行
-                        self.runtime.wakeup(&expired);
-                        if let Some(task) = (self.runtime.0).1.try_pop() {
-                            run_task(task);
-                        }
-                    },
-                    AsyncTimingTask::WaitRun(expired) => {
-                        //立即执行到期的定时异步任务，并立即执行
-                        (self.runtime.0).1.push_timed_out(expired);
-                        if let Some(task) = (self.runtime.0).1.try_pop() {
-                            run_task(task);
-                        }
-                    },
+        (self.runtime.0).3.lock().consume(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+        loop {
+            let current_time = (self.runtime.0).3.lock().is_require_pop(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+            if let Some(current_time) = current_time {
+                //当前有到期的定时异步任务，则只处理到期的一个定时异步任务
+                let timed_out = (self.runtime.0).3.lock().pop(current_time); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+                if let Some((handle, timing_task)) = timed_out {
+                    match timing_task {
+                        AsyncTimingTask::Pended(expired) => {
+                            //唤醒休眠的异步任务，并立即执行
+                            self.runtime.wakeup(&expired);
+                            if let Some(task) = (self.runtime.0).1.try_pop() {
+                                run_task(task);
+                            }
+                        },
+                        AsyncTimingTask::WaitRun(expired) => {
+                            //立即执行到期的定时异步任务，并立即执行
+                            (self.runtime.0).1.push_timed_out(handle as u64, expired);
+                            if let Some(task) = (self.runtime.0).1.try_pop() {
+                                run_task(task);
+                            }
+                        },
+                    }
                 }
+            } else {
+                //当前没有到期的定时异步任务，则退出本次定时异步任务处理
+                break;
             }
         }
 
@@ -590,32 +596,43 @@ impl<
         let mut tasks = (self.runtime.0).1.try_pop_all();
 
         //设置新的定时任务，并唤醒已过期的定时任务
-        (self.runtime.0).3.lock().consume();
-        let current_time = (self.runtime.0).3.lock().is_require_pop();
-        if let Some(current_time) = current_time {
-            //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
-            while let Some(timing_task) = (self.runtime.0).3.lock().pop(current_time) {
-                match timing_task {
-                    AsyncTimingTask::Pended(expired) => {
-                        //唤醒休眠的异步任务，并立即执行
-                        self.runtime.wakeup(&expired);
-                        if let Some(task) = (self.runtime.0).1.try_pop() {
-                            run_task(task);
+        (self.runtime.0).3.lock().consume(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+        loop {
+            let current_time = (self.runtime.0).3.lock().is_require_pop(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+            if let Some(current_time) = current_time {
+                //当前有到期的定时异步任务，则开始处理到期的所有定时异步任务
+                loop {
+                    let timed_out = (self.runtime.0).3.lock().pop(current_time); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
+                    if let Some((handle, timing_task)) = timed_out {
+                        match timing_task {
+                            AsyncTimingTask::Pended(expired) => {
+                                //唤醒休眠的异步任务，并立即执行
+                                self.runtime.wakeup(&expired);
+                                if let Some(task) = (self.runtime.0).1.try_pop() {
+                                    run_task(task);
+                                }
+                            },
+                            AsyncTimingTask::WaitRun(expired) => {
+                                //立即执行到期的定时异步任务，并立即执行
+                                (self.runtime.0).1.push_timed_out(handle as u64, expired);
+                                if let Some(task) = (self.runtime.0).1.try_pop() {
+                                    run_task(task);
+                                }
+                            },
                         }
-                    },
-                    AsyncTimingTask::WaitRun(expired) => {
-                        //立即执行到期的定时异步任务，并立即执行
-                        (self.runtime.0).1.push_timed_out(expired);
-                        if let Some(task) = (self.runtime.0).1.try_pop() {
-                            run_task(task);
-                        }
-                    },
-                }
 
-                if let Some(task) = tasks.next() {
-                    //执行当前所有异步任务中的一个异步任务，避免定时异步任务占用当前运行时的所有执行时间
-                    run_task(task);
+                        if let Some(task) = tasks.next() {
+                            //执行当前所有异步任务中的一个异步任务，避免定时异步任务占用当前运行时的所有执行时间
+                            run_task(task);
+                        }
+                    } else {
+                        //当前所有的到期任务已处理完，则退出本次定时异步任务处理
+                        break;
+                    }
                 }
+            } else {
+                //当前没有到期的定时异步任务，则退出本次定时异步任务处理
+                break;
             }
         }
 
