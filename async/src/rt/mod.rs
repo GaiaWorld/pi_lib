@@ -1748,7 +1748,7 @@ impl MontonicTime {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     pub fn elapsed(&self) -> Duration {
         if let MontonicTime::Fast((sec0, nsec0)) = self {
-            let(sec1, nsec1) = now_monotonic;
+            let (sec1, nsec1) = now_monotonic();
             Duration::new((sec1 - sec0) as u64, (nsec1 - nsec0) as u32)
         } else {
             panic!("Take elapsed failed, reason: invalid target os");
