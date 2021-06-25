@@ -1289,7 +1289,7 @@ fn timer_work_loop<
                                 (runtime.0).1.push_timed_out(handle as u64, expired);
                                 if let Some(task) = pool.try_pop() {
                                     sleep_count = 0; //重置连续休眠次数
-                                    run_task(task);
+                                    run_task(&runtime, task);
                                 }
                             },
                         }
@@ -1297,7 +1297,7 @@ fn timer_work_loop<
                         if let Some(task) = pool.try_pop() {
                             //执行当前工作者任务池中的异步任务，避免定时异步任务占用当前工作者的所有工作时间
                             sleep_count = 0; //重置连续休眠次数
-                            run_task(task);
+                            run_task(&runtime, task);
                         }
                     } else {
                         //当前所有的到期任务已处理完，则退出本次定时异步任务处理
@@ -1379,7 +1379,7 @@ fn timer_work_loop<
             Some(task) => {
                 //有任务，则执行
                 sleep_count = 0; //重置连续休眠次数
-                run_task(task);
+                run_task(&runtime, task);
             },
         }
     }
@@ -1452,7 +1452,7 @@ fn work_loop<
             Some(task) => {
                 //有任务，则执行
                 sleep_count = 0; //重置连续休眠次数
-                run_task(task);
+                run_task(&runtime, task);
             },
         }
     }
@@ -1506,7 +1506,7 @@ fn is_closeable<
 fn run_task<
     O: Default + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
->(task: Arc<AsyncTask<O, P>>) {
+>(runtime: &MultiTaskRuntime<O, P>, task: Arc<AsyncTask<O, P>>) {
     let waker = waker_ref(&task);
     let mut context = Context::from_waker(&*waker);
     if let Some(mut future) = task.get_inner() {
@@ -1514,6 +1514,9 @@ fn run_task<
             //当前未准备好，则恢复异步任务，以保证异步服务后续访问异步任务和异步任务不被提前释放
             task.set_inner(Some(future));
         }
+    } else {
+        //当前异步任务还未唤醒，则继续加入当前异步运行时队列，并等待下次被执行
+        (runtime.0).1.push(task);
     }
 }
 
