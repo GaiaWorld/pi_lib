@@ -974,7 +974,6 @@ pub enum AsyncTimingTask<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTas
 pub struct AsyncTaskTimer<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> {
     producor:   Sender<(usize, AsyncTimingTask<O, P>)>,                             //定时任务生产者
     consumer:   Receiver<(usize, AsyncTimingTask<O, P>)>,                           //定时任务消费者
-    duration:   Instant,                                                            //定时器持续时间
     timer:      Arc<RefCell<LocalTimer<AsyncTimingTask<O, P>, 1000, 60, 60, 24>>>,  //定时器
 }
 
@@ -985,24 +984,20 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
     /// 构建异步任务本地定时器
     pub fn new() -> Self {
         let (producor, consumer) = unbounded();
-        let duration = Instant::now();
         AsyncTaskTimer {
             producor,
             consumer,
-            duration,
-            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O, P>, 1000, 60, 60, 24>::new(1, duration.elapsed().as_millis() as u64))),
+            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O, P>, 1000, 60, 60, 24>::new(1, (minstant::now() as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64))),
         }
     }
 
     /// 构建指定间隔的异步任务本地定时器
     pub fn with_interval(time: usize) -> Self {
         let (producor, consumer) = unbounded();
-        let duration = Instant::now();
         AsyncTaskTimer {
             producor,
             consumer,
-            duration,
-            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O, P>, 1000, 60, 60, 24>::new(time as u64, duration.elapsed().as_millis() as u64))),
+            timer: Arc::new(RefCell::new(LocalTimer::<AsyncTimingTask<O, P>, 1000, 60, 60, 24>::new(time as u64, (minstant::now() as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64))),
         }
     }
 
@@ -1046,7 +1041,7 @@ impl<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> AsyncTaskT
 
     /// 判断当前时间是否有可以弹出的任务，如果有可以弹出的任务，则返回当前时间，否则返回空
     pub fn is_require_pop(&self) -> Option<u64> {
-        let current_time = self.duration.elapsed().as_millis() as u64;
+        let current_time = (minstant::now() as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64;
         if self.timer.borrow().check_sleep(current_time) == 0 {
             Some(current_time)
         } else {
