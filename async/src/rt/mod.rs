@@ -72,10 +72,10 @@ impl Debug for TaskId {
 /// 异步任务
 ///
 pub struct AsyncTask<O: Default + 'static, P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>> {
-    uid:        TaskId,                                     //任务唯一id
-    future:     UnsafeCell<Option<BoxFuture<'static, O>>>,  //异步任务
-    pool:       Arc<P>,                                     //异步任务池
-    context:    Option<UnsafeCell<Box<dyn Any>>>,           //异步任务上下文
+    uid:        TaskId,                                 //任务唯一id
+    future:     Mutex<Option<BoxFuture<'static, O>>>,   //异步任务
+    pool:       Arc<P>,                                 //异步任务池
+    context:    Option<UnsafeCell<Box<dyn Any>>>,       //异步任务上下文
 }
 
 unsafe impl<
@@ -141,7 +141,7 @@ impl<
                future: Option<BoxFuture<'static, O>>) -> AsyncTask<O, P> {
         AsyncTask {
             uid,
-            future: UnsafeCell::new(future),
+            future: Mutex::new(future),
             pool,
             context: None,
         }
@@ -156,7 +156,7 @@ impl<
 
         AsyncTask {
             uid,
-            future: UnsafeCell::new(future),
+            future: Mutex::new(future),
             pool,
             context: Some(UnsafeCell::new(any)),
         }
@@ -170,7 +170,7 @@ impl<
 
         AsyncTask {
             uid: runtime.alloc(),
-            future: UnsafeCell::new(future),
+            future: Mutex::new(future),
             pool: runtime.shared_pool(),
             context: Some(UnsafeCell::new(any)),
         }
@@ -183,12 +183,12 @@ impl<
 
     /// 获取内部任务
     pub fn get_inner(&self) -> Option<BoxFuture<'static, O>> {
-        unsafe { (*self.future.get()).take() }
+        self.future.lock().take()
     }
 
     /// 设置内部任务
     pub fn set_inner(&self, inner: Option<BoxFuture<'static, O>>) {
-        unsafe { *self.future.get() = inner; }
+        *self.future.lock() = inner;
     }
 
     //判断异步任务是否有上下文
