@@ -18,7 +18,7 @@ use futures::future::{FutureExt, BoxFuture};
 use num_cpus;
 
 use r#async::rt::{AsyncRuntime,
-                   multi_thread::{MultiTaskPool, MultiTaskRuntime}};
+                   multi_thread::{MultiTaskRuntimeBuilder, StealableTaskPool, MultiTaskRuntime}};
 use async_file::file::{rename, AsyncFileOptions, AsyncFile};
 
 mod frontend;
@@ -36,8 +36,15 @@ use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, ParseContext,
 ///
 lazy_static! {
     static ref WORKER_RUNTIME: MultiTaskRuntime<()> = {
-        let pool = MultiTaskPool::new("PI-JS-PROXY-GEN-WORKER-RT".to_string(), num_cpus::get_physical(), 8 * 1024 * 1024, 10, None);
-        pool.startup(false)
+        let len = num_cpus::get_physical();
+        let pool = StealableTaskPool::with(len, len);
+        let builder = MultiTaskRuntimeBuilder::new(pool)
+            .thread_prefix("PI-JS-PROXY-GEN-WORKER-RT")
+            .thread_stack_size(8 * 1024 * 1024)
+            .init_worker_size(len)
+            .set_worker_limit(len, len)
+            .set_timeout(10);
+        builder.build()
     };
 }
 
@@ -49,7 +56,7 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
 
     if is_concurrent {
         //并发递归分析，导出函数的序号不保证一致
-        let mut map = WORKER_RUNTIME.map();
+        let mut map = WORKER_RUNTIME.map_reduce(dirs.len());
         for path in dirs {
             let future = async move {
                 match parse_crate(path).await {
@@ -62,10 +69,10 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
                 }
             }.boxed();
 
-            map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+            map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
         }
 
-        match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
+        match map.reduce(true).await {
             Err(e) => Err(e),
             Ok(vec) => {
                 for r in vec {

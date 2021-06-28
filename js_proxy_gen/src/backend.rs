@@ -128,7 +128,7 @@ pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerate
                                                  is_concurrent: bool) -> Result<()> {
     if is_concurrent {
         //并发解析并生成代理源码，导出函数的序号不保证一致
-        let mut map = WORKER_RUNTIME.map();
+        let mut map = WORKER_RUNTIME.map_reduce(import_crates.len());
 
         for import_crate in import_crates {
             let generater_copy = generater.clone();
@@ -146,10 +146,10 @@ pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerate
                 Ok(())
             }.boxed();
 
-            map.join(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+            map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
         }
 
-        match map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone())).await {
+        match map.reduce(true).await {
             Err(e) => Err(e),
             Ok(vec) => {
                 //异步解析所有导入库中的源码
