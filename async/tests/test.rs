@@ -34,13 +34,13 @@ use future_parking_lot::{mutex::{Mutex as FutureMutex, FutureLockable}, rwlock::
 use tokio::runtime::Builder as TokioRtBuilder;
 use async_stream::stream;
 
-use r#async::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+use r#async::{AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
                   lock::{mpmc_deque::MpmcDeque,
                          mpsc_deque::mpsc_deque,
                          spin_lock::SpinLock,
                          mutex_lock::Mutex,
                          rw_lock::RwLock},
-                  rt::{TaskId, AsyncRuntime, AsyncValue, spawn_worker_thread, AsyncPipelineResult,
+                  rt::{TaskId, AsyncTask, AsyncRuntime, AsyncValue, spawn_worker_thread, AsyncPipelineResult,
                        single_thread::{SingleTaskRuntime, SingleTaskRunner},
                        multi_thread::{MultiTaskRuntime, MultiTaskRuntimeBuilder}},
                   local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
@@ -3346,7 +3346,7 @@ fn test_single_timing_task() {
                 },
                 Ok(handle) => {
                     if index % 2 != 0 {
-                        rt.cancel_timing(handle);
+                        // rt.cancel_timing(handle);
                     }
                 },
             }
@@ -3374,7 +3374,7 @@ fn test_single_timing_task() {
     //测试取消定时任务的性能
     let start = Instant::now();
     for handle in handles {
-        rt.cancel_timing(handle);
+        // rt.cancel_timing(handle);
     }
     println!("!!!!!!cancel single timing task ok, time: {:?}", Instant::now() - start);
 
@@ -3397,7 +3397,7 @@ fn test_multi_timing_task() {
                 },
                 Ok(handle) => {
                     if index % 2 != 0 {
-                        rt.cancel_timing(handle);
+                        // rt.cancel_timing(handle);
                     }
                 },
             }
@@ -3425,7 +3425,7 @@ fn test_multi_timing_task() {
     //测试取消定时任务的性能
     let start = Instant::now();
     for handle in handles {
-        rt.cancel_timing(handle);
+        // rt.cancel_timing(handle);
     }
     println!("!!!!!!cancel multi timing task ok, time: {:?}", Instant::now() - start);
 
