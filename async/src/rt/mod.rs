@@ -201,9 +201,7 @@ impl<
         if let Some(context) = &self.context {
             //存在上下文
             let any = unsafe { &*context.get() };
-            let r = <dyn Any>::downcast_ref::<C>(&**any).unwrap();
-
-            return Some(r);
+            return <dyn Any>::downcast_ref::<C>(&**any);
         }
 
         None
@@ -214,9 +212,7 @@ impl<
         if let Some(context) = &self.context {
             //存在上下文
             let any = unsafe { &mut *context.get() };
-            let r = <dyn Any>::downcast_mut::<C>(&mut **any).unwrap();
-
-            return Some(r);
+            return <dyn Any>::downcast_mut::<C>(&mut **any);
         }
 
         None
@@ -697,8 +693,7 @@ pub fn get_local_dict<T: 'static>() -> Option<&'static T> {
         unsafe {
             if let Some(any) = (&*dict.get()).get(&TypeId::of::<T>()) {
                 //指定类型的值存在
-                let r = <dyn Any>::downcast_ref::<T>(&**any).unwrap();
-                Some(r)
+                <dyn Any>::downcast_ref::<T>(&**any)
             } else {
                 //指定类型的值不存在
                 None
@@ -722,8 +717,7 @@ pub fn get_local_dict_mut<T: 'static>() -> Option<&'static mut T> {
         unsafe {
             if let Some(any) = (&mut *dict.get()).get_mut(&TypeId::of::<T>()) {
                 //指定类型的值存在
-                let r = <dyn Any>::downcast_mut::<T>(&mut **any).unwrap();
-                Some(r)
+                <dyn Any>::downcast_mut::<T>(&mut **any)
             } else {
                 //指定类型的值不存在
                 None
