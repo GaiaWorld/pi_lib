@@ -185,12 +185,40 @@ pub fn pi_async_main(args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let args = syn::parse_macro_input!(args as syn::AttributeArgs);
-    parse_async_main(input, args).unwrap_or_else(|e| e.to_compile_error().into())
+    parse_async_macro(input, args, false).unwrap_or_else(|e| e.to_compile_error().into())
+}
+
+///
+/// 测试异步函数的入口
+///
+#[proc_macro_attribute]
+pub fn pi_async_test(args: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = syn::parse_macro_input!(item as syn::ItemFn);
+    if input.sig.asyncness.is_none() {
+        //如果主入口函数不是异步函数，则立即返回错误
+        let msg = "Parse async test failed, reason: the test function require async function";
+        return syn::Error::new_spanned(&input.sig.ident, msg)
+            .to_compile_error()
+            .into();
+    } else {
+        //如果主入口函数是异步函数，则移除异步标记
+        input.sig.asyncness = None;
+    }
+    if !input.sig.inputs.is_empty() {
+        let msg = "Parse async test failed, reason: the test function cannot accept arguments";
+        return syn::Error::new_spanned(&input.sig.ident, msg)
+            .to_compile_error()
+            .into();
+    }
+
+    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    parse_async_macro(input, args, true).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 //分析宏参数
-fn parse_async_main(mut input: syn::ItemFn,
-                    args: AttributeArgs) -> Result<TokenStream, syn::Error> {
+fn parse_async_macro(mut input: syn::ItemFn,
+                     args: AttributeArgs,
+                     is_test: bool) -> Result<TokenStream, syn::Error> {
     let mut config = AsyncRuntimeConfig::new();
     for arg in args {
         match arg {
@@ -391,10 +419,16 @@ fn parse_async_main(mut input: syn::ItemFn,
     };
     input.block.brace_token = brace_token;
 
-    let result = quote! {
-        #input
+    let result = if is_test {
+        quote! {
+            #[test]
+            #input
+        }
+    } else {
+        quote! {
+            #input
+        }
     };
 
     Ok(result.into())
 }
-
