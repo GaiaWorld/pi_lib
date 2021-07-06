@@ -1335,45 +1335,40 @@ fn timer_work_loop<
                     let (is_sleep, lock, condvar) = &*worker_waker;
                     let mut locked = lock.lock();
 
-                    if !is_sleep.load(Ordering::Relaxed) {
-                        //如果当前未休眠，则休眠
-                        is_sleep.store(true, Ordering::SeqCst);
+                    //设置当前为休眠状态
+                    is_sleep.store(true, Ordering::SeqCst);
 
-                        //获取休眠的实际时长
-                        let diff_time = ((minstant::now() - timer_run_millis) as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64; //获取定时器运行时长
-                        let real_timeout = if timer.lock().len() == 0 {
-                            //当前定时器没有未到期的任务，则休眠指定时长
-                            sleep_timeout
+                    //获取休眠的实际时长
+                    let diff_time = ((minstant::now() - timer_run_millis) as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64; //获取定时器运行时长
+                    let real_timeout = if timer.lock().len() == 0 {
+                        //当前定时器没有未到期的任务，则休眠指定时长
+                        sleep_timeout
+                    } else {
+                        //当前定时器还有未到期的任务，则计算需要休眠的时长
+                        if diff_time >= timer_interval {
+                            //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
+                            continue;
                         } else {
-                            //当前定时器还有未到期的任务，则计算需要休眠的时长
-                            if diff_time > timer_interval {
-                                //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
-                                continue;
-                            } else if diff_time < timer_interval {
-                                //定时器内部时间与当前时间差距不大，则休眠差值时间
-                                timer_interval - diff_time
-                            } else {
-                                //定时器内部时间与当前时间相等，则休眠与定时器间隔相同的时长
-                                timer_interval
-                            }
-                        };
-
-                        //记录待唤醒的工作者唤醒器，用于有新任务时唤醒对应的工作者
-                        (runtime.0).4.push(worker_waker.clone());
-
-                        //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
-                        if condvar
-                            .wait_for(
-                                &mut locked,
-                                Duration::from_millis(real_timeout),
-                            )
-                            .timed_out()
-                        {
-                            //条件超时唤醒，则设置状态为未休眠
-                            is_sleep.store(false, Ordering::SeqCst);
-                            //记录连续休眠次数，因为任务导致的唤醒不会计数
-                            sleep_count += 1;
+                            //定时器内部时间与当前时间差距不大，则休眠差值时间
+                            timer_interval - diff_time
                         }
+                    };
+
+                    //记录待唤醒的工作者唤醒器，用于有新任务时唤醒对应的工作者
+                    (runtime.0).4.push(worker_waker.clone());
+
+                    //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
+                    if condvar
+                        .wait_for(
+                            &mut locked,
+                            Duration::from_millis(real_timeout),
+                        )
+                        .timed_out()
+                    {
+                        //条件超时唤醒，则设置状态为未休眠
+                        is_sleep.store(false, Ordering::SeqCst);
+                        //记录连续休眠次数，因为任务导致的唤醒不会计数
+                        sleep_count += 1;
                     }
                 }
             },
@@ -1427,26 +1422,24 @@ fn work_loop<
                     let (is_sleep, lock, condvar) = &*worker_waker;
                     let mut locked = lock.lock();
 
-                    if !is_sleep.load(Ordering::Relaxed) {
-                        //如果当前未休眠，则休眠
-                        is_sleep.store(true, Ordering::SeqCst);
+                    //设置当前为休眠状态
+                    is_sleep.store(true, Ordering::SeqCst);
 
-                        //记录待唤醒的工作者唤醒器，用于有新任务时唤醒对应的工作者
-                        (runtime.0).4.push(worker_waker.clone());
+                    //记录待唤醒的工作者唤醒器，用于有新任务时唤醒对应的工作者
+                    (runtime.0).4.push(worker_waker.clone());
 
-                        //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
-                        if condvar
-                            .wait_for(
-                                &mut locked,
-                                Duration::from_millis(sleep_timeout),
-                            )
-                            .timed_out()
-                        {
-                            //条件超时唤醒，则设置状态为未休眠
-                            is_sleep.store(false, Ordering::SeqCst);
-                            //记录连续休眠次数，因为任务导致的唤醒不会计数
-                            sleep_count += 1;
-                        }
+                    //让当前工作者休眠，等待有任务时被唤醒或超时后自动唤醒
+                    if condvar
+                        .wait_for(
+                            &mut locked,
+                            Duration::from_millis(sleep_timeout),
+                        )
+                        .timed_out()
+                    {
+                        //条件超时唤醒，则设置状态为未休眠
+                        is_sleep.store(false, Ordering::SeqCst);
+                        //记录连续休眠次数，因为任务导致的唤醒不会计数
+                        sleep_count += 1;
                     }
                 }
             },
