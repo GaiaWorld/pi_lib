@@ -1346,12 +1346,15 @@ fn timer_work_loop<
                             sleep_timeout
                         } else {
                             //当前定时器还有未到期的任务，则计算需要休眠的时长
-                            if diff_time >= timer_interval {
+                            if diff_time > timer_interval {
                                 //定时器内部时间与当前时间差距过大，则忽略休眠，并继续工作
                                 continue;
-                            } else {
+                            } else if diff_time < timer_interval {
                                 //定时器内部时间与当前时间差距不大，则休眠差值时间
                                 timer_interval - diff_time
+                            } else {
+                                //定时器内部时间与当前时间相等，则休眠与定时器间隔相同的时长
+                                timer_interval
                             }
                         };
 
