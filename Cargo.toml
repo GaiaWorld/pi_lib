@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "async",
+  "async_macro",
   "adler32",
   "base58",
   "atom",
