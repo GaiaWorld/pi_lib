@@ -4,28 +4,31 @@
 //！2、然后再不断尝试大于数组的素数p2，保证临时列表的数不冲突，在结果列表中记录该数的位置。如果p2超过p1，则将p1增加，重新尝试。
 //！在65535范围内，有6542个素数。2*3*5*7*11*13*17*19*23*29就超过2**32.
 //! 测试get性能大概StaticMap为5ns, 标准的HashMap大概为12ns
-//! 测试StaticMap::new的性能， 30个kv为700ns，100个kv为2700~5200ns，500个kv大概为1ms，
+//! 测试StaticMap::new的性能， 30个kv为700ns，100个kv为2700~5200ns，500个kv大概为1ms，1000个kv大概为8~13ms，
 //! 数组长度上， 30个kv为80~100，100个kv为400，500个kv大概为2400~3000
 
 #![feature(test)]
 extern crate test;
 
-extern crate invalid;
+extern crate core;
+
+extern crate null;
 
 use std::mem;
+use core::ops::{Index, IndexMut};
 
-use invalid::Invalid;
+use null::Null;
 
 /// 静态hash表，要求k一定为不重复的usize
-pub struct StaticMap<V: Invalid> {
-    /// 值数组，空位为Invalid的V
+pub struct StaticMap<V: Null> {
+    /// 值数组，空位为Null的V
     array: Vec<V>,
     /// 第一个素数
     p1: usize,
     /// 第二个素数
     p2: usize,
 }
-impl<V: Invalid> StaticMap<V> {
+impl<V: Null> StaticMap<V> {
     /// 用指定的kv键创建静态hash表
     pub fn new<F>(mut arr: Vec<(usize, V)>, invalid_func: F) -> Self where 
     F: Fn() -> V {
@@ -100,7 +103,7 @@ impl<V: Invalid> StaticMap<V> {
     /// 获得指定键的只读引用
     pub fn get(&self, k: usize) -> &V {
         let r = &self.array[k % self.p1];
-        if r.is_invalid() {
+        if r.is_null() {
             &self.array[self.p1 + k % self.p2]
         }else{
             r
@@ -109,11 +112,24 @@ impl<V: Invalid> StaticMap<V> {
     /// 获得指定键的可写引用
     pub fn get_mut(&mut self, k: usize) -> &mut V {
         let i = k % self.p1;
-        if self.array[i].is_invalid() {
+        if self.array[i].is_null() {
             &mut self.array[self.p1 + k % self.p2]
         }else{
             &mut self.array[i]
         }
+    }
+}
+impl<V: Null> Index<usize> for StaticMap<V> {
+    type Output = V;
+
+    fn index(&self, key: usize) -> &V {
+        self.get(key)
+    }
+}
+
+impl<V: Null> IndexMut<usize> for StaticMap<V> {
+    fn index_mut(&mut self, key: usize) -> &mut V {
+        self.get_mut(key)
     }
 }
 
@@ -170,16 +186,16 @@ mod test_mod {
         let map: StaticMap<usize> = StaticMap::new(arr.clone(), || {usize::MAX});
         println!("map len:{}", map.len());
         for (k, v) in arr {
-            let n = map.get(k);
-            assert_eq!(*n, v);
+            let n = map[k];
+            assert_eq!(n, v);
         }
     }
 
     #[bench]
     fn bench_make(b: &mut Bencher) {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(2222222);
+        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222222);
         let mut arr = Vec::new();
-        for _ in 0..500 {
+        for _ in 0..1000 {
             let k = rng.next_u32() as usize;
             arr.push((k, k + 1));
         }

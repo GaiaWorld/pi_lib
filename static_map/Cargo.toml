@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
-invalid = {path="../invalid"}
+null = {path="../null"}
 
 [dev-dependencies]
 pcg_rand = "0.13"
