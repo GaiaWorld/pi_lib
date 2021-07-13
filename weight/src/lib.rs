@@ -131,11 +131,11 @@ impl<T> Ord for WeightItem<T> {
 }
 
 impl<T> WeightItem<T> {
-    pub fn new(weight: usize, item: T) -> Self {
+    pub fn new(weight: usize, el: T) -> Self {
         WeightItem {
             weight,
             amount: weight,
-            el: item,
+            el,
         }
     }
     pub fn weight(&self) -> usize {
@@ -156,7 +156,7 @@ pub trait HeapAction<T> {
     /// 修改指定位置元素的权重，并维护权重统计
     fn modify_weight(&mut self, index: usize, weight: usize) -> Option<usize>;
     /// 放入元素并维护权重统计
-    fn push_weight(&mut self, item: WeightItem<T>);
+    fn push_weight(&mut self, weight: usize, el: T);
 }
 
 impl<T: fmt::Debug> HeapAction<T> for ExtHeap<WeightItem<T>> {
@@ -178,18 +178,24 @@ impl<T: fmt::Debug> HeapAction<T> for ExtHeap<WeightItem<T>> {
 
     fn remove_index(&mut self, index: usize) -> WeightItem<T> {
         if self.len() == 1 {
-            return self.remove(index, &mut |_, _| {})
+            return self.remove(index, &mut(), empty)
         }
         let mut cur = self.len() - 1;
         // 先修正最后一个节点所在叶到根路径的全权重值
         let weight = self.as_slice()[cur].weight;
         fix_parent_weight(self, cur, |el| el.amount -= weight);
-        let item = self.remove(index, &mut |_, loc| {
-            *(&mut cur) = loc;
-        });
+        if index == cur {
+            return self.remove(index, &mut(), empty)
+        }
+        fn set_index<T>(c: &mut usize, _: & mut [WeightItem<T>], loc: usize) {
+            *c = loc;
+        }
+        let item = self.remove(index, &mut cur, set_index);
         // 如果调整的最后一个节点放到的不是当前位置，则修复叶到根的修复总权重值
         if cur > index {
             fix_weight(self, cur, index);
+        }else {
+            fix_index_weight(self, index);
         }
         // 向上递归修改每个父节点的总权重值
         if index > 0 {
@@ -212,7 +218,7 @@ impl<T: fmt::Debug> HeapAction<T> for ExtHeap<WeightItem<T>> {
             // 节点向下落
             el.weight = weight;
             el.amount -= old_weight - weight;
-            let cur = self.repair(index, weight.cmp(&old_weight), &mut |_, _| {});
+            let cur = self.repair(index, Ordering::Less, &mut(), empty);
             if cur > index {
                 fix_weight(self, cur, index);
             }
@@ -225,7 +231,7 @@ impl<T: fmt::Debug> HeapAction<T> for ExtHeap<WeightItem<T>> {
             // 节点向上升
             el.weight = weight;
             el.amount += weight - old_weight;
-            let cur = self.repair(index, weight.cmp(&old_weight), &mut |_, _| {});
+            let cur = self.repair(index, Ordering::Greater, &mut(), empty);
             // 如果放到的不是最后一个位置，则修复叶到根的修复总权重值
             if index > cur {
                 fix_weight(self, index, cur);
@@ -240,10 +246,9 @@ impl<T: fmt::Debug> HeapAction<T> for ExtHeap<WeightItem<T>> {
         }
     }
 
-    fn push_weight(&mut self, item: WeightItem<T>) {
+    fn push_weight(&mut self, weight: usize, el: T) {
         let old = self.len();
-        let weight = item.weight;
-        let cur = self.push(item, &mut |_, _| {});
+        let cur = self.push(WeightItem::new(weight, el), &mut(), empty);
         // 如果放到的不是最后一个位置，则修复叶到根的修复总权重值
         if old > cur {
             fix_weight(self, old, cur);
@@ -277,17 +282,7 @@ fn fix_weight<T>(heap: &mut WeightHeap<T>, mut child: usize, end: usize) {
         el.amount = el.weight + w;
     } else {
         // 最后一层和倒数第二层，可能没有左右子节点
-        let left = child + child + 1;
-        let mut w = 0;
-        if left < len {
-            w = heap.as_slice()[left].amount;
-            let right = left + 1;
-            if right < len {
-                w += heap.as_slice()[right].amount;
-            }
-        }
-        let el = unsafe { heap.get_unchecked_mut(child) };
-        el.amount = el.weight + w;
+        fix_index_weight(heap, child);
     }
     if child == 0 {
         return;
@@ -305,6 +300,20 @@ fn fix_weight<T>(heap: &mut WeightHeap<T>, mut child: usize, end: usize) {
         child = (child - 1) / 2;
     }
 }
+//修复指定位置的节点的总权重值，可能没有左右子节点
+fn fix_index_weight<T>(heap: &mut WeightHeap<T>, index: usize) {
+    let left = index + index + 1;
+    let mut w = 0;
+    if left < heap.len() {
+        w = heap.as_slice()[left].amount;
+        let right = left + 1;
+        if right < heap.len() {
+            w += heap.as_slice()[right].amount;
+        }
+    }
+    let el = unsafe { heap.get_unchecked_mut(index) };
+    el.amount = el.weight + w;
+}
 // 向上递归修改每个父节点的总权重值
 fn fix_parent_weight<T>(
     heap: &mut WeightHeap<T>,
@@ -320,6 +329,8 @@ fn fix_parent_weight<T>(
     }
 }
 
+fn empty<T, A>(_arg: &mut A, _arr: &mut [T], _index: usize) {}
+
 #[test]
 fn test() {
     use crate::*;
@@ -327,56 +338,61 @@ fn test() {
     extern crate rand_core;
 
     use rand_core::{RngCore,SeedableRng};
-    let mut rng = pcg_rand::Pcg32::seed_from_u64(12388843);
-
+    let seed = 12843;
+    let mut rng = pcg_rand::Pcg32::seed_from_u64(seed);
+    println!("start seed:{}", seed);
     let mut heap: WeightHeap<usize> = WeightHeap::new();
     // let vec = vec![1, 10, 6, 5, 9, 4, 4, 4, 3, 7, 100, 90, 2, 15, 8, 22];
     let mut vec = Vec::new();
-    for _ in 0..100 {
+    for _ in 0..1000 {
         vec.push(rng.next_u32() as usize);
     }
     let mut sum = 0;
     // 测试添加权重
     for i in vec.clone() {
         sum += i;
-        heap.push_weight(WeightItem::new(i, i));
+        heap.push_weight(i, i);
         assert_eq!(heap.peek().unwrap().amount, sum);
     }
-    check(&heap);
+    check(&heap, false);
     println!("push_weight Ok");
     // 测试调整权重
     for i in 0..heap.len() {
         let old = heap.as_slice()[heap.len() - i - 1].weight;
         heap.modify_weight(heap.len() - i - 1, old + i + 1);
-        check(&heap);
+        check(&heap, false);
     }
     println!("modify_weight Ok");
     // 测试删除权重
     while heap.len() > 0 {
         heap.remove_index(heap.len() / 2);
-        check(&heap);
+        check(&heap, false);
     }
     println!("remove_index Ok");
     // 测试根据权重弹出元素
     let mut sum = 0;
+    let mut c = 0;
     for i in vec.clone() {
         sum += i;
-        heap.push_weight(WeightItem::new(i, i));
+        heap.push_weight(i, c);
         assert_eq!(heap.peek().unwrap().amount, sum);
+        c += 1;
     }
-    check(&heap);
+    check(&heap, false);
     for i in 0..heap.len() {
-        sum += i;
         let amount = heap.peek().unwrap().amount;
-        let index = heap.find_weight(amount - 1);
-        heap.remove_index(index);
-        println!("pop_weight {:?}, index: {}", amount /2, index);
-        check(&heap);
+        let index = heap.find_weight(rng.next_u32() as usize % amount);
+        let r = heap.remove_index(index);
+        //println!("pop_weight {:?}, weight: {}, index: {}", r, amount /2, index);
+        check(&heap, false);
     }
+    println!("pop_weight Ok");
 }
 #[cfg(test)]
-fn check(heap: &WeightHeap<usize>) {
-    //println!("{:?}", heap);
+fn check(heap: &WeightHeap<usize>, show: bool) {
+    if show {
+        println!("{:?}", heap);
+    }
     let arr = heap.as_slice();
     for i in 0..arr.len() {
         let left = i + i + 1;

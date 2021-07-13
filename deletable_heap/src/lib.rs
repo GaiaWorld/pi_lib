@@ -19,20 +19,23 @@ use index_slotmap::*;
 use ext_heap::*;
 
 /// 带反向位置索引键的条目
-pub struct KeyItem<T: Ord> {
-    key: DefaultKey,
+pub struct KeyItem<T> {
     pub el: T,
+    key: DefaultKey,
 }
-impl<T: Ord + fmt::Debug> fmt::Debug for KeyItem<T> {
+impl<T: fmt::Debug> fmt::Debug for KeyItem<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("KeyItem").field(&self.key).field(&self.el).finish()
+        f.debug_struct("KeyItem")
+            .field("el", &self.el)
+            .field("key", &self.key)
+            .finish()
     }
 }
-impl<T: Ord + Clone> Clone for KeyItem<T> {
+impl<T: Clone> Clone for KeyItem<T> {
     fn clone(&self) -> Self {
         KeyItem{
-            key: self.key.clone(),
             el: self.el.clone(),
+            key: self.key.clone(),
         }
     }
 }
@@ -55,11 +58,11 @@ impl<T: Ord> Ord for KeyItem<T> {
     }
 }
 
-impl<T: Ord> KeyItem<T> {
-    pub fn new(key: DefaultKey, item: T) -> Self {
+impl<T> KeyItem<T> {
+    pub fn new(el: T, key: DefaultKey) -> Self {
         KeyItem{
+            el,
             key,
-            el: item,
         }
     }
     pub fn get_key(&self) -> &DefaultKey {
@@ -75,52 +78,44 @@ pub trait HeapAction<T: Ord, I> {
     /// 移除指定位置的元素并维护反向位置索引
     fn remove_index(&mut self, index: usize, slotmap: &mut IndexSlotMap<I>) -> KeyItem<T>;
     /// 修复指定位置的元素并维护反向位置索引
-    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>);
+    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>) -> usize;
     /// 放入元素并维护反向位置索引
-    fn push_index(&mut self, item: KeyItem<T>, slotmap: &mut IndexSlotMap<I>);
+    fn push_index(&mut self, item: KeyItem<T>, slotmap: &mut IndexSlotMap<I>) -> usize;
 }
 
-impl<T: Ord + fmt::Debug, I> HeapAction<T, I> for ExtHeap<KeyItem<T>> {
+impl<T: Ord, I> HeapAction<T, I> for ExtHeap<KeyItem<T>> {
     fn pop_index(&mut self, slotmap: &mut IndexSlotMap<I>) -> Option<KeyItem<T>> {
-        self.pop(&mut |arr, loc|{
-            let i = &arr[loc];
-            slotmap[i.key].index = loc;
-        }).map(|item| {
-            slotmap.remove(item.key);
-            item
-        })
+        match self.pop(slotmap, set_index) {
+            Some(item) => {
+                slotmap.remove(item.key);
+                Some(item)
+            }
+            _ => None
+        }
     }
 
     fn remove_index(&mut self, index: usize, slotmap: &mut IndexSlotMap<I>) -> KeyItem<T> {
-        let item = self.remove(index, &mut |arr, loc|{
-            let i = &arr[loc];
-            slotmap[i.key].index = loc;
-        });
+        let item = self.remove(index, slotmap, set_index);
         slotmap.remove(item.key);
         item
     }
 
-    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>) {
-        self.repair(index, ord, &mut |arr, loc|{
-            let i = &arr[loc];
-            slotmap[i.key].index = loc;
-        });
+    fn repair_index(&mut self, index: usize, ord: Ordering, slotmap: &mut IndexSlotMap<I>) -> usize {
+        self.repair(index, ord, slotmap, set_index)
     }
 
-    fn push_index(&mut self, item: KeyItem<T>, slotmap: &mut IndexSlotMap<I>) {
-        println!("push_index: {:?}", item);
-        self.push(item, &mut |arr, loc|{
-            let i = &arr[loc];
-            slotmap[i.key].index = loc;
-            println!("push_index cb: {:?}", (i, loc));
-        });
+    fn push_index(&mut self, item: KeyItem<T>, slotmap: &mut IndexSlotMap<I>) -> usize {
+        self.push(item, slotmap, set_index)
     }
 }
-
-pub fn push_item<T:Ord + fmt::Debug, I>(heap: &mut DeletableHeap<T>, el: T, index_value: I, slotmap: &mut IndexSlotMap<I>) -> DefaultKey {
-    let k = slotmap.insert(IndexEntry{index: heap.len(), value: index_value});
-    heap.push_index(KeyItem{key: k, el}, slotmap);
-    k
+pub fn set_index<I, T: Ord>(slotmap: &mut IndexSlotMap<I>, arr: &mut [KeyItem<T>], loc: usize) {
+    let i = &arr[loc];
+    slotmap[i.key].index = loc;
+}
+pub fn push_item<T:Ord, I>(heap: &mut DeletableHeap<T>, el: T, index_value: I, slotmap: &mut IndexSlotMap<I>) -> DefaultKey {
+    let key = slotmap.insert(IndexEntry{index: heap.len(), value: index_value});
+    heap.push_index(KeyItem{el, key}, slotmap);
+    key
 }
 
 #[test]

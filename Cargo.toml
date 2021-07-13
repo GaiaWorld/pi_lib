@@ -60,4 +60,6 @@ members = [
   "deletable_heap",
   "ext_heap",
   "weight",
+  "wy_rng",
+  "wy_hash",
 ]
