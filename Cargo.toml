@@ -2,6 +2,7 @@
 members = [
   "async",
   "async_macro",
+  "async_buffer",
   "adler32",
   "base58",
   "atom",
