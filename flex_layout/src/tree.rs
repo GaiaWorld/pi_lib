@@ -41,6 +41,7 @@ type IdTree = IdTree1<usize>;
 type Node = Node1<usize>;
 
 pub fn set_display(id: usize, v: Display, dirty: &mut LayerDirty, tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output = INode>, rect_style_map: &impl Index<usize, Output = RectStyle>, other_style_map: &impl Index<usize, Output = OtherStyle>,) {
+	debug_println!("set_display=====================, id:{}", id);
 	let n = &tree[id];
 	let i_node = &mut i_nodes[id];
 	let rect_style = &rect_style_map[id];
@@ -168,6 +169,7 @@ pub fn set_self_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output =
         // 如果是隐藏
         return;
     }
+	debug_println!("set_self_style=====================, id:{}", id);
 	let n = &tree[id];
 	let i_node = &mut i_nodes[id];
     let parent = set_self_dirty(dirty, id, n, i_node);
@@ -182,6 +184,7 @@ pub fn set_children_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Outp
         // 如果是隐藏
         return;
     }
+	debug_println!("set_children_style=====================, id:{}", id);
 	mark_children_dirty(tree, i_nodes, dirty, id)
 }
 // 设置一般样式， 设父节点脏
@@ -194,6 +197,7 @@ pub fn set_normal_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output
 	let i_node = &i_nodes[id];
     let parent = n.parent();
     let state = i_node.state;
+	debug_println!("set_normal_style=====================, id:{} state:{:?}", id, i_node.state);
     set_parent(i_nodes, tree, dirty, style, state, parent, true)
 }
 // 设置区域 pos margin size
@@ -272,13 +276,13 @@ fn calc_size_defined(style: &RectStyle, n: &mut INode) -> bool {
 // 设置节点自身脏, 如果节点是size=auto并且不是绝对定位, 则返回父节点id，需要继续设置其父节点脏
 fn set_self_dirty(dirty: &mut LayerDirty, id: usize, n: &Node, i_node: &mut INode) -> usize {
 	debug_println!("set_self_dirty, id: {}, self_dirty:{}, children_dirty:{:?}, layer:{}", id, i_node.state.self_dirty(), i_node.state.children_dirty(), n.layer());
-	if !i_node.state.self_dirty() {
+	if !i_node.state.vnode() && !i_node.state.self_dirty() {
 		i_node.state.self_dirty_true();
 		if n.layer() > 0 {
 			if !i_node.state.children_dirty() {
 				dirty.mark(id, n.layer());
 			}
-			if i_node.state.vnode() || !(i_node.state.size_defined() || i_node.state.abs()) {
+			if i_node.state.vnode() || !(i_node.state.size_defined() && i_node.state.abs()) {
 				return n.parent();
 			}
 		}
@@ -304,18 +308,25 @@ fn set_self_dirty(dirty: &mut LayerDirty, id: usize, n: &Node, i_node: &mut INod
 pub fn mark_children_dirty(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output = INode>, dirty: &mut LayerDirty, mut id: usize) {
     while id > 0 {
 		let i_node = &mut i_nodes[id];
+
+		debug_println!("mark_children_dirty, id:{}, self_dirty:{}, size_defined:{}, abs:{}, vnode:{}, children_dirty: {}, parent:{}", id, i_node.state.self_dirty(),i_node.state.size_defined(), i_node.state.abs(), i_node.state.vnode(), i_node.state.children_dirty(), tree[id].parent());
+
         if i_node.state.children_dirty() {
             break;
 		}
 		let n = &tree[id];
-		debug_println!("mark_children_dirty, id:{}, self_dirty:{}", id, i_node.state.self_dirty());
-		i_node.state.children_dirty_true();
-		if !i_node.state.self_dirty() {
-			dirty.mark(id, n.layer());
+		
+		if !i_node.state.vnode() {
+			i_node.state.children_dirty_true();
+			if !i_node.state.self_dirty() {
+				dirty.mark(id, n.layer());
+			}
 		}
-        if (i_node.state.size_defined() || i_node.state.abs()) && !i_node.state.vnode() {
-            break;
-        }
-        id = n.parent()
+		
+		if i_node.state.vnode() || !(i_node.state.size_defined() && i_node.state.abs()) {
+			id = n.parent()
+		} else {
+			break;
+		}
     }
 }
