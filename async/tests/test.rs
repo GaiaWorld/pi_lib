@@ -1,3 +1,4 @@
+#![feature(async_stream)]
 
 extern crate futures;
 extern crate crossbeam_channel;
@@ -21,8 +22,8 @@ use std::cell::{UnsafeCell, RefCell};
 use std::task::{Context, Poll, Waker};
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
-use futures::{future::{FutureExt, BoxFuture},
-              task::{ArcWake, waker_ref},
+use futures::{pin_mut, stream::{Stream, StreamExt, BoxStream}, future::{FutureExt, BoxFuture},
+              task::{SpawnExt, ArcWake, waker_ref},
               lock::Mutex as FuturesMutex, executor::LocalPool};
 use parking_lot::{Mutex as ParkingLotMutex, Condvar};
 use crossbeam_channel::{Sender, unbounded};
@@ -31,21 +32,23 @@ use dashmap::DashMap;
 use rand::prelude::*;
 use future_parking_lot::{mutex::{Mutex as FutureMutex, FutureLockable}, rwlock::{RwLock as FutureRwLock, FutureReadable, FutureWriteable}};
 use tokio::runtime::Builder as TokioRtBuilder;
+use async_stream::stream;
 
-use r#async::{AsyncTask, AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
-              lock::{mpmc_deque::MpmcDeque,
-                     mpsc_deque::mpsc_deque,
-                     spin_lock::SpinLock,
-                     mutex_lock::Mutex,
-                     rw_lock::RwLock},
-              rt::{TaskId, AsyncRuntime, AsyncValue, spawn_worker_thread,
-                   single_thread::{SingleTask, SingleTaskRuntime, SingleTaskRunner},
-                   multi_thread::{MultiTask, MultiTasks, MultiTaskRuntime, MultiTaskPool}},
-              local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
-use futures::task::SpawnExt;
+use r#async::{AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
+                  lock::{mpmc_deque::MpmcDeque,
+                         mpsc_deque::mpsc_deque,
+                         spin_lock::SpinLock,
+                         mutex_lock::Mutex,
+                         rw_lock::RwLock},
+                  rt::{TaskId, AsyncTask, AsyncRuntime, AsyncValue, spawn_worker_thread, AsyncPipelineResult,
+                       single_thread::{SingleTaskRuntime, SingleTaskRunner},
+                       multi_thread::{MultiTaskRuntime, MultiTaskRuntimeBuilder}},
+                  local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
 
 #[test]
 fn test_other_rt() {
+    use std::mem;
+
     let mut pool = LocalPool::new();
     let spawner = pool.spawner();
 
@@ -63,26 +66,222 @@ fn test_other_rt() {
     }
     pool.run();
 
-    let runtime = TokioRtBuilder::new()
-        .threaded_scheduler()
-        .core_threads(8)
-        .thread_stack_size(1024 * 1024)
-        .build()
-        .unwrap();
-    {
-        let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
-        let start = Instant::now();
-        for _ in 0..10000000 {
-            let counter_copy = counter.clone();
-            let obj = Box::new(async move {
-                counter_copy.0.fetch_add(1, Ordering::Relaxed);
-            }).boxed();
-            runtime.spawn(obj);
-        }
-        println!("!!!!!!spawn time: {:?}", Instant::now() - start);
-    }
+    thread::sleep(Duration::from_millis(10000));
 
-    thread::sleep(Duration::from_millis(500000));
+    let runtime = Arc::new(TokioRtBuilder::new_current_thread()
+        .enable_time()
+        .thread_stack_size(2 * 1024 * 1024)
+        .build()
+        .unwrap());
+    let rt0 = runtime.clone();
+    let rt1 = runtime.clone();
+    let rt2 = runtime.clone();
+    let rt3 = runtime.clone();
+
+    let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter0 = counter.clone();
+    let counter1 = counter.clone();
+    let counter2 = counter.clone();
+    let counter3 = counter.clone();
+    mem::drop(counter);
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let counter_copy = counter0.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt0.block_on(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let counter_copy = counter1.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt1.block_on(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let counter_copy = counter2.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt2.block_on(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let counter_copy = counter3.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt3.block_on(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::sleep(Duration::from_millis(10000));
+
+    let runtime = Arc::new(TokioRtBuilder::new_multi_thread()
+        .enable_all()
+        .worker_threads(8)
+        .thread_stack_size(2 * 1024 * 1024)
+        .build()
+        .unwrap());
+    let rt0 = runtime.clone();
+    let rt1 = runtime.clone();
+    let rt2 = runtime.clone();
+    let rt3 = runtime.clone();
+    let rt4 = runtime.clone();
+    let rt5 = runtime.clone();
+    let rt6 = runtime.clone();
+    let rt7 = runtime.clone();
+
+    let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter0 = counter.clone();
+    let counter1 = counter.clone();
+    let counter2 = counter.clone();
+    let counter3 = counter.clone();
+    let counter4 = counter.clone();
+    let counter5 = counter.clone();
+    let counter6 = counter.clone();
+    let counter7 = counter.clone();
+    mem::drop(counter);
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter0.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt0.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter1.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt1.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter2.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt2.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter3.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt3.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter4.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt4.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter5.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt5.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter6.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt6.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::spawn(move || {
+        {
+            let start = Instant::now();
+            for _ in 0..2000000 {
+                let counter_copy = counter7.clone();
+                let obj = Box::new(async move {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }).boxed();
+                rt7.spawn(obj);
+            }
+            println!("!!!!!!spawn time: {:?}", Instant::now() - start);
+        }
+    });
+
+    thread::sleep(Duration::from_millis(1000000000));
 }
 
 #[test]
@@ -128,6 +327,98 @@ fn test_thread_local() {
     TMP_THREAD_LOCAL.with(move |local| {
         println!("!!!!!!local: {:?}", local.load(Ordering::Relaxed));
     });
+}
+
+struct TestStream(usize, usize);
+
+unsafe impl Send for TestStream {}
+
+impl Stream for TestStream {
+    type Item = usize;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if self.1 >= 0xffffffff {
+            //数值过大，则停止生成新的Fibonacci数
+            return Poll::Ready(None);
+        }
+
+        //生成新的Fibonacci数，并更新当前状态
+        let value = self.0 + self.1;
+        self.0 = self.1;
+        self.1 = value;
+
+        Poll::Ready(Some(value))
+    }
+}
+
+#[test]
+fn test_async_stream() {
+    let runner = SingleTaskRunner::default();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+    });
+
+    let rt_copy = rt.clone();
+    rt.spawn(rt.alloc(), async move {
+        let s = new_stream(3);
+
+        pin_mut!(s);
+
+        while let Some(value) = s.next().await {
+            rt_copy.wait_timeout(1000).await;
+            println!("got {}", value);
+        }
+
+        let mut s = new_boxed_stream(11);
+        let mut input = Vec::new();
+        let mut s = rt_copy.pipeline(s, move |n| {
+            if n < 10 {
+                input.push(n);
+                AsyncPipelineResult::Filtered((n * 1000).to_string())
+            } else {
+                println!("input: {:?}", input);
+                AsyncPipelineResult::Disconnect
+            }
+        });
+
+        while let Some(value) = s.next().await {
+            rt_copy.wait_timeout(1000).await;
+            println!("got {:?}", value);
+        }
+
+        let mut s = TestStream(0, 1);
+        while let Some(value) = s.next().await {
+            println!("got {}", value);
+        }
+    });
+
+    thread::sleep(Duration::from_millis(1000000000));
+}
+
+fn new_stream(len: usize) -> impl Stream<Item = usize> {
+    stream! {
+        for i in 0..len {
+            yield i;
+        }
+    }
+}
+
+fn new_boxed_stream(len: usize) -> BoxStream<'static, usize> {
+    let stream = stream! {
+        for i in 0..len {
+            yield i;
+        }
+    };
+
+    stream.boxed()
 }
 
 #[test]
@@ -978,7 +1269,7 @@ fn test_atomic() {
 //future_parking_lot的Mutex无法在临界区内执行异步任务等待
 #[test]
 fn test_future_mutex() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -991,11 +1282,11 @@ fn test_future_mutex() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     let rt_ = rt.clone();
     let rt0_ = rt0.clone();
@@ -1070,7 +1361,7 @@ fn test_future_mutex() {
 
 #[test]
 fn test_future_rwlock() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -1083,11 +1374,11 @@ fn test_future_rwlock() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(true);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(true);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     let start = Instant::now();
     let shared = Arc::new(FutureRwLock::new(Counter(0, start)));
@@ -1144,7 +1435,7 @@ fn test_future_rwlock() {
 
 #[test]
 fn test_futures_mutex() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -1157,11 +1448,11 @@ fn test_futures_mutex() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     let rt_ = rt.clone();
     let rt0_ = rt0.clone();
@@ -1298,11 +1589,15 @@ fn test_futures_mutex() {
 
 #[test]
 fn test_spin_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt1 = pool.build();
 
     {
         let rt0_0 = rt0.clone();
@@ -1445,7 +1740,7 @@ fn test_spin_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(35000));
+    thread::sleep(Duration::from_millis(50000));
 
     //锁跨临界区传递，且不需要等待此跨临界区的锁，不会产生deadlock
     {
@@ -1478,7 +1773,8 @@ fn test_spin_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(350000));
+    thread::sleep(Duration::from_millis(50000));
+    println!("!!!!!!valid test finish");
 
     //锁不跨临界区传递，但临界区内需要执行异步任务等待，会产生deadlock
     {
@@ -1519,7 +1815,7 @@ fn test_spin_lock() {
 
 #[test]
 fn test_spin_lock_bench() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -1532,11 +1828,11 @@ fn test_spin_lock_bench() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     println!("!!!!!!Start lock test for single thread");
     let start = Instant::now();
@@ -1602,11 +1898,15 @@ fn test_spin_lock_bench() {
 
 #[test]
 fn test_mutex_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt1 = pool.build();
 
     {
         let rt0_0 = rt0.clone();
@@ -1739,7 +2039,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(30000));
+    thread::sleep(Duration::from_millis(50000));
 
     {
         let start = Instant::now();
@@ -1773,7 +2073,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(60000));
+    thread::sleep(Duration::from_millis(30000));
 
     //锁不跨临界区传递，不会产生deadlock
     {
@@ -1818,7 +2118,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(30000));
+    thread::sleep(Duration::from_millis(10000));
 
     //锁跨临界区传递，且不需要等待此跨临界区的锁，不会产生deadlock
     {
@@ -1851,7 +2151,7 @@ fn test_mutex_lock() {
             });
         }
     }
-    thread::sleep(Duration::from_millis(30000));
+    thread::sleep(Duration::from_millis(10000));
     println!("!!!!!!valid test finish");
 
     //锁跨临界区传递，且需要等待此跨临界区的锁，会产生deadlock
@@ -1899,7 +2199,7 @@ fn test_mutex_lock() {
 
 #[test]
 fn test_mutex_lock_bench() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -1912,11 +2212,11 @@ fn test_mutex_lock_bench() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     println!("!!!!!!Start lock test for single thread");
     let start = Instant::now();
@@ -2385,14 +2685,14 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Local(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2408,14 +2708,14 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2430,14 +2730,14 @@ fn test_mutex_lock_bench() {
                     (*v).0 += 1;
                 }
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2461,14 +2761,14 @@ fn test_mutex_lock_bench() {
                 let mut v = shared_.lock().await;
                 (*v).0 += 1;
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Local(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Local(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Local(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2482,14 +2782,14 @@ fn test_mutex_lock_bench() {
                 let mut v = shared0_.lock().await;
                 (*v).0 += 1;
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2502,14 +2802,14 @@ fn test_mutex_lock_bench() {
                 let mut v = shared1_.lock().await;
                 (*v).0 += 1;
 
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(2);
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.join(AsyncRuntime::Multi(rt_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt_copy.clone()), async move {
                     Ok(true)
                 });
-                map.map(AsyncRuntime::Multi(rt_copy.clone())).await;
+                let _ = map_reduce.reduce(true).await;
             });
         }
     });
@@ -2522,11 +2822,15 @@ fn test_mutex_lock_bench() {
 
 #[test]
 fn test_rw_lock() {
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 2, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(true);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(2)
+        .set_worker_limit(2, 2);
+    let rt1 = pool.build();
 
     let rt0_ = rt0.clone();
     let rt1_ = rt1.clone();
@@ -2551,7 +2855,7 @@ fn test_rw_lock() {
             });
         }
     });
-    thread::sleep(Duration::from_millis(30000));
+    thread::sleep(Duration::from_millis(10000));
 
     let rt0_ = rt0.clone();
     let rt1_ = rt1.clone();
@@ -2619,7 +2923,7 @@ fn test_rw_lock() {
             });
         }
     });
-    thread::sleep(Duration::from_millis(60000));
+    thread::sleep(Duration::from_millis(10000));
 
     //锁不跨临界区传递，不会产生deadlock
     let start = Instant::now();
@@ -2698,7 +3002,7 @@ fn test_rw_lock() {
             });
         }
     });
-    thread::sleep(Duration::from_millis(60000));
+    thread::sleep(Duration::from_millis(30000));
     println!("!!!!!!valid test finish");
 
     //锁跨临界区传递，且需要等待此跨临界区的锁，会产生deadlock
@@ -2784,7 +3088,7 @@ impl TestFuture0 {
 
 #[test]
 fn test_single_task() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -2861,8 +3165,8 @@ impl TestFuture1 {
 
 #[test]
 fn test_multi_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, None);
-    let rt = pool.startup(true);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt = pool.build();
 
     let mut ids = Vec::with_capacity(50);
     for index in 0..100 {
@@ -2912,7 +3216,7 @@ impl Drop for AtomicCounter {
 
 #[test]
 fn test_empty_single_task() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -2945,8 +3249,8 @@ fn test_empty_single_task() {
 
 #[test]
 fn test_empty_multi_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();;
+    let rt = pool.build();
     let rt0 = rt.clone();
     let rt1 = rt.clone();
     let rt2 = rt.clone();
@@ -3018,7 +3322,7 @@ fn test_empty_multi_task() {
 
 #[test]
 fn test_single_timing_task() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3042,7 +3346,7 @@ fn test_single_timing_task() {
                 },
                 Ok(handle) => {
                     if index % 2 != 0 {
-                        rt.cancel_timing(handle);
+                        // rt.cancel_timing(handle);
                     }
                 },
             }
@@ -3070,7 +3374,7 @@ fn test_single_timing_task() {
     //测试取消定时任务的性能
     let start = Instant::now();
     for handle in handles {
-        rt.cancel_timing(handle);
+        // rt.cancel_timing(handle);
     }
     println!("!!!!!!cancel single timing task ok, time: {:?}", Instant::now() - start);
 
@@ -3079,8 +3383,8 @@ fn test_single_timing_task() {
 
 #[test]
 fn test_multi_timing_task() {
-    let pool = MultiTaskPool::new("AsyncWorker".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt = pool.build();
 
     //测试派发定时异步任务和取消定时异步任务的功能
     {
@@ -3093,7 +3397,7 @@ fn test_multi_timing_task() {
                 },
                 Ok(handle) => {
                     if index % 2 != 0 {
-                        rt.cancel_timing(handle);
+                        // rt.cancel_timing(handle);
                     }
                 },
             }
@@ -3121,7 +3425,7 @@ fn test_multi_timing_task() {
     //测试取消定时任务的性能
     let start = Instant::now();
     for handle in handles {
-        rt.cancel_timing(handle);
+        // rt.cancel_timing(handle);
     }
     println!("!!!!!!cancel multi timing task ok, time: {:?}", Instant::now() - start);
 
@@ -3131,7 +3435,9 @@ fn test_multi_timing_task() {
 //一个AsyncValue任务由2个异步任务组成，不包括创建AsyncValue的异步任务
 #[test]
 fn test_async_value() {
-    let runner = SingleTaskRunner::new();
+    use std::mem;
+
+    let runner = SingleTaskRunner::default();
     let rt0 = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3144,8 +3450,10 @@ fn test_async_value() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default()
+        .init_worker_size(4)
+        .set_worker_limit(4, 4);
+    let rt1 = pool.build();
 
     {
         let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
@@ -3168,53 +3476,194 @@ fn test_async_value() {
     }
     thread::sleep(Duration::from_millis(30000));
 
-    {
-        let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter0 = counter.clone();
+    let counter1 = counter.clone();
+    let counter2 = counter.clone();
+    let counter3 = counter.clone();
+    mem::drop(counter);
+
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
         let start = Instant::now();
-        for _ in 0..10000000 {
-            let rt1_copy = rt1.clone();
-            let counter_copy = counter.clone();
+        for _ in 0..2500000 {
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter0.clone();
             let future = async move {
-                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
                 let value_copy = value.clone();
-                rt1_copy.spawn(rt1_copy.alloc(), async move {
+                rt1_clone.spawn(rt1_clone.alloc(), async move {
                     value_copy.set(true);
                 });
                 value.await;
                 counter_copy.0.fetch_add(1, Ordering::Relaxed);
             };
-            rt1.spawn(rt1.alloc(), future);
+            rt1_copy.spawn(rt1_copy.alloc(), future);
         }
         println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
-    }
+    });
+
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter1.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt1_clone.spawn(rt1_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
+
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter2.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt1_clone.spawn(rt1_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
+
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter3.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt1_clone.spawn(rt1_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
     thread::sleep(Duration::from_millis(30000));
 
-    {
-        let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+    let counter0 = counter.clone();
+    let counter1 = counter.clone();
+    let counter2 = counter.clone();
+    let counter3 = counter.clone();
+    mem::drop(counter);
+
+    let rt0_copy = rt0.clone();
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
         let start = Instant::now();
-        for _ in 0..10000000 {
-            let rt0_copy = rt0.clone();
-            let rt1_copy = rt1.clone();
-            let counter_copy = counter.clone();
+        for _ in 0..2500000 {
+            let rt0_clone = rt0_copy.clone();
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter0.clone();
             let future = async move {
-                let value = AsyncValue::new(AsyncRuntime::Local(rt0_copy.clone()));
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
                 let value_copy = value.clone();
-                rt1_copy.spawn(rt1_copy.alloc(), async move {
+                rt0_clone.spawn(rt0_clone.alloc(), async move {
                     value_copy.set(true);
                 });
                 value.await;
                 counter_copy.0.fetch_add(1, Ordering::Relaxed);
             };
-            rt0.spawn(rt0.alloc(), future);
+            rt1_copy.spawn(rt1_copy.alloc(), future);
         }
         println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
-    }
+    });
+
+    let rt0_copy = rt0.clone();
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt0_clone = rt0_copy.clone();
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter1.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt0_clone.spawn(rt0_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
+
+    let rt0_copy = rt0.clone();
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt0_clone = rt0_copy.clone();
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter2.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt0_clone.spawn(rt0_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
+
+    let rt0_copy = rt0.clone();
+    let rt1_copy = rt1.clone();
+    thread::spawn(move || {
+        let start = Instant::now();
+        for _ in 0..2500000 {
+            let rt0_clone = rt0_copy.clone();
+            let rt1_clone = rt1_copy.clone();
+            let counter_copy = counter3.clone();
+            let future = async move {
+                let value = AsyncValue::new(AsyncRuntime::Multi(rt1_clone.clone()));
+                let value_copy = value.clone();
+                rt0_clone.spawn(rt0_clone.alloc(), async move {
+                    value_copy.set(true);
+                });
+                value.await;
+                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+            };
+            rt1_copy.spawn(rt1_copy.alloc(), future);
+        }
+        println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+    });
     thread::sleep(Duration::from_millis(100000000));
 }
 
 #[test]
 fn test_async_wait_timeout() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3227,8 +3676,8 @@ fn test_async_wait_timeout() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
     let counter = Arc::new(AtomicUsize::new(0));
     for _ in 0..1000 {
@@ -3260,7 +3709,7 @@ fn test_async_wait_timeout() {
 //一个AsyncWait任务由3个异步任务组成，不包括创建AsyncWait的异步任务
 #[test]
 fn test_async_wait() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3273,11 +3722,11 @@ fn test_async_wait() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::<()>::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::<()>::default();
+    let rt1 = pool.build();
 
     {
         let rt_copy = rt.clone();
@@ -3417,7 +3866,7 @@ fn test_async_wait() {
 //一个AsyncWaitAny任务由2 * n个异步任务组成，不包括创建AsyncWaitAny的异步任务
 #[test]
 fn test_async_wait_any() {
-    let runner = SingleTaskRunner::new();
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3430,11 +3879,11 @@ fn test_async_wait_any() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     {
         let rt_copy = rt.clone();
@@ -3563,7 +4012,7 @@ fn test_async_wait_any() {
             println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
         });
     }
-    thread::sleep(Duration::from_millis(60000));
+    thread::sleep(Duration::from_millis(70000));
 
     {
         let rt_0 = rt.clone();
@@ -3681,10 +4130,10 @@ fn test_async_wait_any() {
     thread::sleep(Duration::from_millis(100000000));
 }
 
-//一个AsyncWaitAll任务由2 * n个异步任务组成，不包括创建AsyncWaitAll的异步任务
+//一个AsyncWaitAnyCallbck任务由2 * n个异步任务组成，不包括创建AsyncWaitAnyCallback的异步任务
 #[test]
-fn test_async_wait_all() {
-    let runner = SingleTaskRunner::new();
+fn test_async_wait_any_callback() {
+    let runner = SingleTaskRunner::default();
     let rt = runner.startup().unwrap();
 
     thread::spawn(move || {
@@ -3697,11 +4146,305 @@ fn test_async_wait_all() {
         }
     });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime1".to_string(), 8, 1024 * 1024, 10, Some(1));
-    let rt1 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
+
+    {
+        let rt_copy = rt.clone();
+        let rt0_copy = rt0.clone();
+        let rt1_copy = rt1.clone();
+        let future = async move {
+            let f0 = Box::new(async move {
+                let mut rng = rand::thread_rng();
+                let timeout: u64 = rng.gen_range(0, 10000);
+                thread::sleep(Duration::from_millis(timeout));
+                Ok("rt0-".to_string() + timeout.to_string().as_str())
+            }).boxed();
+            let f1 = Box::new(async move {
+                let mut rng = rand::thread_rng();
+                let timeout: u64 = rng.gen_range(0, 10000);
+                thread::sleep(Duration::from_millis(timeout));
+                Ok("rt1-".to_string() + timeout.to_string().as_str())
+            }).boxed();
+
+            match rt_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt0_copy), f0), (AsyncRuntime::Multi(rt1_copy), f1)],
+                                            move |result| {
+                                                true
+                                            }).await {
+                Err(e) => {
+                    println!("!!!!!!wait any failed, reason: {:?}", e);
+                },
+                Ok(result) => {
+                    println!("!!!!!!wait any ok, result: {:?}", result);
+                },
+            }
+        };
+        rt.spawn(rt.alloc(), future);
+    }
+    thread::sleep(Duration::from_millis(10000));
+
+    {
+        let rt0_0 = rt0.clone();
+        let rt0_1 = rt0.clone();
+        let rt0_2 = rt0.clone();
+        let rt0_3 = rt0.clone();
+
+        let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+        let counter0 = counter.clone();
+        let counter1 = counter.clone();
+        let counter2 = counter.clone();
+        let counter3 = counter.clone();
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let rt0_copy = rt0_0.clone();
+                let counter_copy = counter0.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt0_copy.clone()), f0), (AsyncRuntime::Multi(rt0_copy.clone()), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt0_0.spawn(rt0_0.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 2500000..5000000 {
+                let rt0_copy = rt0_1.clone();
+                let counter_copy = counter1.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt0_copy.clone()), f0), (AsyncRuntime::Multi(rt0_copy.clone()), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt0_1.spawn(rt0_1.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 5000000..7500000 {
+                let rt0_copy = rt0_2.clone();
+                let counter_copy = counter2.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt0_copy.clone()), f0), (AsyncRuntime::Multi(rt0_copy.clone()), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt0_2.spawn(rt0_2.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 7500000..10000000 {
+                let rt0_copy = rt0_3.clone();
+                let counter_copy = counter3.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt0_copy.clone()), f0), (AsyncRuntime::Multi(rt0_copy.clone()), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt0_3.spawn(rt0_3.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+    }
+    thread::sleep(Duration::from_millis(70000));
+
+    {
+        let rt_0 = rt.clone();
+        let rt_1 = rt.clone();
+        let rt_2 = rt.clone();
+        let rt_3 = rt.clone();
+        let rt0_0 = rt0.clone();
+        let rt0_1 = rt0.clone();
+        let rt0_2 = rt0.clone();
+        let rt0_3 = rt0.clone();
+        let rt1_0 = rt1.clone();
+        let rt1_1 = rt1.clone();
+        let rt1_2 = rt1.clone();
+        let rt1_3 = rt1.clone();
+
+        let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
+        let counter0 = counter.clone();
+        let counter1 = counter.clone();
+        let counter2 = counter.clone();
+        let counter3 = counter.clone();
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 0..2500000 {
+                let rt_copy = rt_0.clone();
+                let rt0_copy = rt0_0.clone();
+                let rt1_copy = rt1_0.clone();
+                let counter_copy = counter0.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt1_copy.clone()), f0), (AsyncRuntime::Multi(rt1_copy), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt_copy.spawn(rt_copy.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 2500000..5000000 {
+                let rt_copy = rt_1.clone();
+                let rt0_copy = rt0_1.clone();
+                let rt1_copy = rt1_1.clone();
+                let counter_copy = counter1.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt1_copy.clone()), f0), (AsyncRuntime::Multi(rt1_copy), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt_copy.spawn(rt_copy.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 5000000..7500000 {
+                let rt_copy = rt_2.clone();
+                let rt0_copy = rt0_2.clone();
+                let rt1_copy = rt1_2.clone();
+                let counter_copy = counter2.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt1_copy.clone()), f0), (AsyncRuntime::Multi(rt1_copy), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt_copy.spawn(rt_copy.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+
+        thread::spawn(move || {
+            let start = Instant::now();
+            for _ in 7500000..10000000 {
+                let rt_copy = rt_3.clone();
+                let rt0_copy = rt0_3.clone();
+                let rt1_copy = rt1_3.clone();
+                let counter_copy = counter3.clone();
+                let future = async move {
+                    let f0 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    let f1 = Box::new(async move {
+                        Ok(1)
+                    }).boxed();
+                    if let Ok(r) = rt0_copy.wait_any_callback(vec![(AsyncRuntime::Multi(rt1_copy.clone()), f0), (AsyncRuntime::Multi(rt1_copy), f1)],
+                                                              move |result| {
+                                                                  true
+                                                              }).await {
+                        counter_copy.0.fetch_add(r, Ordering::Relaxed);
+                    }
+                };
+                rt_copy.spawn(rt_copy.alloc(), future);
+            }
+            println!("!!!!!!spawn ok, time: {:?}", Instant::now() - start);
+        });
+    }
+
+    thread::sleep(Duration::from_millis(100000000));
+}
+
+//一个AsyncWaitAll任务由2 * n个异步任务组成，不包括创建AsyncWaitAll的异步任务
+#[test]
+fn test_async_wait_all() {
+    let runner = SingleTaskRunner::default();
+    let rt = runner.startup().unwrap();
+
+    thread::spawn(move || {
+        loop {
+            if let Err(e) = runner.run() {
+                println!("!!!!!!run failed, reason: {:?}", e);
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let pool: MultiTaskRuntimeBuilder<()> = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
+
+    let pool: MultiTaskRuntimeBuilder<()> = MultiTaskRuntimeBuilder::default();
+    let rt1 = pool.build();
 
     {
         struct SendableFn(Box<dyn FnOnce(&mut Vec<u8>) -> Vec<u8> + Send + 'static>);
@@ -3709,24 +4452,24 @@ fn test_async_wait_all() {
         let rt_copy = rt.clone();
         let rt0_copy = rt0.clone();
         rt.spawn(rt.alloc(), async move {
-            let mut map = rt_copy.map::<SendableFn>();
+            let mut map_reduce = rt_copy.map_reduce(10);
 
             let cb: SendableFn = SendableFn(Box::new(move |v: &mut Vec<u8>| {
                 v.clone()
             }));
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(cb)
             });
 
             let cb: SendableFn = SendableFn(Box::new(move |v: &mut Vec<u8>| {
                 v.clone()
             }));
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(cb)
             });
 
             let mut vec = vec![0xff, 0xff, 0xff];
-            for r in map.map(AsyncRuntime::Local(rt_copy)).await.unwrap() {
+            for r in map_reduce.reduce(true).await.unwrap() {
                 if let Ok(cb) = r {
                     assert_eq!(cb.0(&mut vec), vec);
                 }
@@ -3740,73 +4483,73 @@ fn test_async_wait_all() {
         let rt0_copy = rt0.clone();
         let rt1_copy = rt1.clone();
         let future = async move {
-            let mut map = rt_copy.map();
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            let mut map_reduce = rt_copy.map_reduce(10);
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(0)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(1)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(2)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(3)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(4)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(5)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(6)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(7)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(8)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(9)
             });
 
-            println!("!!!!!!map result: {:?}", map.map(AsyncRuntime::Local(rt_copy.clone())).await);
+            println!("!!!!!!map result: {:?}", map_reduce.reduce(false).await);
 
-            let mut map = rt_copy.map();
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            let mut map_reduce = rt_copy.map_reduce(10);
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(0)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(1)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(2)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(3)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(4)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(5)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(6)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(7)
             });
-            map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                 Ok(8)
             });
-            map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+            map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                 Ok(9)
             });
 
-            println!("!!!!!!map result by order: {:?}", map.map(AsyncRuntime::Local(rt_copy)).await);
+            println!("!!!!!!map result by order: {:?}", map_reduce.reduce(true).await);
         };
         rt.spawn(rt.alloc(), future);
     }
@@ -3819,39 +4562,40 @@ fn test_async_wait_all() {
             let rt0_copy = rt0.clone();
             let counter_copy = counter.clone();
             let future = async move {
-                let mut map = rt0_copy.map();
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                let mut map_reduce = rt0_copy.map_reduce(10);
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(0)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(1)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(2)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(3)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(4)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(5)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(6)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(7)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(8)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(9)
                 });
-                map.map(AsyncRuntime::Multi(rt0_copy)).await;
-                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                if let Ok(_) = map_reduce.reduce(true).await {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }
             };
             rt0.spawn(rt0.alloc(), future);
         }
@@ -3868,39 +4612,40 @@ fn test_async_wait_all() {
             let rt1_copy = rt1.clone();
             let counter_copy = counter.clone();
             let future = async move {
-                let mut map = rt_copy.map();
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                let mut map_reduce = rt_copy.map_reduce(10);
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(0)
                 });
-                map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(1)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(2)
                 });
-                map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(3)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(4)
                 });
-                map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(5)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(6)
                 });
-                map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(7)
                 });
-                map.join(AsyncRuntime::Multi(rt0_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt0_copy.clone()), async move {
                     Ok(8)
                 });
-                map.join(AsyncRuntime::Multi(rt1_copy.clone()), async move {
+                map_reduce.map(AsyncRuntime::Multi(rt1_copy.clone()), async move {
                     Ok(9)
                 });
-                map.map(AsyncRuntime::Multi(rt0_copy)).await;
-                counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                if let Ok(_) = map_reduce.reduce(true).await {
+                    counter_copy.0.fetch_add(1, Ordering::Relaxed);
+                }
             };
             rt.spawn(rt.alloc(), future);
         }
@@ -3913,8 +4658,8 @@ fn test_async_wait_all() {
 #[test]
 fn test_worker_runtime() {
     let thread_status = Arc::new(AtomicBool::new(true));
-    let thread_waker: Arc<(AtomicBool, ParkingLotMutex<()>, Condvar)> = Arc::new((AtomicBool::new(false), ParkingLotMutex::new(()), Condvar::new()));
-    let runner = SingleTaskRunner::with_thread_waker(Some(thread_waker.clone()));
+    let runner = SingleTaskRunner::default();
+    let thread_waker = runner.get_thread_waker().unwrap();
     let rt = AsyncRuntime::Worker(Arc::new(AtomicBool::new(true)), thread_waker.clone(), runner.startup().unwrap());
 
     let rt_copy = rt.clone();
@@ -3940,8 +4685,8 @@ fn test_worker_runtime() {
                             rt_copy.len()
                         });
 
-    let pool = MultiTaskPool::<()>::new("AsyncRuntime0".to_string(), 8, 1024 * 1024, 10, None);
-    let rt0 = pool.startup(false);
+    let pool = MultiTaskRuntimeBuilder::default();
+    let rt0 = pool.build();
 
     {
         let counter = Arc::new(AtomicCounter(AtomicUsize::new(0), Instant::now()));
