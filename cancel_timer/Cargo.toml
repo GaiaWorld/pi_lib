@@ -1,12 +1,14 @@
 [package]
-name = "timer"
+name = "cancel_timer"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 ext_heap = {path="../ext_heap"}
-wheel = {path="../wheel"}
+slotmap = "1.0"
+slot_wheel = {path="../slot_wheel"}
+slot_deque = {path="../slot_deque"}
 
 [dev-dependencies]
 pcg_rand = "0.13"

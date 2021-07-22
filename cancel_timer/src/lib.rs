@@ -1,14 +1,18 @@
-//! 不可撤销的定时器
+//! 可撤销的定时器
 
 use std::{cmp::Reverse, fmt};
 
-use ext_heap::{empty as heap_empty, ExtHeap};
-use wheel::{TimeoutItem, Wheel};
+use ext_heap::ExtHeap;
+use slot_deque::{LinkedNode, Slot};
+use slot_wheel::{Result, TimeoutItem, TimerKey, Wheel};
+use slotmap::{Key};
 
-/// 不可撤销的定时器
+
+/// 可撤销的定时器
 pub struct Timer<T, const N0: usize, const N: usize, const L: usize> {
+    slot: Slot<TimerKey, TimeoutItem<T>>,
     wheel: Wheel<T, N0, N, L>, // 定时轮
-    heap: ExtHeap<Reverse<TimeoutItem<T>>>, // 最小堆
+    heap: ExtHeap<Reverse<(usize, TimerKey)>>, // 最小堆
     add_count: usize,
     remove_count: usize,
     roll_count: u64,
@@ -30,6 +34,7 @@ impl<T: fmt::Debug, const N0: usize, const N: usize, const L: usize> fmt::Debug
 impl<T, const N0: usize, const N: usize, const L: usize> Default for Timer<T, N0, N, L> {
     fn default() -> Self {
         Timer {
+            slot: Default::default(),
             wheel: Default::default(),
             heap: Default::default(),
             add_count: 0,
@@ -53,19 +58,36 @@ impl<T, const N0: usize, const N: usize, const L: usize> Timer<T, N0, N, L> {
         self.roll_count
     }
     /// 放入一个定时任务
-    pub fn push(&mut self, timeout: usize, el: T) {
+    pub fn push(&mut self, timeout: usize, el: T) -> TimerKey {
         self.add_count += 1;
-        if let Some(r) = self.wheel.push(TimeoutItem::new(timeout, el)) {
-            // 没有放入的定时任务的时间已经被转换成绝对时间，放入堆中
-            self.heap.push(Reverse(r), &mut (), heap_empty);
+        match self.wheel.push(timeout, el, &mut self.slot) {
+            Result::Ok(key) => key,
+            Result::Overflow(timeout, el) => {
+                // 将定时任务放入slot中
+                let key = self.slot.insert(LinkedNode::new(
+                    TimeoutItem::new(0, el, N0 + N * L),
+                    TimerKey::null(),
+                    TimerKey::null(),
+                ));
+                // 将绝对时间和键放入堆中
+                let loc = self.heap.push(
+                    Reverse((timeout, key)),
+                    &mut self.slot,
+                    set_index::<T, N0, N, L>,
+                );
+                // 修正所在的堆位置
+                unsafe {
+                    self.slot.get_unchecked_mut(key).el.index += loc;
+                }
+                key
+            }
         }
     }
-    /// 弹出一个定时任务
-    /// * `now` 当前时间
+    /// 弹出定时间内的一个定时任务
     /// * @return `Option<T>` 弹出的定时元素
     pub fn pop(&mut self, now: u64) -> Option<T> {
         loop {
-            if let Some(r) = self.wheel.pop() {
+            if let Some(r) = self.wheel.pop(&mut self.slot) {
                 self.remove_count += 1;
                 return Some(r.el)
             }
@@ -90,25 +112,66 @@ impl<T, const N0: usize, const N: usize, const L: usize> Timer<T, N0, N, L> {
     /// 轮滚动 - 向后滚动一个最小粒度, 可能会造成轮的逐层滚动。如果滚动到底，则修正堆上全部的定时任务，并将堆上的到期任务放入轮中
     pub fn roll(&mut self) {
         self.roll_count += 1;
-        if self.wheel.roll() {
+        if self.wheel.roll(&mut self.slot) {
             // 修正堆上全部的定时任务
             for i in 0..self.heap.len() {
-                unsafe { self.heap.get_unchecked_mut(i).0.timeout -= self.wheel.max_time() };
+                unsafe { self.heap.get_unchecked_mut(i).0.0 -= self.wheel.max_time() };
             }
             // 如果滚到轮的最后一层的最后一个， 则将堆上的到期任务放入轮中
             // 检查堆顶的最近的任务
             while let Some(it) = self.heap.peek() {
                 // 判断任务是否需要放入轮中
-                if it.0.timeout >= self.wheel.max_time() {
+                if it.0.0 >= self.wheel.max_time() {
                     break;
                 }
-                let it = self.heap.pop(&mut (), heap_empty).unwrap();
+                let Reverse((mut timeout, key)) = self
+                    .heap
+                    .pop(&mut self.slot, set_index::<T, N0, N, L>)
+                    .unwrap();
                 // 时间已经修正过了，可以直接放入定时轮中
-                self.wheel.push(it.0);
+                self.wheel
+                    .push_key(key, &mut self.slot, &mut timeout, retimeout);
             }
         }
     }
+    /// 取消定时任务
+    pub fn cancel(&mut self, key: TimerKey) -> Option<T> {
+        match self.slot.remove(key) {
+            Some(node) => {
+                self.remove_count += 1;
+                if node.el.index < N0 + N * L {
+                    self.wheel.get_slot_mut(node.el.index).repair(
+                        node.prev(),
+                        node.next(),
+                        &mut self.slot,
+                    );
+                } else {
+                    self.heap.remove(
+                        node.el.index - N0 - N * L,
+                        &mut self.slot,
+                        set_index::<T, N0, N, L>,
+                    );
+                }
+                Some(node.el.el)
+            }
+            _ => None,
+        }
+    }
 }
+fn retimeout<T>(timeout: &mut usize, it: &mut TimeoutItem<T>) {
+    it.timeout = *timeout;
+}
+fn set_index<T, const N0: usize, const N: usize, const L: usize>(
+    slot: &mut Slot<TimerKey, TimeoutItem<T>>,
+    arr: &mut [Reverse<(usize, TimerKey)>],
+    loc: usize,
+) {
+    let i = &arr[loc];
+    unsafe {
+        slot.get_unchecked_mut(i.0 .1).el.index = N0 + N * L + loc;
+    }
+}
+
 
 // 测试定时器得延时情况
 #[cfg(test)]

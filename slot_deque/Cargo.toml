@@ -1,8 +1,8 @@
 [package]
-name = "wy_rng"
+name = "slot_deque"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rand_core = "0.6"
+slotmap = "1.0"

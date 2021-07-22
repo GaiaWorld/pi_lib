@@ -5,14 +5,9 @@
 #![feature(exclusive_range_pattern)]
 
 
-extern crate rand_core;
-extern crate wy_rng;
-
-
-use std::{convert::TryInto, hash::Hasher};
+use std::{hash::Hasher};
 
 use rand_core::{RngCore, SeedableRng};
-
 use wy_rng::mum;
 
 pub const P0: u64 = 0xa076_1d64_78bd_642f;
@@ -88,6 +83,7 @@ impl WyHash {
 }
 
 impl Default for WyHash {
+    #[inline(always)]
     fn default() -> Self {
         WyHash::new(0, [P0, P1, P2, P3])
     }
@@ -142,9 +138,9 @@ impl Hasher for WyHash {
 pub fn read_le_0_7(bytes: &[u8]) -> u64 {
     match bytes.len() {
         1 => bytes[0] as u64,
-        2 => u16::from_le_bytes([bytes[0], bytes[1]]) as u64,
+        2 => unsafe {u16::from_le_bytes(*(bytes as *const _ as *const [u8; 2])) as u64 },
         3 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], 0]) as u64,
-        4 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as u64,
+        4 => unsafe {u32::from_le_bytes(*(bytes as *const _ as *const [u8; 4])) as u64 }
         5 => u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], 0, 0, 0]) as u64,
         6 => u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], 0, 0]) as u64,
         7 => u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], 0]) as u64,
@@ -152,8 +148,10 @@ pub fn read_le_0_7(bytes: &[u8]) -> u64 {
     }
 }
 /// 读取大于等于8字节的u64
+#[inline(always)]
 pub fn read_le(bytes: &[u8]) -> u64 {
-    u64::from_le_bytes(bytes.try_into().unwrap())
+    unsafe {u64::from_le_bytes(*(bytes as *const _ as *const [u8; 8])) }
+    //u64::from_le_bytes(bytes.try_into().unwrap())
 }
 
 /// Generate new secret for wyhash
@@ -189,18 +187,34 @@ pub fn make_secret(seed: u64) -> [u64; 4] {
 #[test]
 fn test() {
     let mut h = WyHash::default();
-    //h.write_u8(1);
-    //h.write_i8(11);
-    //h.write(&[0]);
-    h.write(&[]);
-    h.write(&[]);
-    println!("hash: {}", h.finish());
+    h.write_u8(1);
+    println!("1: {}", h.finish());
+    h.write_u8(1);
+    println!("1: {}", h.finish());
     h = WyHash::default();
-    h.write_u8(0);
-    assert_eq!(h.finish(), 2495792281036420879);
-    h.write_u32(11);
-    assert_eq!(h.finish(), 13451875736397521462);
-    h.write(&[0]);
-    println!("hash: {}", h.finish());
-    assert_eq!(h.finish(), 14686941155276824898);
+    h.write(&[1]);
+    println!("1: {}", h.finish());
+    h.write(&[1]);
+    println!("11: {}", h.finish());
+    h = WyHash::default();
+    h.write(b"hellhell");
+    //h.write(&[]);
+    println!("hello: {}", h.finish());
+    h.write(b"worlworl");
+    println!("helloworld: {}", h.finish());
+    //assert_eq!(h.finish(), 14277199482324177244); // 9723359729180093834
+    h = WyHash::default();
+    h.write(b"hellhellworlworl");
+    println!("helloworld: {}", h.finish());
+//     h = WyHash::default();
+//     h.write_u8(0);
+//     assert_eq!(h.finish(), 2495792281036420879);
+//     h.write_u32(11);
+//     assert_eq!(h.finish(), 13451875736397521462);
+//     h.write(&[0]);
+//     println!("hash: {}", h.finish());
+//     assert_eq!(h.finish(), 14686941155276824898);
+//     h.write(&[0,2,3,45,54,6,67,4,8,9,45,54,6,67,4,8,9,45,54,6,67,4,8,9,9,45,54,6,67,4,8,9,9,45,54,6,67,4,8,9,9,45,54,6,67,4,8,9,9,45,54,6,67,4,8,9,9,45,54,6,67,4,8,9,]);
+//     println!("hash: {}", h.finish());
+//     assert_eq!(h.finish(), 5476865104113569038);
 }

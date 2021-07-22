@@ -2,6 +2,7 @@
 name = "time"
 version = "0.1.0"
 authors = ["vmos <vmos@fairblock.io>"]
+edition = "2018"
 
 [dependencies]
 lazy_static = "*"
