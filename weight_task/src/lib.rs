@@ -365,7 +365,14 @@ impl<T, D, const N0: usize, const N: usize, const L: usize> TaskPool<T, D, N0, N
     pub fn get_cancel_timer_mut(&mut self) -> &mut cancel_timer::Timer<T, N0, N, L> {
         &mut self.cancel_timer
     }
-
+    /// 获得定时器的权重
+    pub fn get_timer_weight(&self) -> usize {
+        self.timer_weight
+    }
+    /// 设置定时器的权重
+    pub fn set_timer_weight(&mut self, weight: usize) {
+        self.timer_weight = weight;
+    }
     /// 弹出一个任务，如果任务存在，返回任务及所在队列, 否则返回None
     /// 如果该任务是一个串行队列任务，并且为自动加锁状态，则会对该任务所在的队列加锁，此后，该队列的任务无法弹出，
     /// 直到外部调用free_deque方法解锁该队列，该队列的任务在后续的弹出过程中才有机会被弹出
