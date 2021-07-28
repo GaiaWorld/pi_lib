@@ -65,4 +65,5 @@ members = [
   "wy_hash",
   "slot_deque",
   "weight_task",
+  "res_mgr",
 ]
