@@ -4,17 +4,14 @@
 //! 在Cache清理中，先将在最小容量外的所有超时的资源释放， 然后再将超出容量的最早资源释放。
 //! TODO 以后Rc或Arc支持设置内存分配器， 可以使用自定义的内存分配器， 这样在资源的引用计数减为0时， 将其放入到特定位置， 可以避免现在通过遍历资源表来发现未引用的资源。
 
+use std::collections::hash_map::{Entry, Iter};
+use std::hash::Hash;
 
-use std::collections::hash_map::Iter;
-use std::{hash::Hash};
-
-
-use any::{BoxAny, impl_downcast_box};
+use any::{impl_downcast_box, BoxAny};
 use hash::XHashMap;
-use share::{Share};
+use share::Share;
 use slot_deque::{Deque, Slot};
-use slotmap::{Key, new_key_type};
-
+use slotmap::{new_key_type, Key};
 
 /// 资源，放入资源表的资源必须实现该trait
 pub trait Res {
@@ -57,7 +54,13 @@ pub(crate) struct ResCache {
 }
 impl ResCache {
     /// 配置最小最大容量和超时时间
-    pub fn config(&mut self, min_capacity: usize, max_capacity: usize, timeout: usize, name: Share<String>) {
+    pub fn config(
+        &mut self,
+        min_capacity: usize,
+        max_capacity: usize,
+        timeout: usize,
+        name: Share<String>,
+    ) {
         self.min_capacity = min_capacity;
         self.max_capacity = max_capacity;
         self.cur_capacity = max_capacity;
@@ -89,7 +92,7 @@ pub struct ResMap<T: Res> {
     /// 缓存资源表
     slot: Slot<CacheKey, (Share<T>, usize)>,
     /// 分组的缓存资源队列表
-    caches: [ResCache;4],
+    caches: [ResCache; 4],
     /// 资源表内全部资源的内存大小
     size: usize,
 }
@@ -98,7 +101,12 @@ impl<T: Res> Default for ResMap<T> {
         ResMap {
             map: Default::default(),
             slot: Default::default(),
-            caches: [Default::default(),Default::default(),Default::default(),Default::default()],
+            caches: [
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ],
             size: 0,
         }
     }
@@ -127,10 +135,25 @@ impl<T: Res> ResMap<T> {
     }
     /// 放入资源
     #[inline]
-    pub fn push(&mut self, res: Share<T>) {
+    pub fn insert(&mut self, res: Share<T>) {
         self.size += res.size();
-        let k = res.key();
-        self.map.insert(k, (res, CacheKey::null()));
+        match self.map.entry(res.key()) {
+            Entry::Occupied(mut e) => {
+                let r = e.get_mut();
+                self.size -= r.0.size();
+                r.0 = res;
+                if !r.1.is_null() {
+                    let c = &mut self.caches[r.0.group()];
+                    c.deque.remove(r.1, &mut self.slot);
+                    c.size -= r.0.size();
+                    c.len -= 1;
+                    r.1 = CacheKey::null();
+                }
+            }
+            Entry::Vacant(e) => {
+                e.insert((res, CacheKey::null()));
+            }
+        }
     }
     /// 移除一个指定键的资源
     #[inline]
@@ -143,13 +166,13 @@ impl<T: Res> ResMap<T> {
                 c.size -= r.0.size();
                 c.len -= 1;
             }
-            return Some(r.0)
+            return Some(r.0);
         }
         None
     }
 }
 
-impl<T: Res+ 'static> ResCollect for ResMap<T> {
+impl<T: Res + 'static> ResCollect for ResMap<T> {
     /// 计算资源的内存占用
     fn size(&self) -> usize {
         self.size
@@ -176,7 +199,7 @@ impl<T: Res+ 'static> ResCollect for ResMap<T> {
         for c in &mut self.caches {
             while c.size > c.min_capacity {
                 // 清理过时的资源
-                let node = unsafe {self.slot.get_unchecked(c.deque.head())};
+                let node = unsafe { self.slot.get_unchecked(c.deque.head()) };
                 if node.el.1 + c.timeout < now {
                     break;
                 }
