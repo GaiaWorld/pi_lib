@@ -206,7 +206,13 @@ impl<T, D, const N0: usize, const N: usize, const L: usize> TaskPool<T, D, N0, N
     /// 将指定的串行任务队列加入任务池，返回队列key
     pub fn push_deque(&mut self, deque: Deque<T, D>) -> DequeKey {
         let w = match deque.weight_type {
-            WeightType::Normal(w) => w.get() as usize,
+            WeightType::Normal(w) => {
+                if deque.deque.len() > 0 {
+                    w.get() as usize
+                } else {
+                    0
+                }
+            }
             WeightType::Unit(w) => (w.get() as usize) * deque.deque.len(),
         };
         let lock_state = deque.lock_state;
