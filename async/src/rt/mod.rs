@@ -1757,5 +1757,5 @@ fn now_monotonic() -> (i64, i64) {
     let ret = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_COARSE, &mut time) };
     assert!(ret == 0);
 
-    (time.tv_sec, time.tv_nsec)
+    (time.tv_sec as i64, time.tv_nsec as i64)
 }
