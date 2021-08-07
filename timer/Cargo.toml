@@ -5,7 +5,6 @@ authors = ["suncy <suncy@gmail.com>"]
 
 [dependencies]
 atom = {path="../atom"}
-apm = {path="../apm"}
 wheel = {path="../wheel"}
 time = {path="../time"}
 lazy_static = "*"

@@ -1,7 +1,6 @@
 #![feature(integer_atomics)]
 
 extern crate atom;
-extern crate apm;
 extern crate wheel;
 extern crate time;
 
@@ -18,23 +17,9 @@ use std::marker::Send;
 use std::fmt::{Debug, Formatter, Result as FResult};
 
 use atom::Atom;
-use apm::counter::{GLOBAL_PREF_COLLECT, PrefCounter, PrefTimer};
 use wheel::slab_wheel::Wheel;
 use wheel::wheel::Item;
 use time::{run_millis};
-
-lazy_static! {
-    //定时器数量
-    pub static ref TIMER_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_count"), 0).unwrap();
-    //创建定时任务数量
-    pub static ref TIMER_CREATE_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_create_count"), 0).unwrap();
-    //取消定时任务数量
-    pub static ref TIMER_CANCEL_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_cancel_count"), 0).unwrap();
-    //定时任务运行数量
-    pub static ref TIMER_RUN_COUNT: PrefCounter = GLOBAL_PREF_COLLECT.new_static_counter(Atom::from("timer_run_count"), 0).unwrap();
-    //定时任务运行总时长
-	pub static ref TIMER_RUN_TIME: PrefTimer = GLOBAL_PREF_COLLECT.new_static_timer(Atom::from("timer_run_time"), 0).unwrap();
-}
 
 pub trait Runer{
     fn run(self, index: usize);
@@ -42,8 +27,6 @@ pub trait Runer{
 
 impl<T: 'static + Send + Runer> Timer<T>{
     pub fn new(clock_ms: u64) -> Self {
-        TIMER_COUNT.sum(1);
-
         Timer(Arc::new(Mutex::new(TimerImpl::new(clock_ms))))
     }
 
@@ -81,7 +64,6 @@ impl<T: 'static + Send + Runer> Timer<T>{
 	}
 
     pub fn set_timeout(&self, elem: T, ms: u32) -> usize{
-        TIMER_CREATE_COUNT.sum(1);
 
         let mut lock = self.0.lock().unwrap();
 		let time =  lock.wheel.get_time();
@@ -92,8 +74,6 @@ impl<T: 'static + Send + Runer> Timer<T>{
         let mut lock = self.0.lock().unwrap();
 		match lock.wheel.try_remove(index) {
 			Some(v) => {
-                TIMER_CANCEL_COUNT.sum(1);
-
                 Some(v.elem)
             },
 			None => {None},
@@ -201,17 +181,12 @@ fn run_zero<T: Send + Runer>(timer: &Arc<Mutex<TimerImpl<T>>>){
 
 //执行任务，返回任务执行完的时间
 fn run_task<T: Send + Runer>(_timer: &Arc<Mutex<TimerImpl<T>>>, r: &mut Vec<(Item<T>, usize)>){
-    let start = TIMER_RUN_TIME.start();
 	let mut j = r.len();
-	TIMER_RUN_COUNT.sum(r.len());
     for _ in 0..r.len(){
         j -= 1;
         let e = r.remove(j);
         e.0.elem.run(e.1);
     }
-	
-    
-    TIMER_RUN_TIME.timing(start);
 }
 #[test]
 fn test(){
