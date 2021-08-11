@@ -680,6 +680,8 @@ pub struct IterTree<'a, K: 'a + Clone, V: 'a + Clone>{
 	marker: PhantomData<&'a Node<K, V>>
 }
 
+unsafe impl<'a, K: 'a + Clone, V: 'a + Clone> Send for IterTree<'a, K, V> {}
+
 impl<'a, K: 'a + Clone, V: 'a + Clone> IterTree<'a, K, V>{
 	fn next_ascending(it: &mut IterTree<'a, K, V>) -> Option<&'a Entry<K, V>>{
 		match it.len{

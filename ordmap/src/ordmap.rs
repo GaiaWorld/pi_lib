@@ -553,7 +553,7 @@ pub trait ImOrdMap {
 pub trait Iter<'a>: ImOrdMap{
 	type K: 'a + Clone + Ord;
 	type V: 'a + Clone;
-	type IterType: Iterator<Item= &'a Entry<Self::K, Self::V>>;
+	type IterType: Iterator<Item= &'a Entry<Self::K, Self::V>> + Send + 'a;
 	/// 迭代方法， 从指定的键开始， 升序或降序遍历
 	fn iter(&self, key: Option<&Self::Key>, descending: bool) -> Self::IterType;
 }
@@ -567,6 +567,9 @@ pub struct OrdMap<T:Clone> {
 pub struct Keys<'a, T: Iter<'a>>{
 	inner: T::IterType
 }
+
+unsafe impl<'a, T: Iter<'a>> Send for Keys<'a, T> {}
+
 /// 键集的迭代器
 impl<'a, T: Iter<'a>> Iterator for Keys<'a, T>{
 	type Item = &'a T::K;
