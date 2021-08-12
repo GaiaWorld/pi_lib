@@ -1,0 +1,23 @@
+[package]
+name = "async_transaction"
+version = "0.1.0"
+authors = ["zuon <zuon@yinengyun.com>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3"
+bytes = "1.0"
+dashmap = "4.0"
+log = "0.4"
+async = { path = "../async" }
+guid = { path = "../guid" }
+atom = { path = "../atom" }
+
+[dev-dependencies]
+parking_lot = "0.11"
+async-stream = "0.3"
+async_file = { path = "../async_file" }
+hash = { path = "../hash" }
+ordmap = { path = "../ordmap" }
+time = { path = "../time" }
+sinfo = { path = "../sinfo" }
