@@ -2,10 +2,12 @@
 name = "timer"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
 
 [dependencies]
-atom = {path="../atom"}
+ext_heap = {path="../ext_heap"}
 wheel = {path="../wheel"}
-time = {path="../time"}
-lazy_static = "*"
-rand = "0.7"
+
+[dev-dependencies]
+pcg_rand = "0.13"
+rand_core = "0.6"

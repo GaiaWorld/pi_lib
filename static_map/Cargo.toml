@@ -2,6 +2,7 @@
 name = "static_map"
 version = "0.1.0"
 authors = ["zmythleo <zmythleo@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 null = {path="../null"}
