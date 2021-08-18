@@ -202,6 +202,11 @@ pub trait AsyncCommitLog: Clone + Send + Sync + 'static {
 
     /// 异步确认提交日志
     fn confirm(&self, commit_uid: Self::Cid) -> BoxFuture<IOResult<()>>;
+
+    /// 重播提交日志
+    fn replay<B, F>(&self, callback: F) -> BoxFuture<IOResult<(usize, usize)>>
+        where B: BufMut + AsRef<[u8]> + From<Vec<u8>> + Send + Sized + 'static,
+              F: FnMut(Self::Cid, B) -> IOResult<()> + Send + 'static;
 }
 
 

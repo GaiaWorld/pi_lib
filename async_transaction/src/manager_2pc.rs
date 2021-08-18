@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::fmt::Debug;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, Result as IOResult, ErrorKind};
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
 use bytes::BufMut;
@@ -1039,6 +1039,40 @@ impl<
             }
         }.boxed()
     }
+
+    /// 重播提交日志，以恢复因异常关闭导致的未确认的提交日志
+    pub async fn replay_commit_log<B>(&self,
+                                      callback: impl FnMut(Guid, B) -> IOResult<()> + Send + 'static)
+                                      -> IOResult<(usize, usize)>
+        where B: BufMut + AsRef<[u8]> + From<Vec<u8>> + Send + Sized + 'static {
+        self.0.commit_logger.replay(callback).await
+    }
+
+    /// 重播提交，提交重播未确认的提交日志的事务
+    /// 为事务设置指定的事务唯一id和提交唯一id
+    pub async fn replay_commit<T>(&self,
+                                  tr: T,
+                                  transaction_uid: <T as Transaction2Pc>::Tid,
+                                  commit_uid: <T as Transaction2Pc>::Cid,
+                                  input: <T as Transaction2Pc>::PrepareOutput,
+                                  confirm: <T as Transaction2Pc>::CommitConfirm)
+        -> Result<<T as AsyncTransaction>::Output, <T as AsyncTransaction>::Error>
+        where T: TransactionTree<Tid = Guid, Pid = Guid, Cid = Guid, Node = T, Status = Transaction2PcStatus> {
+        //初始化重播事务
+        reset_transaction_uid::<C, Log, T>(tr.clone(), transaction_uid); //递归重置重播事务的事务唯一id
+        if let Err(current_len) = register_transcation(&self, &tr) {
+            //注册根事务失败，指定事务所在事务源的同时处理事务数已达限制
+            tr.set_status(Transaction2PcStatus::InitFailed); //更新事务状态为初始化失败
+            return Err(<T as AsyncTransaction>::Error::new_transaction_error(ErrorLevel::Normal, format!("Init root failed, type: unit, current: {}, status: {:?}, reason: same source transaction excessive", current_len, tr.get_status())));
+        }
+
+        //因为是重播的是未确认且已提交的提交日志的事务，则忽略重播事务的预提交过程
+        reset_commit_uid::<C, Log, T>(tr.clone(), commit_uid); //递归重置重播事务的提交唯一id
+        tr.set_status(Transaction2PcStatus::Prepared); //更新事务状态为已预提交
+
+        //提交重播事务
+        self.commit(tr, input, confirm).await
+    }
 }
 
 // 分配一个唯一的事务id
@@ -1103,6 +1137,44 @@ fn register_transcation<
     }
 
     Ok(())
+}
+
+//递归设置事务的事务唯一id
+fn reset_transaction_uid<
+    C: Send + 'static,
+    Log: AsyncCommitLog<C = C, Cid = Guid>,
+    T: TransactionTree<Tid = Guid, Pid = Guid, Cid = Guid, Node = T, Status = Transaction2PcStatus>,
+>(tr: T,
+  transaction_uid: <T as Transaction2Pc>::Tid) {
+    tr.set_transaction_uid(transaction_uid.clone()); //重置重播事务的事务唯一id
+
+    if tr.children_len() > 0 {
+        //当前事务有子事务，则递归的设置子事务的事务唯一id
+        let mut childs = tr.to_children();
+
+        while let Some(child) = childs.next() {
+            reset_transaction_uid::<C, Log, T>(child, transaction_uid.clone());
+        }
+    }
+}
+
+//递归设置事务的提交唯一id
+fn reset_commit_uid<
+    C: Send + 'static,
+    Log: AsyncCommitLog<C = C, Cid = Guid>,
+    T: TransactionTree<Tid = Guid, Pid = Guid, Cid = Guid, Node = T, Status = Transaction2PcStatus>,
+>(tr: T,
+  commit_uid: <T as Transaction2Pc>::Cid) {
+    tr.set_commit_uid(commit_uid.clone()); //重置重播事务的事务唯一id
+
+    if tr.children_len() > 0 {
+        //当前事务有子事务，则递归的设置子事务的事务唯一id
+        let mut childs = tr.to_children();
+
+        while let Some(child) = childs.next() {
+            reset_commit_uid::<C, Log, T>(child, commit_uid.clone());
+        }
+    }
 }
 
 // 内部事务两阶段提交管理器
