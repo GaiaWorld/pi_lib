@@ -4,6 +4,7 @@
 /// 抽象了事务的执行，一个事务允许由其它事务通过序列或树方式组合而成，事务组合和事务初始化的过程可能完全不同，所以必须是具象的
 /// 但事务的执行过程在事务组合和事务初始化后，是可以统一的，所以可以抽象事务的执行过程
 ///
+use std::sync::Arc;
 use std::fmt::Debug;
 use std::io::Result as IOResult;
 
@@ -193,7 +194,7 @@ pub trait AsyncCommitLog: Clone + Send + Sync + 'static {
     type C: Clone + Send + 'static;
     type Cid: Debug + Clone + Send + PartialEq + Eq + 'static;
 
-    /// 异步追加提交日志
+    /// 异步追加提交日志，返回日志编号
     fn append<B>(&self, commit_uid: Self::Cid, log: B) -> BoxFuture<IOResult<Self::C>>
         where B: BufMut + AsRef<[u8]> + Send + Sized + 'static;
 
@@ -203,10 +204,23 @@ pub trait AsyncCommitLog: Clone + Send + Sync + 'static {
     /// 异步确认提交日志
     fn confirm(&self, commit_uid: Self::Cid) -> BoxFuture<IOResult<()>>;
 
-    /// 重播提交日志
-    fn replay<B, F>(&self, callback: F) -> BoxFuture<IOResult<(usize, usize)>>
+    /// 开始重播提交日志，返回重播的日志数量和字节数量
+    fn start_replay<B, F>(&self, callback: Arc<F>) -> BoxFuture<IOResult<(usize, usize)>>
         where B: BufMut + AsRef<[u8]> + From<Vec<u8>> + Send + Sized + 'static,
-              F: FnMut(Self::Cid, B) -> IOResult<()> + Send + 'static;
+              F: Fn(Self::Cid, B) -> IOResult<()> + Send + Sync + 'static;
+
+    /// 异步追加重播的提交日志
+    fn append_replay<B>(&self, commit_uid: Self::Cid, log: B) -> BoxFuture<IOResult<Self::C>>
+        where B: BufMut + AsRef<[u8]> + Send + Sized + 'static;
+
+    /// 异步刷新重播的提交日志
+    fn flush_replay(&self, log_handle: Self::C) -> BoxFuture<IOResult<()>>;
+
+    /// 异步确认重播的提交日志
+    fn confirm_replay(&self, commit_uid: Self::Cid) -> BoxFuture<IOResult<()>>;
+
+    /// 完成提交日志的重播
+    fn finish_replay(&self) -> BoxFuture<IOResult<()>>;
 }
 
 

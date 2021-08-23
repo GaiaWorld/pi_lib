@@ -619,6 +619,12 @@ impl<
 
         if tr.is_writable() && tr.is_require_persistence() {
             //可写且需要持久化的事务，必须首先写入提交日志
+            if input.as_ref().len() == 0 {
+                //预提交输出为空，则立即返回提交成功
+                tr.set_status(Transaction2PcStatus::Commited); //更新事务状态为已提交
+                return Ok(<T as AsyncTransaction>::Output::default());
+            }
+
             self.0.commit_produced.fetch_add(1, Ordering::Relaxed); //增加开始提交数量
             tr.set_status(Transaction2PcStatus::LogCommiting); //更新事务状态为正在提交日志
 
@@ -1042,14 +1048,15 @@ impl<
 
     /// 重播提交日志，以恢复因异常关闭导致的未确认的提交日志
     pub async fn replay_commit_log<B>(&self,
-                                      callback: impl FnMut(Guid, B) -> IOResult<()> + Send + 'static)
+                                      callback: impl Fn(Guid, B) -> IOResult<()> + Send + Sync + 'static)
                                       -> IOResult<(usize, usize)>
         where B: BufMut + AsRef<[u8]> + From<Vec<u8>> + Send + Sized + 'static {
-        self.0.commit_logger.replay(callback).await
+        self.0.commit_logger.start_replay(Arc::new(callback)).await
     }
 
     /// 重播提交，提交重播未确认的提交日志的事务
     /// 为事务设置指定的事务唯一id和提交唯一id
+    /// 忽略预提交和提交日志的过程
     pub async fn replay_commit<T>(&self,
                                   tr: T,
                                   transaction_uid: <T as Transaction2Pc>::Tid,
@@ -1068,10 +1075,46 @@ impl<
 
         //因为是重播的是未确认且已提交的提交日志的事务，则忽略重播事务的预提交过程
         reset_commit_uid::<C, Log, T>(tr.clone(), commit_uid); //递归重置重播事务的提交唯一id
-        tr.set_status(Transaction2PcStatus::Prepared); //更新事务状态为已预提交
 
         //提交重播事务
-        self.commit(tr, input, confirm).await
+        self.0.commit_produced.fetch_add(1, Ordering::Relaxed); //增加开始提交数量
+
+        match self.0.commit_logger.append_replay(tr.get_commit_uid().unwrap(),
+                                                 input).await {
+            Err(e) => {
+                //同步追加重播的提交日志失败
+                tr.set_status(Transaction2PcStatus::LogCommitFailed); //更新事务状态为提交日志失败
+                return Err(<T as AsyncTransaction>::Error::new_transaction_error(ErrorLevel::Normal, format!("Commit  replay transaction failed, type: tree, transaction_uid: {:?}, commit_uid: {:?}, reason: {:?}", tr.get_transaction_uid(), tr.get_commit_uid(), e)));
+            },
+            Ok(log_handle) => {
+                //同步追加重播的提交日志成功，则立即异步刷新重播的提交日志
+                if let Err(e) = self.0.commit_logger.flush_replay(log_handle).await {
+                    //异步刷新提交日志失败
+                    tr.set_status(Transaction2PcStatus::LogCommitFailed); //更新事务状态为提交日志失败
+                    return Err(<T as AsyncTransaction>::Error::new_transaction_error(ErrorLevel::Normal, format!("Commit replay transaction failed, type: tree, transaction_uid: {:?}, commit_uid: {:?}, reason: {:?}", tr.get_transaction_uid(), tr.get_commit_uid(), e)));
+                }
+
+                tr.set_status(Transaction2PcStatus::LogCommited); //更新事务状态为已提交日志
+            },
+        }
+
+        let result = self.commit_confirm(tr.clone(), confirm).await;
+
+        if result.is_err() {
+            //提交事务失败
+            tr.set_status(Transaction2PcStatus::CommitFailed); //更新事务状态为提交失败
+        } else {
+            //提交事务成功
+            tr.set_status(Transaction2PcStatus::Commited); //更新事务状态为已提交
+        }
+        self.0.commit_consumed.fetch_add(1, Ordering::Relaxed); //增加结束提交数量
+
+        result
+    }
+
+    /// 完成提交日志的重播
+    pub async fn finish_replay(&self) -> IOResult<()> {
+        self.0.commit_logger.finish_replay().await
     }
 }
 
