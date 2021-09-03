@@ -77,14 +77,14 @@ use std::slice::Iter;
 ///    assert_eq!(di.1, 3);
 /// ```
 #[derive(Debug)]
-pub struct LayerDirty {
-    dirtys: Vec<Vec<usize>>, // 按层放置的脏节点
+pub struct LayerDirty<T> {
+    dirtys: Vec<Vec<T>>, // 按层放置的脏节点
     count: usize,            // 脏节点数量
     start: usize,            // 脏节点的起始层
 }
 
-impl Default for LayerDirty {
-    fn default() -> LayerDirty {
+impl<T: Eq> Default for LayerDirty<T> {
+    fn default() -> LayerDirty<T> {
         LayerDirty {
             dirtys: vec![Vec::new()],
             count: 0,
@@ -93,7 +93,7 @@ impl Default for LayerDirty {
     }
 }
 
-impl LayerDirty {
+impl<T: Eq> LayerDirty<T> {
     /// 脏数量
     pub fn count(&self) -> usize {
         self.count
@@ -107,7 +107,7 @@ impl LayerDirty {
     /// let mut dirtys = LayerDirty::default();
     /// dirtys.mark(7, 3);// 将第3层的节点7标记为脏
     /// ```
-    pub fn mark(&mut self, id: usize, layer: usize) {
+    pub fn mark(&mut self, id: T, layer: usize) {
         self.count += 1;
         if self.start > layer {
             self.start = layer;
@@ -132,7 +132,7 @@ impl LayerDirty {
     /// dirtys.delete(7, 3);// 将第3层的节点7标记为脏
     /// assert_eq!(dirtys.count(), 0);
     /// ```
-    pub fn delete(&mut self, id: usize, layer: usize) {
+    pub fn delete(&mut self, id: T, layer: usize) {
         let vec = unsafe { self.dirtys.get_unchecked_mut(layer) };
         for i in 0..vec.len() {
             if vec[i] == id {
@@ -144,7 +144,7 @@ impl LayerDirty {
     }
 
     /// 取到LayerDirty的迭代器
-    pub fn iter(&self) -> DirtyIterator {
+    pub fn iter(&self) -> DirtyIterator<T> {
         if self.count == 0 {
             DirtyIterator {
                 inner: self,
@@ -178,15 +178,15 @@ impl LayerDirty {
 
 
 /// 迭代器
-pub struct DirtyIterator<'a> {
-    inner: &'a LayerDirty,
+pub struct DirtyIterator<'a, T> {
+    inner: &'a LayerDirty<T>,
     layer: usize,
-    iter: Iter<'a, usize>,
+    iter: Iter<'a, T>,
 }
 
 // 迭代器实现
-impl<'a> Iterator for DirtyIterator<'a> {
-    type Item = (&'a usize, usize);
+impl<'a, T: Eq> Iterator for DirtyIterator<'a, T> {
+    type Item = (&'a T, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut r = self.iter.next();

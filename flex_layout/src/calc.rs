@@ -557,7 +557,7 @@ impl Cache {
     // 自动布局，计算宽高， 如果is_notify则返回Temp(宽度或高度auto、宽度或高度undefined的节点会进入此方法)
     fn auto_layout<T>(
         &mut self,
-        tree: &IdTree<usize>,
+        tree: &IdTree<u32>,
         i_nodes: &mut impl IndexMut<usize, Output = INode>,
         rect_style_map: &impl Index<usize, Output = RectStyle>,
         other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -618,7 +618,7 @@ impl Cache {
     }
     fn do_layout<T>(
         &mut self,
-        tree: &IdTree<usize>,
+        tree: &IdTree<u32>,
         i_nodes: &mut impl IndexMut<usize, Output = INode>,
         rect_style_map: &impl Index<usize, Output = RectStyle>,
         other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -771,7 +771,7 @@ impl Cache {
     // 节点的flex布局
     fn node_layout<T>(
         &mut self,
-        tree: &IdTree<usize>,
+        tree: &IdTree<u32>,
         i_nodes: &mut impl IndexMut<usize, Output = INode>,
         rect_style_map: &impl Index<usize, Output = RectStyle>,
         other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -1106,7 +1106,7 @@ impl Temp {
     // 实际进行子节点布局
     fn layout<T>(
         &mut self,
-        tree: &IdTree<usize>,
+        tree: &IdTree<u32>,
         i_nodes: &mut impl IndexMut<usize, Output = INode>,
         rect_style_map: &impl Index<usize, Output = RectStyle>,
         other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -1331,7 +1331,7 @@ impl Temp {
     // 处理单行的节点布局
     fn single_line<T>(
         &mut self,
-        tree: &IdTree<usize>,
+        tree: &IdTree<u32>,
         i_nodes: &mut impl IndexMut<usize, Output = INode>,
         rect_style_map: &impl Index<usize, Output = RectStyle>,
         other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -1550,7 +1550,7 @@ impl ContainerStyle {
 
 // 绝对定位下的布局，如果size=auto， 会先调用子节点的布局
 pub(crate) fn abs_layout<T>(
-    tree: &IdTree<usize>,
+    tree: &IdTree<u32>,
     i_nodes: &mut impl IndexMut<usize, Output = INode>,
     rect_style_map: &impl Index<usize, Output = RectStyle>,
     other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -1728,7 +1728,7 @@ pub(crate) fn abs_layout<T>(
 
 // 如果节点是相对定位，被设脏表示其修改的数据不会影响父节点的布局 则先检查自身的布局数据，然后修改子节点的布局数据
 pub(crate) fn rel_layout<T>(
-    tree: &IdTree<usize>,
+    tree: &IdTree<u32>,
     i_nodes: &mut impl IndexMut<usize, Output = INode>,
     rect_style_map: &impl Index<usize, Output = RectStyle>,
     other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -1774,7 +1774,7 @@ pub(crate) fn rel_layout<T>(
 
 // 设置节点的布局数据，如果内容宽高有改变，则调用自身的子节点布局方法
 fn set_layout<T>(
-    tree: &IdTree<usize>,
+    tree: &IdTree<u32>,
     i_nodes: &mut impl IndexMut<usize, Output = INode>,
     rect_style_map: &impl Index<usize, Output = RectStyle>,
     other_style_map: &impl Index<usize, Output = OtherStyle>,
@@ -2074,7 +2074,7 @@ fn align_stretch(start: f32, end: f32, info: &RelNodeInfo) -> (f32, f32) {
 }
 
 fn layout_node<T>(
-    tree: &IdTree<usize>,
+    tree: &IdTree<u32>,
     i_nodes: &mut impl IndexMut<usize, Output = INode>,
     rect_style_map: &impl Index<usize, Output = RectStyle>,
     other_style_map: &impl Index<usize, Output = OtherStyle>,

@@ -1,0 +1,9 @@
+[package]
+name = "idtree_new"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+
+[dependencies]
+map_new = {path="../map_new"}
+log = "*"
+

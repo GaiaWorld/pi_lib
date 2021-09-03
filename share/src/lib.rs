@@ -15,10 +15,10 @@
 //! * `ShareMutex`等同于`std::sync::Mutex`
 //! * `ShareRwLock`等同于`std::sync::RwCell`
 //! * `ShareCell`等同于`cell::TrustCell`
+use std::cell::{RefCell, Ref, RefMut, BorrowError, BorrowMutError};
 
 #[cfg(feature = "rc")]
 use std::rc::{Rc, Weak};
-use std::cell::{RefCell, Ref, RefMut, BorrowError, BorrowMutError};
 #[cfg(feature = "rc")]
 pub type Share<T> = Rc<T>;
 #[cfg(feature = "rc")]

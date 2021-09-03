@@ -2,10 +2,12 @@
 extern crate deque;
 extern crate hash;
 extern crate lru;
-extern crate share;
+
 extern crate slab;
 #[macro_use]
 extern crate any;
+extern crate share;
+
 
 // extern crate web_sys;
 

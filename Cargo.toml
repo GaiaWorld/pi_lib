@@ -61,4 +61,8 @@ members = [
   "deletable_heap",
   "ext_heap",
   "weight",
+  "slab_new",
+  "map_new",
+  "flex_layout_new",
+  "idtree_new",
 ]
