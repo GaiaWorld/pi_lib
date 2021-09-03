@@ -575,7 +575,12 @@ impl<O: Default + 'static> AsyncFile<O> {
             },
         }
     }
-}
+
+    /// 获取文件内部句柄
+    pub fn get_inner(&self) -> Result<File> {
+        self.0.inner.read().try_clone()
+    }
+ }
 
 /*
 * 异步文件的异步方法

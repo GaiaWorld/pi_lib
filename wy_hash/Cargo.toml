@@ -1,13 +1,9 @@
 [package]
-name = "timer"
+name = "wy_hash"
 version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-ext_heap = {path="../ext_heap"}
-wheel = {path="../wheel"}
-
-[dev-dependencies]
-pcg_rand = "0.13"
+wy_rng = {path="../wy_rng"}
 rand_core = "0.6"

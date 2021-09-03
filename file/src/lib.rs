@@ -12,8 +12,6 @@ extern crate notify;
 extern crate lazy_static;
 extern crate atom;
 extern crate apm;
-extern crate worker;
 
-pub mod file;
 pub mod fs_monitor;
 

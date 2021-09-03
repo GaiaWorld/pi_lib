@@ -1,0 +1,13 @@
+[package]
+name = "res_mgr"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+share = { path = "../share", features=["rc"]}
+hash = {path="../hash"}
+slotmap = "1.0"
+slot_deque = {path="../slot_deque"}
+any = {path="../any"}
+

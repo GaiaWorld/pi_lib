@@ -1,9 +1,6 @@
 [package]
 name = "wheel"
 version = "0.1.0"
-authors = ["suncy <suncy@gmail.com>"]
+authors = ["zmythleo <zmythleo@gmail.com>"]
 edition = "2018"
 
-[dependencies]
-heap = {path="../heap"}
-dyn_uint = {path="../dyn_uint"}

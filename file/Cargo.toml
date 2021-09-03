@@ -9,4 +9,3 @@ notify = "*"
 lazy_static = "1.3"
 atom = { path = "../atom" }
 apm = { path = "../apm" }
-worker = { path = "../worker" }
