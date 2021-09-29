@@ -6,7 +6,6 @@
 #![feature(associated_type_defaults)]
 #![feature(exclusive_range_pattern)]
 #![feature(trait_alias)]
-#![feature(const_fn)]
 #![feature(nll)]
 #[warn(unreachable_patterns)]
 
