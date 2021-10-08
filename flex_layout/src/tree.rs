@@ -85,11 +85,16 @@ pub fn compute<T>(dirty: &mut LayerDirty<usize>, tree: &IdTree, i_nodes: &mut im
 		};
 		let is_text = i_node.text.len() > 0;
 		if state.abs() {
+			let i_node = &i_nodes[*id];
+			let mut parent = node.parent(); 
+			while parent > 0 && i_nodes[parent].state.vnode() {
+				parent = tree[parent].parent();
+			}; 
 			// 如果节点是绝对定位， 则重新计算自身的布局数据
 			let (parent_size, flex) = if !i_node.state.self_rect() {
 				// 如果节点自身不是绝对区域，则需要获得父容器的内容大小
-				let layout = &mut layouts[node.parent()];
-				let style = &other_styles[node.parent()];
+				let layout = &mut layouts[parent];
+				let style = &other_styles[parent];
 				(layout.get_content_size(), ContainerStyle::new(style))
 			} else {
 				((0.0, 0.0), ContainerStyle{justify_content: JustifyContent::FlexStart, align_content: AlignContent::FlexStart, flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::NoWrap, align_items: AlignItems::FlexStart})
