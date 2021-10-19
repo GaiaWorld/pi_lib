@@ -63,6 +63,7 @@ impl<T> SpinLock<T> {
     }
 
     /// 获取同步自旋锁
+    #[cfg(not(target_arch = "aarch64"))]
     pub fn lock(&self) -> SpinLockGuard<T> {
         let mut spin_len = 1;
         loop {
@@ -70,6 +71,27 @@ impl<T> SpinLock<T> {
                                                           true,
                                                           Ordering::Acquire,
                                                           Ordering::Relaxed) {
+                Err(_) => {
+                    //锁失败，则自旋后，继续锁
+                    spin_len = spin(spin_len);
+                    continue;
+                },
+                Ok(_) => {
+                    return SpinLockGuard {
+                        guarder: self.inner.clone(),
+                    };
+                },
+            }
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    pub fn lock(&self) -> SpinLockGuard<T> {
+        let mut spin_len = 1;
+        loop {
+            match self.inner.status.compare_exchange(false,
+                                                     true,
+                                                     Ordering::Acquire,
+                                                     Ordering::Relaxed) {
                 Err(_) => {
                     //锁失败，则自旋后，继续锁
                     spin_len = spin(spin_len);

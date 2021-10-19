@@ -470,19 +470,37 @@ impl<
 
     /// 启动单线程异步任务执行器
     pub fn startup(&self) -> Option<SingleTaskRuntime<O, P>> {
-        match self
-            .is_running
-            .compare_exchange_weak(false,
-                                   true,
-                                   Ordering::SeqCst,
-                                   Ordering::SeqCst) {
-            Ok(false) => {
-                //未启动，则启动，并返回单线程异步运行时
-                Some(self.runtime.clone())
+        if cfg!(target_arch = "aarch64") {
+            match self
+                .is_running
+                .compare_exchange(false,
+                                  true,
+                                  Ordering::SeqCst,
+                                  Ordering::SeqCst) {
+                Ok(false) => {
+                    //未启动，则启动，并返回单线程异步运行时
+                    Some(self.runtime.clone())
+                }
+                _ => {
+                    //已启动，则忽略
+                    None
+                }
             }
-            _ => {
-                //已启动，则忽略
-                None
+        } else {
+            match self
+                .is_running
+                .compare_exchange_weak(false,
+                                       true,
+                                       Ordering::SeqCst,
+                                       Ordering::SeqCst) {
+                Ok(false) => {
+                    //未启动，则启动，并返回单线程异步运行时
+                    Some(self.runtime.clone())
+                }
+                _ => {
+                    //已启动，则忽略
+                    None
+                }
             }
         }
     }
