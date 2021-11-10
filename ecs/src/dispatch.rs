@@ -28,7 +28,10 @@ impl Dispatcher for SeqDispatcher {
         for k in names.iter() {
             let sys = match world.get_system(&k) {
                 Some(r) => r,
-                None => panic!("system is not exist:{}", **k),
+                None => {
+					log::error!("system is not exist:{}", **k);
+					panic!("");
+				},
             };
             match sys.fetch_run() {
                 Some(run) => self.vec.borrow_mut().push(run),

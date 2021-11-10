@@ -5,4 +5,5 @@ authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [features]
+defualt = []
 rc = []

@@ -17,6 +17,7 @@ share = {path="../share"}
 debug_info = {path="../debug_info"}
 paste = "0.1"
 lazy_static = "*"
+log = "*"
 # im = "*"
 
 # [dependencies.web-sys]

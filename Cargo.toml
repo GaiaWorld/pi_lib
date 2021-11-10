@@ -64,4 +64,8 @@ members = [
   "slot_deque",
   "weight_task",
   "res_mgr",
+  "slab_new",
+  "map_new",
+  "flex_layout_new",
+  "idtree_new",
 ]
