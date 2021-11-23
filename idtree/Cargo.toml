@@ -5,4 +5,5 @@ authors = ["zmythleo <zmythleo@gmail.com>"]
 
 [dependencies]
 map = {path="../map"}
+log="*"
 

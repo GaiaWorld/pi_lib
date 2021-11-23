@@ -11,6 +11,7 @@ any = {path="../any"}
 # share_rc = { package = "share", path = "../share", features=["rc"], optional = true }
 # share_arc = { package = "share", path = "../share", optional = true }
 share = { path = "../share", optional = true}
+log="*"
 
 hash = {path="../hash"}
 atom = {path="../atom"}
