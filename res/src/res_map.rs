@@ -21,9 +21,17 @@ pub trait Res: 'static {
     /// 关联键的类型
     type Key: Hash + Eq + Clone + std::fmt::Debug;
 }
+
+
 /// 资源整理接口
 #[cfg(feature="rc")]
 pub trait ResCollect: RcAny {
+	 /// 计算资源的内存占用
+	fn use_cost(&self) -> usize;
+
+	/// 计算资源的内存占用
+	fn lru_cost(&self) -> usize;
+
     /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
     /// 计算资源的内存占用
@@ -44,6 +52,12 @@ pub trait Res: Send + Sync + 'static {
 /// 资源整理接口
 #[cfg(not(feature="rc"))]
 pub trait ResCollect: ArcAny {
+     /// 计算资源的内存占用
+	fn use_cost(&self) -> usize;
+
+	/// 计算资源的内存占用
+	fn lru_cost(&self) -> usize;
+
     /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
     /// 计算资源的内存占用
@@ -171,6 +185,17 @@ impl<T: Res + 'static> ResMap<T> {
 }
 
 impl<T: Res + 'static> ResCollect for ResMap<T> {
+	fn use_cost(&self) -> usize {
+		let mut r = 0;
+		for i in self.array.iter() {
+			r += i.1;
+		}
+		r
+	}
+
+	fn lru_cost(&self) -> usize {
+		self.cache.size()
+	}
     fn mem_size(&self) -> usize {
         let mut r = 0;
         r += self.map.capacity()

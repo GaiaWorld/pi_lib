@@ -15,14 +15,14 @@ pub static CAPACITY: usize = 64 * 1024 * 1024;
 
 /// 资源管理器
 pub struct ResMgr {
-    tables: XHashMap<(TypeId, usize/*group_i*/), ResTable>,
+    pub tables: XHashMap<(TypeId, usize/*group_i*/), ResTable>,
     pub total_capacity: usize,
     weight: usize,
     min_capacity: usize,
 }
 
-struct ResTable{
-    res_map: Share<dyn ResCollect>,
+pub struct ResTable{
+    pub res_map: Share<dyn ResCollect>,
     weight: usize,
 }
 

@@ -24,9 +24,10 @@ pub type CellMultiCase<E, C> = StdCell<MultiCaseImpl<E, C>>;
 
 impl<E: 'static, C: Component> MultiCase for CellMultiCase<E, C> {
     fn delete(&self, id: usize) {
-        let notify = self.borrow_mut().notify.delete.clone();
-        let e = Event { id: id, field: "", index:0  };
-        notify.listen(&e);
+        // let notify = self.borrow_mut().notify.delete.clone();
+        // let e = Event { id: id, field: "", index:0  };
+        // notify.listen(&e);
+        // 实体删除，组件不再监听删除事件
         self.borrow_mut().map.remove(&id);
     }
 }
@@ -181,7 +182,10 @@ impl<E: 'static, C: Component> Fetch for ShareMultiCase<E, C> {
     fn fetch(world: &World) -> Self {
 		match world.fetch_multi::<E, C>() {
 			Some(r) => r,
-			None => std::panic!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<E>(), std::any::type_name::<C>()),
+			None => {
+                log::error!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<E>(), std::any::type_name::<C>());
+                std::panic!();
+            },
 		}
     }
 }

@@ -238,6 +238,8 @@ pub struct CharNode {
     pub pos: (f32, f32),         // 位置
     pub ch_id_or_count: usize,   // 字符id或单词的字符数量
     pub base_width: f32,         // font_size 为32 的字符宽度
+	pub char_i: isize,// 字符在整个节点中的索引
+	pub context_id: isize, // 如果是多字符文字中的某个字符，则存在一个容易索引
 }
 
 impl Default for CharNode {
@@ -249,6 +251,8 @@ impl Default for CharNode {
 			pos: (0.0, 0.0),
 			ch_id_or_count: 0,
 			base_width: 0.0,
+			char_i: -1,
+			context_id: -1,
 		}
 	}
 }

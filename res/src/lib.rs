@@ -7,6 +7,7 @@ extern crate slab;
 #[macro_use]
 extern crate any;
 extern crate share;
+extern crate log;
 
 
 // extern crate web_sys;
