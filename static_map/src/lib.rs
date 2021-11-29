@@ -14,25 +14,50 @@ extern crate core;
 
 extern crate null;
 
-use std::mem;
+use std::{marker::PhantomData, mem};
 use core::ops::{Index, IndexMut};
 
 use null::Null;
 
-/// 静态hash表，要求k一定为不重复的usize
-pub struct StaticMap<V: Null> {
+pub trait Idx: Copy {
+    fn get_rem(self, v: usize) -> usize;
+}
+impl Idx for usize {
+    #[inline(always)]
+    fn get_rem(self, v: usize) -> usize {
+        self % v
+    }
+}
+impl Idx for u32 {
+    #[inline(always)]
+    fn get_rem(self, v: usize) -> usize {
+        self as usize % v
+    }
+}
+impl Idx for u64 {
+    #[inline(always)]
+    fn get_rem(self, v: usize) -> usize {
+        (self % v as u64) as usize
+    }
+}
+/// 静态hash表，要求k一定为不重复的usize, u32, u64
+pub struct StaticMap<K: Idx, V: Null> {
     /// 值数组，空位为Null的V
     array: Vec<V>,
     /// 第一个素数
     p1: usize,
     /// 第二个素数
     p2: usize,
+    _k: PhantomData<K>,
 }
-impl<V: Null> StaticMap<V> {
+impl<K: Idx, V: Null> StaticMap<K, V> {
     /// 用指定的kv键创建静态hash表
-    pub fn new<F>(mut arr: Vec<(usize, V)>, invalid_func: F) -> Self where 
+    pub fn new<F>(mut arr: Vec<(usize, V)>, start_size: usize, invalid_func: F) -> Self where 
     F: Fn() -> V {
-        let len = arr.len() + arr.len();
+        let mut len = arr.len() + arr.len();
+        if start_size > len {
+            len = start_size;
+        }
         let mut index = match PRIMES.binary_search(&(len as u16)) {
             Ok(i) => i,
             Err(i) => i,
@@ -86,10 +111,10 @@ impl<V: Null> StaticMap<V> {
                         array,
                         p1,
                         p2,
+                        _k: PhantomData,
                     }
                 }
             }
-            
         }
     }
     /// 获得kv表的大小
@@ -101,34 +126,34 @@ impl<V: Null> StaticMap<V> {
         self.array.len()
     }
     /// 获得指定键的只读引用
-    pub fn get(&self, k: usize) -> &V {
-        let r = &self.array[k % self.p1];
+    pub fn get(&self, k: K) -> &V {
+        let r = &self.array[k.get_rem(self.p1)];
         if r.is_null() {
-            &self.array[self.p1 + k % self.p2]
+            &self.array[self.p1 + k.get_rem(self.p2)]
         }else{
             r
         }
     }
     /// 获得指定键的可写引用
-    pub fn get_mut(&mut self, k: usize) -> &mut V {
-        let i = k % self.p1;
+    pub fn get_mut(&mut self, k: K) -> &mut V {
+        let i = k.get_rem(self.p1);
         if self.array[i].is_null() {
-            &mut self.array[self.p1 + k % self.p2]
+            &mut self.array[self.p1 + k.get_rem(self.p2)]
         }else{
             &mut self.array[i]
         }
     }
 }
-impl<V: Null> Index<usize> for StaticMap<V> {
+impl<K: Idx, V: Null> Index<K> for StaticMap<K, V> {
     type Output = V;
 
-    fn index(&self, key: usize) -> &V {
+    fn index(&self, key: K) -> &V {
         self.get(key)
     }
 }
 
-impl<V: Null> IndexMut<usize> for StaticMap<V> {
-    fn index_mut(&mut self, key: usize) -> &mut V {
+impl<K: Idx, V: Null> IndexMut<K> for StaticMap<K, V> {
+    fn index_mut(&mut self, key: K) -> &mut V {
         self.get_mut(key)
     }
 }
@@ -183,7 +208,7 @@ mod test_mod {
             let k = rng.next_u32() as usize;
             arr.push((k, k + 1));
         }
-        let map: StaticMap<usize> = StaticMap::new(arr.clone(), || {usize::MAX});
+        let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 0, || {usize::MAX});
         println!("map len:{}", map.len());
         for (k, v) in arr {
             let n = map[k];
@@ -200,7 +225,7 @@ mod test_mod {
             arr.push((k, k + 1));
         }
         b.iter(move|| {
-            let map: StaticMap<usize> = StaticMap::new(arr.clone(), || {usize::MAX});
+            let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 4000,|| {usize::MAX});
             for (k, v) in arr.clone() {
                 let n = map.get(k);
                 assert_eq!(*n, v);
@@ -215,7 +240,7 @@ mod test_mod {
             let k = rng.next_u32() as usize;
             arr.push((k, k + 1));
         }
-        let map: StaticMap<usize> = StaticMap::new(arr.clone(), || {usize::MAX});
+        let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 0, || {usize::MAX});
         println!("map len:{}", map.len());
         b.iter(move|| {
             for &(k, v) in &arr {
