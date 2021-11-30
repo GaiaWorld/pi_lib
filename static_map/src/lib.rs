@@ -14,7 +14,7 @@ extern crate core;
 
 extern crate null;
 
-use std::{marker::PhantomData, mem};
+use std::{any::TypeId, marker::PhantomData, mem};
 use core::ops::{Index, IndexMut};
 
 use null::Null;
@@ -38,6 +38,12 @@ impl Idx for u64 {
     #[inline(always)]
     fn get_rem(self, v: usize) -> usize {
         (self % v as u64) as usize
+    }
+}
+impl Idx for TypeId {
+    #[inline(always)]
+    fn get_rem(self, v: usize) -> usize {
+        unsafe {mem::transmute::<TypeId, u64>(self) }.get_rem(v)
     }
 }
 /// 静态hash表，要求k一定为不重复的usize, u32, u64
@@ -116,6 +122,10 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
                 }
             }
         }
+    }
+    /// 获得素数p1 p2
+    pub fn get_p(&self) -> (usize, usize) {
+        (self.p1, self.p2)
     }
     /// 获得kv表的大小
     pub fn len(&self) -> usize {
