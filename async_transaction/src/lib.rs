@@ -84,6 +84,9 @@ pub trait Transaction2Pc: AsyncTransaction + Clone {
     /// 是否需要持久化
     fn is_require_persistence(&self) -> bool;
 
+    /// 设置需要持久化
+    fn require_persistence(&self);
+
     /// 是否并发预提交
     fn is_concurrent_prepare(&self) -> bool;
 
