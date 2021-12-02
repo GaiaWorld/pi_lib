@@ -875,9 +875,8 @@ impl<
             //回滚单元事务
             tr.rollback().await
         } else {
-            tr.rollback().await
             //回滚事务树
-            // self.rollback_childrens(tr).await
+            self.rollback_childrens(tr.clone()).await
         };
 
         if result.is_err() {
