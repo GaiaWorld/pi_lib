@@ -4714,7 +4714,7 @@ fn test_panic_handler() {
     register_global_panic_handler(|thread: thread::Thread, info, other, location| {
         println!("!!!!!!thread: {:?}", thread);
         println!("!!!!!!info: {}", info);
-        println!("!!!!!!other: {:?}", info);
+        println!("!!!!!!other: {:?}", other);
         println!("!!!!!!location: {:?}", location);
 
         Some(0)
