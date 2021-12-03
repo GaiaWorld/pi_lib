@@ -40,7 +40,7 @@ use r#async::{AsyncExecutorResult, AsyncExecutor, AsyncSpawner,
                          spin_lock::SpinLock,
                          mutex_lock::Mutex,
                          rw_lock::RwLock},
-                  rt::{TaskId, AsyncTask, AsyncRuntime, AsyncValue, spawn_worker_thread, AsyncPipelineResult,
+                  rt::{TaskId, AsyncTask, AsyncRuntime, AsyncValue, spawn_worker_thread, AsyncPipelineResult, register_global_panic_handler,
                        single_thread::{SingleTaskRuntime, SingleTaskRunner},
                        multi_thread::{MultiTaskRuntime, MultiTaskRuntimeBuilder}},
                   local_queue::{LocalQueueSpawner, LocalQueue}, task::LocalTask};
@@ -4707,4 +4707,32 @@ fn test_worker_runtime() {
     }
 
     thread::sleep(Duration::from_millis(1000000000));
+}
+
+#[test]
+fn test_panic_handler() {
+    register_global_panic_handler(|thread: thread::Thread, info, other, location| {
+        println!("!!!!!!thread: {:?}", thread);
+        println!("!!!!!!info: {}", info);
+        println!("!!!!!!other: {:?}", info);
+        println!("!!!!!!location: {:?}", location);
+
+        Some(0)
+    });
+
+    fn test() {
+        test0();
+    }
+
+    fn test0() {
+        panic!("Test panic!, {}", true);
+    }
+
+    thread::Builder::new()
+        .name("Test panic thread".to_string())
+        .spawn(|| {
+        test();
+    });
+
+    thread::sleep(Duration::from_millis(10000));
 }

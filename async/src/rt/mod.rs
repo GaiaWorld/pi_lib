@@ -10,6 +10,7 @@ use std::sync::{Arc, Weak};
 use std::any::{Any, TypeId};
 use std::time::{Instant, Duration};
 use std::cell::{RefCell, UnsafeCell};
+use std::panic::{PanicInfo, set_hook};
 use std::task::{Waker, Context, Poll};
 use std::io::{Error, Result, ErrorKind};
 use std::fmt::{Debug, Formatter, Result as FmtResult};
@@ -1810,6 +1811,54 @@ pub fn wakeup_worker_thread<O: Default + 'static, P: AsyncTaskPoolExt<O> + Async
         is_sleep.store(false, Ordering::SeqCst); //设置为未休眠
         let _ = condvar.notify_one();
     }
+}
+
+/// 注册全局异常处理器，会替换当前全局异常处理器
+pub fn register_global_panic_handler<Handler>(handler: Handler)
+    where Handler: Fn(thread::Thread, String, Option<String>, Option<(String, u32, u32)>) -> Option<i32> + Send + Sync + 'static {
+    set_hook(Box::new(move |panic_info| {
+        let thread_info = thread::current();
+
+        let payload = panic_info.payload();
+        let payload_info = match payload.downcast_ref::<&str>() {
+            None => {
+                //不是String
+                match payload.downcast_ref::<String>() {
+                    None => {
+                        //不是&'static str，则返回未知异常
+                        "Unknow panic".to_string()
+                    },
+                    Some(info) => {
+                        info.clone()
+                    }
+                }
+            },
+            Some(info) => {
+                info.to_string()
+            }
+        };
+
+        let other_info = if let Some(arg) = panic_info.message() {
+            if let Some(s) = arg.as_str() {
+                Some(s.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let location = if let Some(location) = panic_info.location() {
+            Some((location.file().to_string(), location.line(), location.column()))
+        } else {
+            None
+        };
+
+        if let Some(exit_code) = handler(thread_info, payload_info, other_info, location) {
+            //需要关闭当前进程
+            std::process::exit(exit_code);
+        }
+    }));
 }
 
 ///单调递增时间
