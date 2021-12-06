@@ -5,4 +5,4 @@ authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-rand_core = "0.6"
+rand = "0.8"

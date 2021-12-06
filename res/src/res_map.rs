@@ -5,7 +5,10 @@
 use std::hash::Hash;
 use std::ops::Deref;
 
+#[cfg(feature="rc")]
 use any::RcAny;
+#[cfg(not(feature="rc"))]
+use any::ArcAny;
 use deque::deque::Node;
 use hash::XHashMap;
 use lru::{Entry, LruCache};
@@ -13,13 +16,22 @@ use share::{Share, ShareWeak};
 use slab::Slab;
 
 /// 资源，放入资源表的资源必须实现该trait
-pub trait Res {
+#[cfg(feature="rc")]
+pub trait Res: 'static {
     /// 关联键的类型
     type Key: Hash + Eq + Clone + std::fmt::Debug;
 }
 
+
 /// 资源整理接口
+#[cfg(feature="rc")]
 pub trait ResCollect: RcAny {
+	 /// 计算资源的内存占用
+	fn use_cost(&self) -> usize;
+
+	/// 计算资源的内存占用
+	fn lru_cost(&self) -> usize;
+
     /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
     /// 计算资源的内存占用
@@ -29,7 +41,35 @@ pub trait ResCollect: RcAny {
     /// 整理容量，删除超出最大容量的资源
     fn capacity_collect(&mut self);
 }
+#[cfg(feature="rc")]
 impl_downcast_rc!(ResCollect);
+
+#[cfg(not(feature="rc"))]
+pub trait Res: Send + Sync + 'static {
+    /// 关联键的类型
+    type Key: Hash + Eq + Clone + std::fmt::Debug + Send + Sync;
+}
+/// 资源整理接口
+#[cfg(not(feature="rc"))]
+pub trait ResCollect: ArcAny {
+     /// 计算资源的内存占用
+	fn use_cost(&self) -> usize;
+
+	/// 计算资源的内存占用
+	fn lru_cost(&self) -> usize;
+
+    /// 计算资源的内存占用
+    fn mem_size(&self) -> usize;
+    /// 计算资源的内存占用
+    fn set_max_capacity(&mut self, max_capacity: usize);
+    /// 整理方法， 将无人使用的资源放入到LruCache， 清理超时的资源
+    fn collect(&mut self, now: usize) -> StateInfo;
+    /// 整理容量，删除超出最大容量的资源
+    fn capacity_collect(&mut self);
+}
+
+#[cfg(not(feature="rc"))]
+impl_downcast_arc!(ResCollect);
 
 ///资源表的状态信息
 #[derive(Debug)]
@@ -145,6 +185,17 @@ impl<T: Res + 'static> ResMap<T> {
 }
 
 impl<T: Res + 'static> ResCollect for ResMap<T> {
+	fn use_cost(&self) -> usize {
+		let mut r = 0;
+		for i in self.array.iter() {
+			r += i.1;
+		}
+		r
+	}
+
+	fn lru_cost(&self) -> usize {
+		self.cache.size()
+	}
     fn mem_size(&self) -> usize {
         let mut r = 0;
         r += self.map.capacity()

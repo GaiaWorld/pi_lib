@@ -3,26 +3,24 @@ use listener::{FnListeners, Listener as LibListener};
 use share::Share;
 use std::ops::Deref;
 
-pub struct CreateEvent {
-    pub id: usize,
-}
+pub struct CreateEvent;
 
-pub struct DeleteEvent {
-    pub id: usize,
-}
+pub struct DeleteEvent;
 
-pub struct ModifyEvent {
+pub struct ModifyEvent;
+
+pub struct Event {
     pub id: usize,
     pub field: &'static str,
     pub index: usize, // 一般无意义。 只有在数组或向量的元素被修改时，才有意义
 }
 
-pub type CreateListeners = FnListeners<CreateEvent>;
-pub type DeleteListeners = FnListeners<DeleteEvent>;
-pub type ModifyListeners = FnListeners<ModifyEvent>;
-pub type CreateFn = FnListener<CreateEvent>;
-pub type DeleteFn = FnListener<DeleteEvent>;
-pub type ModifyFn = FnListener<ModifyEvent>;
+pub type CreateListeners = FnListeners<Event>;
+pub type DeleteListeners = FnListeners<Event>;
+pub type ModifyListeners = FnListeners<Event>;
+pub type CreateFn = FnListener<Event>;
+pub type DeleteFn = FnListener<Event>;
+pub type ModifyFn = FnListener<Event>;
 
 #[derive(Default, Clone)]
 pub struct NotifyImpl(pub Share<NotifyImpl1>);
@@ -80,15 +78,15 @@ impl NotifyImpl1 {
         self.create.mem_size() + self.delete.mem_size() + self.modify.mem_size()
     }
     pub fn create_event(&self, id: usize) {
-        let e = CreateEvent { id: id };
+        let e = Event { id: id, field: "", index:0 };
         self.create.listen(&e);
     }
     pub fn delete_event(&self, id: usize) {
-        let e = DeleteEvent { id: id };
+        let e = Event { id: id, field: "", index:0  };
         self.delete.listen(&e);
     }
     pub fn modify_event(&self, id: usize, field: &'static str, index: usize) {
-        let e = ModifyEvent {
+        let e = Event {
             id: id,
             field: field,
             index: index,

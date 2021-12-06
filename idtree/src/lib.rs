@@ -90,7 +90,10 @@ impl<T: Default> IdTree<T> {
                     }
                     (if n.layer > 0 { n.layer + 1 } else { 0 }, prev, next)
                 }
-                _ => panic!("invalid parent: {}", parent),
+                _ => {
+                    log::error!("invalid parent: {}", parent);
+                    panic!("invalid parent: {}", parent);
+                },
             };
             self.insert_node(id, parent, layer, prev, next)
         } else {
@@ -104,7 +107,10 @@ impl<T: Default> IdTree<T> {
                 InsertType::Front => (n.parent, n.layer, n.prev, brother),
                 InsertType::Back => (n.parent, n.layer, brother, n.next),
             },
-            _ => panic!("invalid brother: {}", brother),
+            _ => {
+                log::error!("invalid brother: {}", brother);
+                panic!("invalid brother: {}", brother);
+            },
         };
         if parent > 0 {
             self.insert_node(id, parent, layer, prev, next)
@@ -235,15 +241,20 @@ impl<T: Default> IdTree<T> {
         let head = match self.map.get_mut(id) {
             Some(n) => {
                 if n.parent > 0 {
-                    panic!("has a parent node, id: {}", id)
+                    log::error!("has a parent node, id: {}", id);
+                    panic!("has a parent node, id: {}", id);
                 }
                 if n.layer > 0 {
-                    panic!("already on the tree, id: {}", id)
+                    log::error!("already on the tree, id: {}", id);
+                    panic!("already on the tree, id: {}", id);
                 }
                 n.layer = 1;
                 n.children.head
             }
-            _ => panic!("invalid id: {}", id),
+            _ => {
+                log::error!("invalid id: {}", id);
+                panic!("invalid id: {}", id);
+            },
         };
         self.insert_tree(head, 2);
         1
@@ -266,10 +277,12 @@ impl<T: Default> IdTree<T> {
             Some(n) => {
                 if n.parent != parent {
                     if n.parent > 0 {
-                        panic!("has a parent node, id: {}", id)
+                        log::error!("has a parent node, id: {}", id);
+                        panic!("has a parent node, id: {}", id);
                     }
                     if n.layer > 0 {
-                        panic!("already on the tree, id: {}", id)
+                        log::error!("already on the tree, id: {}", id);
+                        panic!("already on the tree, id: {}", id);
                     }
                     n.parent = parent;
                     n.layer = layer;
@@ -285,7 +298,10 @@ impl<T: Default> IdTree<T> {
                     (0, fix_prev, fix_next)
                 }
             }
-            _ => panic!("invalid id: {}", id),
+            _ => {
+                log::error!("invalid id: {}", id);
+                panic!("invalid id: {}", id);
+            },
 		};
         // 修改prev和next的节点
         if prev > 0 {

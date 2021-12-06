@@ -101,7 +101,10 @@ impl<T: 'static> Fetch for ShareSingleCase<T> {
     fn fetch(world: &World) -> Self {
 		match world.fetch_single::<T>() {
 			Some(r) => r,
-			None => std::panic!("fetch_single fail:{:?}",  std::any::type_name::<T>()),
+			None => {
+                log::error!("fetch_single fail:{:?}",  std::any::type_name::<T>());
+                std::panic!();
+            },
 		}
     }
 }

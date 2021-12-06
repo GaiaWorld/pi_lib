@@ -1,0 +1,100 @@
+fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
+    *count += 1;
+    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
+}
+#[test]
+fn justify_content_min_width_with_padding_child_width_lower_than_parent() {
+    let mut layout_tree = layout::tree::LayoutTree::default();
+    layout_tree.insert(
+        1,
+        0,
+        0,
+        layout::idtree::InsertType::Back,
+        layout::style::Style {
+            position_type: layout::style::PositionType::Absolute,
+            size: layout::geometry::Size {
+                width: layout::style::Dimension::Points(1920.0),
+                height: layout::style::Dimension::Points(1024.0),
+            },
+            ..Default::default()
+        },
+    );
+    layout_tree.insert(
+        2,
+        1,
+        0,
+        layout::idtree::InsertType::Back,
+        layout::style::Style {
+            flex_direction: layout::style::FlexDirection::Column,
+            size: layout::geometry::Size {
+                width: layout::style::Dimension::Points(1080f32),
+                height: layout::style::Dimension::Points(1584f32),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    layout_tree.insert(
+        3,
+        2,
+        0,
+        layout::idtree::InsertType::Back,
+        layout::style::Style {
+            ..Default::default()
+        },
+    );
+    layout_tree.insert(
+        4,
+        3,
+        0,
+        layout::idtree::InsertType::Back,
+        layout::style::Style {
+            justify_content: layout::style::JustifyContent::Center,
+            min_size: layout::geometry::Size {
+                width: layout::style::Dimension::Points(400f32),
+                ..Default::default()
+            },
+            padding: layout::geometry::Rect {
+                start: layout::style::Dimension::Points(100f32),
+                end: layout::style::Dimension::Points(100f32),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    layout_tree.insert(
+        5,
+        4,
+        0,
+        layout::idtree::InsertType::Back,
+        layout::style::Style {
+            size: layout::geometry::Size {
+                width: layout::style::Dimension::Points(199f32),
+                height: layout::style::Dimension::Points(100f32),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
+    layout_tree.compute(print, &mut 0);
+    let layout = layout_tree.get_layout(2).unwrap();
+    assert_eq!(layout.rect.end - layout.rect.start, 1080f32);
+    assert_eq!(layout.rect.bottom - layout.rect.top, 1584f32);
+    assert_eq!(layout.rect.start, 0f32);
+    assert_eq!(layout.rect.top, 0f32);
+    let layout = layout_tree.get_layout(3).unwrap();
+    assert_eq!(layout.rect.end - layout.rect.start, 1080f32);
+    assert_eq!(layout.rect.bottom - layout.rect.top, 100f32);
+    assert_eq!(layout.rect.start, 0f32);
+    assert_eq!(layout.rect.top, 0f32);
+    let layout = layout_tree.get_layout(4).unwrap();
+    assert_eq!(layout.rect.end - layout.rect.start, 400f32);
+    assert_eq!(layout.rect.bottom - layout.rect.top, 100f32);
+    assert_eq!(layout.rect.start, 0f32);
+    assert_eq!(layout.rect.top, 0f32);
+    let layout = layout_tree.get_layout(5).unwrap();
+    assert_eq!(layout.rect.end - layout.rect.start, 199f32);
+    assert_eq!(layout.rect.bottom - layout.rect.top, 100f32);
+    assert_eq!(layout.rect.start, 101f32);
+    assert_eq!(layout.rect.top, 0f32);
+}
