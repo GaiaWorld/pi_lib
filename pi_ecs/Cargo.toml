@@ -1,0 +1,47 @@
+[package]
+name = "pi_ecs"
+version = "0.1.0"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+slotmap = "1.0"
+fixedbitset = "0.4"
+slab = {path="../slab"}
+atom = {path="../atom"}
+map = {path="../map"}
+any = {path="../any"}
+pointer = {path="../pointer"}
+listener = {path="../listener"}
+hash = {path="../hash"}
+time = {path="../time"}
+share = {path="../share"}
+wy_rng = {path="../wy_rng"}
+debug_info = {path="../debug_info"}
+pi_ecs_macros = { path = "macros"}
+paste = "0.1"
+lazy_static = "*"
+log = "*"
+rand = "*"
+thiserror = "1.0"
+
+# im = "*"
+
+# [dependencies.web-sys]
+# version = "*"
+# features = [
+# 	"console",
+# ]
+
+[features]
+defualt = ["runtime"]
+runtime = []
+
+[[example]]
+name = "expanded"
+
+[[example]]
+name = "basic"
+
+
+

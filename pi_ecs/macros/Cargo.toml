@@ -1,0 +1,16 @@
+[package]
+name = "pi_ecs_macros"
+version = "0.1.0"
+description = "pi_ecs Macros"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+proc-macro2 = "1.0"
+find-crate = "0.6"
