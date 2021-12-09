@@ -15,14 +15,14 @@ pub static CAPACITY: usize = 64 * 1024 * 1024;
 
 /// 资源管理器
 pub struct ResMgr {
-    tables: XHashMap<(TypeId, usize/*group_i*/), ResTable>,
+    pub tables: XHashMap<(TypeId, usize/*group_i*/), ResTable>,
     pub total_capacity: usize,
     weight: usize,
     min_capacity: usize,
 }
 
-struct ResTable{
-    res_map: Share<dyn ResCollect>,
+pub struct ResTable{
+    pub res_map: Share<dyn ResCollect>,
     weight: usize,
 }
 
@@ -497,10 +497,10 @@ pub fn test() {
     texture.create(Atom::from("13"), R1 {}, 2097152, 0);
 
     res_mgr.collect(3000);
-    println!(
-        "xxxxxxxxxxxxxxxxxxxxxxxxxx4: {:?}",
-        texture.cache.get_max_capacity()
-    );
+    // println!(
+    //     "xxxxxxxxxxxxxxxxxxxxxxxxxx4: {:?}",
+    //     texture.cache.get_max_capacity()
+    // );
 
     // let r1 = res_mgr.fetch_map().unwrap();
 }

@@ -20,7 +20,7 @@
 //! LayerDirty就是为了解决这种父子存在计算顺序的问题。
 //! 利用LayerDirty，你可以非常轻松的先迭代父脏，再迭代子脏（其中的脏对每一层进行了划分，并按照层从小到大的顺序排列，
 //! 我们只需要从最外层数组的第一个开始迭代就可以了）
-
+extern  crate log;
 use std::slice::Iter;
 
 /// # Examples
@@ -77,23 +77,25 @@ use std::slice::Iter;
 ///    assert_eq!(di.1, 3);
 /// ```
 #[derive(Debug)]
-pub struct LayerDirty {
-    dirtys: Vec<Vec<usize>>, // 按层放置的脏节点
+pub struct LayerDirty<T> {
+    dirtys: Vec<Vec<T>>, // 按层放置的脏节点
     count: usize,            // 脏节点数量
     start: usize,            // 脏节点的起始层
+	end: usize,            // 脏节点的结束层
 }
 
-impl Default for LayerDirty {
-    fn default() -> LayerDirty {
+impl<T: Eq> Default for LayerDirty<T> {
+    fn default() -> LayerDirty<T> {
         LayerDirty {
             dirtys: vec![Vec::new()],
             count: 0,
-            start: usize::max_value(),
+            start: 0,
+			end: 0,
         }
     }
 }
 
-impl LayerDirty {
+impl<T: Eq> LayerDirty<T> {
     /// 脏数量
     pub fn count(&self) -> usize {
         self.count
@@ -107,11 +109,14 @@ impl LayerDirty {
     /// let mut dirtys = LayerDirty::default();
     /// dirtys.mark(7, 3);// 将第3层的节点7标记为脏
     /// ```
-    pub fn mark(&mut self, id: usize, layer: usize) {
+    pub fn mark(&mut self, id: T, layer: usize) {
         self.count += 1;
         if self.start > layer {
             self.start = layer;
         }
+		if self.end <= layer {
+			self.end = layer + 1;
+		}
         if self.dirtys.len() <= layer {
             for _ in self.dirtys.len()..layer + 1 {
                 self.dirtys.push(Vec::new())
@@ -132,7 +137,7 @@ impl LayerDirty {
     /// dirtys.delete(7, 3);// 将第3层的节点7标记为脏
     /// assert_eq!(dirtys.count(), 0);
     /// ```
-    pub fn delete(&mut self, id: usize, layer: usize) {
+    pub fn delete(&mut self, id: T, layer: usize) {
         let vec = unsafe { self.dirtys.get_unchecked_mut(layer) };
         for i in 0..vec.len() {
             if vec[i] == id {
@@ -144,7 +149,7 @@ impl LayerDirty {
     }
 
     /// 取到LayerDirty的迭代器
-    pub fn iter(&self) -> DirtyIterator {
+    pub fn iter(&self) -> DirtyIterator<T> {
         if self.count == 0 {
             DirtyIterator {
                 inner: self,
@@ -156,6 +161,23 @@ impl LayerDirty {
                 inner: self,
                 layer: self.start + 1,
                 iter: self.dirtys[self.start].iter(),
+            }
+        }
+    }
+
+	 /// 取到LayerDirty的迭代器
+	 pub fn iter_reverse(&self) -> ReverseDirtyIterator<T> {
+        if self.count == 0 {
+            ReverseDirtyIterator {
+                inner: self,
+                layer: self.start,
+                iter: self.dirtys[0].iter(),
+            }
+        } else {
+			ReverseDirtyIterator {
+                inner: self,
+                layer: self.end - 1,
+                iter: self.dirtys[self.end - 1].iter(),
             }
         }
     }
@@ -173,20 +195,21 @@ impl LayerDirty {
             self.count -= c;
             vec.clear();
         }
+		self.end = 0;
     }
 }
 
 
 /// 迭代器
-pub struct DirtyIterator<'a> {
-    inner: &'a LayerDirty,
+pub struct DirtyIterator<'a, T> {
+    inner: &'a LayerDirty<T>,
     layer: usize,
-    iter: Iter<'a, usize>,
+    iter: Iter<'a, T>,
 }
 
 // 迭代器实现
-impl<'a> Iterator for DirtyIterator<'a> {
-    type Item = (&'a usize, usize);
+impl<'a, T: Eq> Iterator for DirtyIterator<'a, T> {
+    type Item = (&'a T, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut r = self.iter.next();
@@ -205,6 +228,38 @@ impl<'a> Iterator for DirtyIterator<'a> {
         }
 		match r {
 			Some(r) => Some((r, self.layer - 1)),
+			None => None,
+		}
+    }
+}
+
+
+/// 迭代器
+pub struct ReverseDirtyIterator<'a, T> {
+    inner: &'a LayerDirty<T>,
+    layer: usize,
+    iter: Iter<'a, T>,
+}
+
+/// 迭代器实现
+impl<'a, T: Eq> Iterator for ReverseDirtyIterator<'a, T> {
+    type Item = (&'a T, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut r = self.iter.next();
+        if r == None {
+            while self.layer > 0 {
+                let vec = unsafe { self.inner.dirtys.get_unchecked(self.layer - 1) };
+                self.layer -= 1;
+                if vec.len() > 0 {
+                    self.iter = vec.iter();
+                    r = self.iter.next();
+                    break;
+                }
+            }
+        }
+		match r {
+			Some(r) => Some((r, self.layer)),
 			None => None,
 		}
     }

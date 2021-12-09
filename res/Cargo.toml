@@ -8,12 +8,25 @@ slab = { path = "../slab"}
 deque = {path = "../deque"}
 lru = {path = "../lru"}
 any = {path="../any"}
-share = { path = "../share", features=["rc"]}
+# share_rc = { package = "share", path = "../share", features=["rc"], optional = true }
+# share_arc = { package = "share", path = "../share", optional = true }
+share = { path = "../share", optional = true}
+log="*"
+
 hash = {path="../hash"}
 atom = {path="../atom"}
+
+[features]
+default = ["share"]
+rc = ["share/rc"]
+
+
 
 # [dependencies.web-sys]
 # version = "*"
 # features = [
 # 	"console",
 # ]
+# [features]
+# default = []
+# rc = ["share/rc"]

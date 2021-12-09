@@ -80,10 +80,12 @@ impl<'a, T> Drop for RefMut<'a, T> {
 
 /// A custom cell container that is a `RefCell` with thread-safety.
 #[derive(Debug)]
-pub struct TrustCell<T:?Sized> {
+pub struct TrustCell<T: ?Sized> {
     flag: AtomicUsize,
     inner: UnsafeCell<T>,
 }
+unsafe impl<T> Sync for TrustCell<T> where T: Sync {}
+unsafe impl<T> Send for TrustCell<T> where T: Send {}
 
 impl<T> TrustCell<T> {
     /// Create a new cell, similar to `RefCell::new`
@@ -179,8 +181,15 @@ impl<T> TrustCell<T> {
                 return Err(InvalidBorrow);
             }
 
-            match self.flag.compare_exchange(val, val + 1, Ordering::AcqRel, Ordering::Relaxed) {
-                Ok(r) => if r == val { return Ok(());},
+            match self
+                .flag
+                .compare_exchange(val, val + 1, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                Ok(r) => {
+                    if r == val {
+                        return Ok(());
+                    }
+                }
                 _ => continue,
             }
         }
@@ -191,24 +200,26 @@ impl<T> TrustCell<T> {
     fn check_flag_write(&self) -> Result<(), InvalidBorrow> {
         // Check we have 0 references out, and then set the ref count to usize::MAX to
         // indicate a write lock.
-        match self.flag.compare_exchange(0, usize::MAX, Ordering::AcqRel, Ordering::Relaxed) {
+        match self
+            .flag
+            .compare_exchange(0, usize::MAX, Ordering::AcqRel, Ordering::Relaxed)
+        {
             Ok(_r) => Ok(()),
             _ => Err(InvalidBorrow),
         }
     }
 }
 
-unsafe impl<T> Sync for TrustCell<T> where T: Sync {}
-unsafe impl<T> Send for TrustCell<T> where T: Send {}
-
-impl<T> Default for TrustCell<T>
-where
-    T: Default,
-{
+impl<T: Default> Default for TrustCell<T> {
     fn default() -> Self {
         TrustCell::new(Default::default())
     }
 }
+// impl<T> const From<T> for TrustCell<T> {
+//     fn from(t: T) -> Self {
+//         TrustCell::new(t)
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

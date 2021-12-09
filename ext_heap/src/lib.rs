@@ -1,4 +1,5 @@
 #![feature(int_bits_const)]
+#![feature(min_specialization)]
 //! 扩展堆，支持删除和修改指定位置的元素，当堆内元素移动时，会调用回调函数
 //! A priority queue implemented with a binary heap.
 //!

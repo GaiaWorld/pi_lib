@@ -18,6 +18,7 @@ extern crate share;
 pub extern crate paste;
 
 pub extern crate time;
+extern crate log;
 
 // pub extern crate web_sys;
 
@@ -39,7 +40,7 @@ pub mod single;
 pub use component::{CellMultiCase, Component, MultiCaseImpl};
 pub use dispatch::{Dispatcher, SeqDispatcher};
 pub use entity::{CellEntity, EntityImpl};
-pub use monitor::{CreateEvent, DeleteEvent, ModifyEvent, Write};
+pub use monitor::{CreateEvent, DeleteEvent, ModifyEvent, Event, Write};
 pub use single::{CellSingleCase, SingleCaseImpl};
 pub use system::{EntityListener, MultiCaseListener, Runner, SingleCaseListener, System};
 pub use world::World;
@@ -305,4 +306,32 @@ impl_trait!(
 impl_trait!(
     (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z),
     (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2, z3)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2, z3, z4)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2, z3, z4, z5)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2, z3, z4, z5, z6)
+);
+impl_trait!(
+    (A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6, Z7),
+    (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z1, z2, z3, z4, z5, z6, z7)
 );

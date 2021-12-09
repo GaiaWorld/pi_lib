@@ -2,7 +2,7 @@ use atom::Atom;
 pub use listener::FnListener;
 use std::{any::TypeId, sync::Arc};
 
-use crate::{Fetch, TypeIds, World};
+use crate::{Event, Fetch, TypeIds, World};
 
 pub trait Runner<'a> {
     type ReadData: SystemData<'a>;
@@ -32,7 +32,7 @@ pub trait MultiCaseListener<'a, E, C, EV> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
+    fn listen(&mut self, event: &Event, read: Self::ReadData, write: Self::WriteData);
 }
 
 /// Entity监听器， 监听Entity的创建和删除， EV是事件类型
@@ -40,14 +40,14 @@ pub trait EntityListener<'a, E, EV> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
+    fn listen(&mut self, event: &Event, read: Self::ReadData, write: Self::WriteData);
 }
 /// 单例组件监听器， EV是事件类型
 pub trait SingleCaseListener<'a, C, EV> {
     type ReadData: SystemData<'a>;
     type WriteData: SystemMutData<'a>;
 
-    fn listen(&mut self, event: &EV, read: Self::ReadData, write: Self::WriteData);
+    fn listen(&mut self, event: &Event, read: Self::ReadData, write: Self::WriteData);
 }
 
 pub type RunnerFn = FnListener<()>;
@@ -59,6 +59,7 @@ pub trait System: any::ArcAny {
     fn fetch_run(&self) -> Option<RunnerFn>;
     fn get_depends(&self) -> (Vec<(TypeId, TypeId)>, Vec<(TypeId, TypeId)>);
 }
+
 impl_downcast_arc!(System);
 
 #[macro_export(local_inner_macros)]
@@ -69,55 +70,331 @@ macro_rules! impl_system {
     (@add_monitor $setup_target:ident, $f:ident, $ec:ty, ModifyEvent) => {$crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())};
     (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, DeleteEvent) => {$crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())};
     (@add_monitor $setup_target:ident, $f:ident, $ec:ty, DeleteEvent) => {$crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())};
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (CreateEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (ModifyEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (CreateEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (DeleteEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (ModifyEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (DeleteEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (CreateEvent, DeleteEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (CreateEvent, ModifyEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (DeleteEvent, CreateEvent , ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (DeleteEvent, ModifyEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (ModifyEvent, CreateEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $e:ty, $c:ty, (ModifyEvent, DeleteEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (CreateEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (ModifyEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (CreateEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (DeleteEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (ModifyEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (DeleteEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (CreateEvent, DeleteEvent, ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (CreateEvent, ModifyEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (DeleteEvent, CreateEvent , ModifyEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (DeleteEvent, ModifyEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (ModifyEvent, CreateEvent, DeleteEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
+    (@add_monitor $setup_target:ident, $f:ident, $ec:ty, (ModifyEvent, DeleteEvent, CreateEvent)) => {
+        $crate::monitor::Notify::add_create(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_modify(&*$setup_target, $f.clone());
+        $crate::monitor::Notify::add_delete(&*$setup_target, $f.clone())
+    };
 
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, CreateEvent) => {
-        let r: Box<Fn(&CreateEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_create(&*$setup_target, &r);
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, CreateEvent) => {
-        let r: Box<Fn(&CreateEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<CreateEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_create(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, ModifyEvent) => {
-        let r: Box<Fn(&ModifyEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, ModifyEvent) => {
-        let r: Box<Fn(&ModifyEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<ModifyEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, DeleteEvent) => {
-        let r: Box<Fn(&DeleteEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_delete(&*$setup_target, &r)
     };
     (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, DeleteEvent) => {
-        let r: Box<Fn(&DeleteEvent)> = unsafe {std::mem::transmute($f.clone())};
-        let r: $crate::monitor::FnListener<DeleteEvent> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
         $crate::monitor::Notify::remove_delete(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (CreateEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (ModifyEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (CreateEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (DeleteEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (DeleteEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (ModifyEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (CreateEvent, ModifyEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (CreateEvent, DeleteEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (ModifyEvent, CreateEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (ModifyEvent, DeleteEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (DeleteEvent, CreateEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $ec:ty, (DeleteEvent, ModifyEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    
+
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (CreateEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (ModifyEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (CreateEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (DeleteEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (DeleteEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (ModifyEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r)
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (CreateEvent, ModifyEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (CreateEvent, DeleteEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (ModifyEvent, CreateEvent, DeleteEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (ModifyEvent, DeleteEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (DeleteEvent, CreateEvent, ModifyEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
+    };
+    (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (DeleteEvent, ModifyEvent, CreateEvent)) => {
+        let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
+        let r: $crate::monitor::FnListener<Event> = $crate::monitor::FnListener(unsafe{share::Share::from_raw(Box::into_raw(r))});
+        $crate::monitor::Notify::remove_delete(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
+        $crate::monitor::Notify::remove_create(&*$setup_target, &r);
     };
 
     // fetch_single fetch_multi fetch_entry
     (@setup_target_ty $setup_target:ident, $w:ident, SingleCaseListener, $c:ty, $ev:ty) => {
         let $setup_target = match $w.fetch_single::<$c>() {
 			Some(r) => r,
-			None => std::panic!("fetch_single fail:{:?}",  std::any::type_name::<$c>()),
+			None => {
+                log::error!("fetch_single fail:{:?}",  std::any::type_name::<$c>());
+                return;
+            },
 		};
     };
     (@setup_target_ty $setup_target:ident, $w:ident, MultiCaseListener, $e:ty, $c:ty, $ev:ty) => {
         let $setup_target = match $w.fetch_multi::<$e, $c>(){
 			Some(r) => r,
-			None => std::panic!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<$e>(), std::any::type_name::<$c>()),
+			None => {
+                log::error!("fetch_multi fail:{:?}, {:?}",  std::any::type_name::<$e>(), std::any::type_name::<$c>());
+                return;
+            },
 		};
     };
     (@setup_target_ty $setup_target:ident, $w:ident, EntityListener, $e:ty, $ev:ty) => {
         let $setup_target = match $w.fetch_entity::<$e>(){
 			Some(r) => r,
-			None => std::panic!("fetch_entity fail:{:?}",  std::any::type_name::<$e>()),
+			None => {
+                log::error!("fetch_entity fail:{:?}",  std::any::type_name::<$e>());
+                return;
+            }
 		};
     };
 
@@ -293,7 +570,10 @@ macro_rules! impl_system {
                 fn setup(&mut self, me: std::sync::Arc<$crate::system::System>, world: &$crate::world::World, name: &atom::Atom){
                     let me: std::sync::Arc<Self> = match $crate::system::System::downcast(me) {
                         Ok(r) => r,
-                        Err(_) => std::panic!("downcast err".to_string()),
+                        Err(_) => {
+                            log::error!("downcast err");
+                            return;
+                        },
                     };
                     let mut listen_arr: Vec<(usize, usize)> = Vec::new();
                     //listen setup
@@ -364,3 +644,10 @@ impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6);
+impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6, Z7);

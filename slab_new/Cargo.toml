@@ -1,0 +1,8 @@
+[package]
+name = "slab_new"
+version = "0.1.0"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+time = {path="../time"}

@@ -114,7 +114,8 @@ impl<T> EntityImpl<T> {
     }
     pub fn register_component(&mut self, component: Arc<dyn MultiCase>) {
         if self.components.len() >= size_of::<u64>() << 3 {
-            panic!("components overflow")
+            log::error!("components overflow");
+            panic!()
         }
         self.components.push(component);
     }
@@ -197,7 +198,10 @@ impl<T: 'static> Fetch for ShareEntity<T> {
     fn fetch(world: &World) -> Self {
 		match world.fetch_entity::<T>() {
 			Some(r) => r,
-			None => std::panic!("fetch_multi fail:{:?}",  std::any::type_name::<T>()),
+			None => {
+                log::error!("fetch_multi fail:{:?}",  std::any::type_name::<T>());
+                std::panic!();
+            },
 		}
     }
 }
