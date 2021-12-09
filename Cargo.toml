@@ -64,4 +64,5 @@ members = [
   "slot_deque",
   "weight_task",
   "res_mgr",
+  "hash_value",
 ]

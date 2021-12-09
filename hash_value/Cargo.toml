@@ -1,0 +1,7 @@
+[package]
+name = "hash_value"
+version = "0.1.0"
+authors = ["yineng <dev@dev.com>"]
+
+[dependencies]
+rustc-serialize = "0.3"
