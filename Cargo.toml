@@ -68,5 +68,6 @@ members = [
   "map_new",
   "flex_layout_new",
   "idtree_new",
+  "hash_value",
   "graph",
 ]
