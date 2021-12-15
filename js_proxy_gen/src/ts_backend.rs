@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf, Component};
 
 use bytes::BufMut;
 
+#[cfg(feature = "ts_lower_camel_case")]
+use heck::AsLowerCamelCase;
+
 use async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
 
 use crate::{WORKER_RUNTIME,
@@ -229,7 +232,10 @@ async fn generate_ts_functions(generater: &ProxySourceGenerater,
             }
 
             //生成具体函数名称
+            #[cfg(not(feature = "ts_lower_camel_case"))]
             let function_name = get_specific_ts_function_name(function);
+            #[cfg(feature = "ts_lower_camel_case")]
+            let function_name = format!("{}", AsLowerCamelCase(get_specific_ts_function_name(function)));
 
             if function.is_async() {
                 //异步函数
@@ -406,7 +412,10 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 获取本地对象方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
+    #[cfg(not(feature = "ts_lower_camel_case"))]
     source_content.put_slice((create_tab(level) + "public get_self() {\n").as_bytes());
+    #[cfg(feature = "ts_lower_camel_case")]
+    source_content.put_slice((create_tab(level) + "public getSelf() {\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "return this.self;\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
@@ -479,7 +488,10 @@ async fn generate_ts_specific_class_method(generater: &ProxySourceGenerater,
             }
 
             //生成具体方法名称
+            #[cfg(not(feature = "ts_lower_camel_case"))]
             let function_name = get_specific_ts_function_name(function);
+            #[cfg(feature = "ts_lower_camel_case")]
+            let function_name = format!("{}", AsLowerCamelCase(get_specific_ts_function_name(function)));
 
             if function.is_static() {
                 //静态方法

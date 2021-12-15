@@ -3,8 +3,10 @@ extern crate proc_macro;
 use std::fs;
 use std::path::PathBuf;
 use proc_macro::{TokenStream, TokenTree};
+use proc_macro2::TokenTree as _TokenTree;
 
 use syn;
+use heck::AsLowerCamelCase;
 
 #[test]
 fn test_parse_ast() {
@@ -57,16 +59,16 @@ fn test_parse_attribute() {
 
                     for token in attr.tokens.clone() {
                         match token {
-                            syn::export::quote::__private::TokenTree::Punct(punct) => {
+                            _TokenTree::Punct(punct) => {
                                 println!("!!!!!!punct: {:?}", punct);
                             },
-                            syn::export::quote::__private::TokenTree::Ident(ident) => {
+                            _TokenTree::Ident(ident) => {
                                 println!("!!!!!!ident: {:?}", ident);
                             },
-                            syn::export::quote::__private::TokenTree::Literal(literal) => {
+                            _TokenTree::Literal(literal) => {
                                 println!("!!!!!!literal: {:?}", literal);
                             },
-                            syn::export::quote::__private::TokenTree::Group(group) => {
+                            _TokenTree::Group(group) => {
                                 println!("!!!!!!group: {:?}", group);
                             }
                         }
@@ -75,4 +77,11 @@ fn test_parse_attribute() {
             }
         }
     }
+}
+
+#[test]
+fn test_snake_case_to_lower_camel_case() {
+    let snake_case = "test_get_string";
+    let lower_camel_case = format!("{}", AsLowerCamelCase(snake_case));
+    println!("{}, {}", snake_case, lower_camel_case);
 }
