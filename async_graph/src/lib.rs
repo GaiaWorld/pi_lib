@@ -40,9 +40,8 @@ pub async fn async_graph<
     R: Runner + Send + 'static,
     RR: Runnble<R> + 'static,
     G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
-    O: Default + 'static,
-    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
->(rt: AsyncRuntime<O, P>, graph: Arc<G>) {
+    P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
+>(rt: AsyncRuntime<(), P>, graph: Arc<G>) {
     // 获得图的to节点的数量
     let mut count = graph.to_len();
     let (producor, consumer) = bounded(count);
@@ -52,7 +51,7 @@ pub async fn async_graph<
         // 减去立即执行完毕的数量
         count -= end_r.unwrap();
     }
-    println!("wait count:{}", count);
+    // println!("wait count:{}", count);
     let r = AsyncGraphResult{
         count,
         consumer,
@@ -178,10 +177,9 @@ impl<
     > AsyncGraphNode<K, R, RR, G>
 {
     /// 执行指定异步图节点到指定的运行时，并返回任务同步情况下的结束数量
-    pub fn exec<O, P>(self, rt: AsyncRuntime<O, P>, node: &G::Node) -> Result<usize>
+    pub fn exec<P>(self, rt: AsyncRuntime<(), P>, node: &G::Node) -> Result<usize>
     where
-        O: Default + 'static,
-        P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+        P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
         match node.value().is_async() {
             None => { // 该节点为同步节点，没有异步任务
@@ -193,7 +191,6 @@ impl<
                     // 执行同步任务
                     r.run();
                     self.exec_async(rt).await;
-                    Default::default()
                 })?;
             },
             _ => {
@@ -204,22 +201,20 @@ impl<
                     match r {
                         Err(e) => {
                             let _ = self.producor.into_send_async(Err(e)).await;
-                            return Default::default();
+                            return;
                         }
                         Ok(_) => (),
                     }
                     self.exec_async(rt).await;
-                    Default::default()
                 })?;
             }
         }
         Ok(0)
     }
     /// 递归的异步执行
-    async fn exec_async<O, P>(self, rt: AsyncRuntime<O, P>)
+    async fn exec_async<P>(self, rt: AsyncRuntime<(), P>)
     where
-        O: Default + 'static,
-        P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+        P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
         // 获取同步执行的结果， 为了不让node引用穿过await，显示声明它的生命周期
         let r = {
@@ -227,16 +222,14 @@ impl<
             self.exec_next(rt, node)
         };
         if let Ok(0) = r {
-            return Default::default();
+            return;
         }
         let _ = self.producor.into_send_async(r).await;
-        Default::default()
     }
     /// 递归的同步执行
-    fn exec_next<O, P>(&self, rt: AsyncRuntime<O, P>, node: &G::Node) -> Result<usize>
+    fn exec_next<P>(&self, rt: AsyncRuntime<(), P>, node: &G::Node) -> Result<usize>
     where
-        O: Default + 'static,
-        P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+        P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
         // 没有后续的节点，则返回结束的数量1
         if node.to_len() == 0 {
@@ -245,7 +238,7 @@ impl<
         let mut sync_count = 0; // 记录同步返回结束的数量
         for k in node.to() {
             let n = self.graph.get(k).unwrap();
-            println!("node: {:?}, count: {} from: {}", n.key(), n.load_count(), n.from_len());
+            // println!("node: {:?}, count: {} from: {}", n.key(), n.load_count(), n.from_len());
             // 将所有的to节点的计数加1，如果计数为from_len， 则表示全部的依赖都就绪
             if n.add_count(1) + 1 != n.from_len() {
                 //println!("node1: {:?}, count: {} ", n.key(), n.load_count());
