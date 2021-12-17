@@ -38,7 +38,7 @@ where
     pub fn new(world: &mut World) -> Self {
         let fetch_state = <Q::State as FetchState>::init(world);
         let filter_state = <F::State as FetchState>::init(world);
-		let entity_state = EntityState::init(world);
+		let entity_state = <EntityState as FetchState>::init(world) ;
         let mut component_access = Default::default();
         fetch_state.update_component_access(&mut component_access);
         filter_state.update_component_access(&mut component_access);

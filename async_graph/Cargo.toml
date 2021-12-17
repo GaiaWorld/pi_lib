@@ -1,0 +1,15 @@
+[package]
+name = "async_graph"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+graph = {path="../graph"}
+async = { path = "../async" }
+futures = "0.3"
+flume = "0.10"
+
+[dev-dependencies]
+pcg_rand = "0.13"
+rand_core = "0.6"

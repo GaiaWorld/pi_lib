@@ -32,16 +32,3 @@ thiserror = "1.0"
 # features = [
 # 	"console",
 # ]
-
-[features]
-defualt = ["runtime"]
-runtime = []
-
-[[example]]
-name = "expanded"
-
-[[example]]
-name = "basic"
-
-
-

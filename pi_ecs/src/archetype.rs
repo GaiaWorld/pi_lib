@@ -1,19 +1,17 @@
 /// 原型
 
 use crate::{
-    component::{ComponentId, StorageType, Component, self, ComponentInfo},
+    component::{ComponentId, StorageType, Component, ComponentInfo},
     entity::Entity,
     storage::{Offset, LocalVersion, Local},
 };
 use std::{
     borrow::Cow,
-    collections::HashMap,
     hash::Hash,
     ops::{Index, IndexMut}, any::TypeId,
-	ops::Deref,
-	ptr::NonNull, alloc::GlobalAlloc,
+	ptr::NonNull,
 };
-use slotmap::{DenseSlotMap, SecondaryMap, SparseSecondaryMap, Key};
+use slotmap::{DenseSlotMap, SecondaryMap, SparseSecondaryMap};
 use map::{Map};
 use hash::XHashMap;
 
@@ -119,10 +117,18 @@ pub type ArchetypeComponentId = Local;
 pub struct Archetypes {
     pub(crate) archetypes: Vec<Archetype>,
     pub(crate) archetype_component_count: usize,
-    archetype_ids: HashMap<ArchetypeIdentity, ArchetypeId>,
+    archetype_ids: XHashMap<ArchetypeIdentity, ArchetypeId>,
 }
 
 impl Archetypes {
+	pub fn new() -> Self {
+		Self {
+			archetypes: Vec::new(),
+			archetype_component_count: 0,
+			archetype_ids: XHashMap::default(),
+		}
+	}
+
 	pub(crate) fn spawn<E: Send + Sync + 'static>(&mut self, id: ArchetypeId) -> Entity {
 		self.archetypes[id.offset()].create_entity()
     }

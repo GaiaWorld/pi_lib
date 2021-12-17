@@ -14,56 +14,79 @@ extern crate core;
 
 extern crate null;
 
-use std::{any::TypeId, marker::PhantomData, mem};
+use core::hash::Hash;
+use std::{any::TypeId, hash::{BuildHasher, Hasher}, marker::PhantomData, mem};
 use core::ops::{Index, IndexMut};
+use hash::DefaultHasher;
 
 use null::Null;
 
-pub trait Idx: Copy {
-    fn get_rem(self, v: usize) -> usize;
-}
-impl Idx for usize {
-    #[inline(always)]
-    fn get_rem(self, v: usize) -> usize {
-        self % v
-    }
-}
-impl Idx for u32 {
-    #[inline(always)]
-    fn get_rem(self, v: usize) -> usize {
-        self as usize % v
-    }
-}
-impl Idx for u64 {
-    #[inline(always)]
-    fn get_rem(self, v: usize) -> usize {
-        (self % v as u64) as usize
-    }
-}
-impl Idx for TypeId {
-    #[inline(always)]
-    fn get_rem(self, v: usize) -> usize {
-        unsafe {mem::transmute::<TypeId, u64>(self) }.get_rem(v)
-    }
-}
+// pub trait Idx: Copy {
+//     fn get_rem(self, v: usize) -> usize;
+// }
+// impl Idx for usize {
+//     #[inline(always)]
+//     fn get_rem(self, v: usize) -> usize {
+//         self % v
+//     }
+// }
+// impl Idx for u32 {
+//     #[inline(always)]
+//     fn get_rem(self, v: usize) -> usize {
+//         self as usize % v
+//     }
+// }
+// impl Idx for u64 {
+//     #[inline(always)]
+//     fn get_rem(self, v: usize) -> usize {
+//         (self % v as u64) as usize
+//     }
+// }
+// impl Idx for TypeId {
+//     #[inline(always)]
+//     fn get_rem(self, v: usize) -> usize {
+//         unsafe {mem::transmute::<TypeId, u64>(self) }.get_rem(v)
+//     }
+// }
 /// 静态hash表，要求k一定为不重复的usize, u32, u64
-pub struct StaticMap<K: Idx, V: Null> {
+pub struct StaticMap<K: Hash, V: Null, S: BuildHasher> {
     /// 值数组，空位为Null的V
     array: Vec<V>,
     /// 第一个素数
     p1: usize,
     /// 第二个素数
     p2: usize,
+    /// hasher
+    hasher: S,
     _k: PhantomData<K>,
 }
-impl<K: Idx, V: Null> StaticMap<K, V> {
-    /// 用指定的kv键创建静态hash表
-    pub fn new<F>(mut arr: Vec<(usize, V)>, start_size: usize, invalid_func: F) -> Self where 
-    F: Fn() -> V {
-        let mut len = arr.len() + arr.len();
-        if start_size > len {
-            len = start_size;
+pub type DefaultStaticMap<K, V> = StaticMap<K, V, DefaultHasher>;
+
+// 当前默认的HashMap和HashSet（使用根据平台字长、和feature来决定的DefaultHasher）
+impl<K: Hash, V: Null, S: BuildHasher> StaticMap<K, V, S> {
+    /// 用指定的素数1 素数2 创建静态hash表
+    // pub fn with_p(p: (usize, usize)) -> Self {
+    //     Self::with_p_and_hasher(p, Default::default())
+    // }
+    /// 用指定的素数1 素数2 创建静态hash表
+    pub fn with_p_and_hasher(p: (usize, usize), hasher: S) -> Self {
+        let mut array = Vec::new();
+        array.resize_with(p.0 + p.1, || {V::null()});
+        StaticMap {
+            array,
+            p1: p.0,
+            p2: p.1,
+            hasher,
+            _k: PhantomData,
         }
+    }
+    /// 用指定的kv键创建静态hash表
+    // pub fn new(mut arr: Vec<(K, V)>) -> Self {
+    //     Self::with_hasher(arr, Default::default())
+    // }
+    /// 用指定的kv键和指定的hasher创建静态hash表
+    pub fn with_hasher(mut arr: Vec<(K, V)>, hasher: S) -> Self {
+        let len = arr.len() + arr.len();
         let mut index = match PRIMES.binary_search(&(len as u16)) {
             Ok(i) => i,
             Err(i) => i,
@@ -82,19 +105,19 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
             result.resize(0, u16::MAX);
             result.resize(p1, u16::MAX);
             for i in 0..arr.len() {
-                let k = arr[i].0;
-                let j = k%p1;
+                let h = hash(&hasher, &arr[i].0);
+                let j = (h % p1 as u64) as usize;
                 // 没有用过的位置
                 if result[j] == u16::MAX {
                     result[j] = i as u16;
                 }else if result[j] == u16::MAX - 1 {
                     // 已经冲突的位置
-                    temp.push((i as u16, k));
+                    temp.push((i as u16, h));
                 }else {
                     // 已经用过的位置
                     let old = result[j];
-                    temp.push((old, arr[old as usize].0));
-                    temp.push((i as u16, k));
+                    temp.push((old, hash(&hasher, &arr[old as usize].0)));
+                    temp.push((i as u16, h));
                     // 标记成冲突
                     result[j] = u16::MAX - 1;
                 }
@@ -103,11 +126,12 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
                 continue
             }
             if temp.len() > 0 {
-                let p2 = make2(p1, &temp, &mut result);
+                let p2 = Self::make(p1, &temp, &mut result);
                 if p2 > 0 {
                     let mut array = Vec::with_capacity(p1 + p2);
                     for i in result {
-                        let mut ii = invalid_func();
+                        //let mut ii = invalid_func();
+                        let mut ii = V::null();
                         if i < u16::MAX - 1 {
                             ii = mem::replace(&mut (arr[i as usize].1), ii);
                         }
@@ -117,6 +141,7 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
                         array,
                         p1,
                         p2,
+                        hasher,
                         _k: PhantomData,
                     }
                 }
@@ -124,7 +149,7 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
         }
     }
     /// 获得素数p1 p2
-    pub fn get_p(&self) -> (usize, usize) {
+    pub fn p(&self) -> (usize, usize) {
         (self.p1, self.p2)
     }
     /// 获得kv表的大小
@@ -137,89 +162,114 @@ impl<K: Idx, V: Null> StaticMap<K, V> {
     }
     /// 获得指定键的只读引用
     pub fn get(&self, k: K) -> &V {
-        let r = &self.array[k.get_rem(self.p1)];
+        let h = hash(&self.hasher, &k);
+        let r = &self.array[(h%self.p1 as u64) as usize];
         if r.is_null() {
-            &self.array[self.p1 + k.get_rem(self.p2)]
+            &self.array[self.p1 + (h%(self.p2 as u64)) as usize]
         }else{
             r
         }
     }
     /// 获得指定键的可写引用
     pub fn get_mut(&mut self, k: K) -> &mut V {
-        let i = k.get_rem(self.p1);
-        if self.array[i].is_null() {
-            &mut self.array[self.p1 + k.get_rem(self.p2)]
+        let h = hash(&self.hasher, &k);
+        let i = (h%self.p1 as u64) as usize;
+         if self.array[i].is_null() {
+            &mut self.array[self.p1 + (h%(self.p2 as u64)) as usize]
         }else{
             &mut self.array[i]
         }
     }
+    fn make(p1: usize, temp: &Vec<(u16, u64)>, result: &mut Vec<u16>) -> usize {
+        let len = temp.len() + temp.len();
+        let mut index = match PRIMES.binary_search(&(len as u16)) {
+            Ok(i) => i,
+            Err(i) => i,
+        };
+        loop {
+            let p2 = PRIMES[index] as usize;
+            if p2 >= p1 {
+                return 0
+            }
+            result.resize(p1, u16::MAX);
+            result.resize(p1 + p2, u16::MAX);
+            if Self::make2(p1, p2, temp, result) {
+                return p2
+            }
+            index += 1;
+        }
+    }
+    fn make2(p1: usize, p2: usize, temp: &Vec<(u16, u64)>, result: &mut Vec<u16>) -> bool {
+        for &(i, h) in temp {
+            let j = p1 + (h%(p2 as u64)) as usize;
+            if result[j] != u16::MAX {
+                return false
+            }
+            result[j] = i;
+        }
+        true
+    }
 }
-impl<K: Idx, V: Null> Index<K> for StaticMap<K, V> {
+impl<K: Hash, V: Null, S: BuildHasher> Index<K> for StaticMap<K, V, S> {
     type Output = V;
-
     fn index(&self, key: K) -> &V {
         self.get(key)
     }
 }
-
-impl<K: Idx, V: Null> IndexMut<K> for StaticMap<K, V> {
+impl<K: Hash, V: Null, S: BuildHasher> IndexMut<K> for StaticMap<K, V, S> {
     fn index_mut(&mut self, key: K) -> &mut V {
         self.get_mut(key)
     }
 }
 
-fn make2(p1: usize, temp: &Vec<(u16, usize)>, result: &mut Vec<u16>) -> usize {
-    let len = temp.len() + temp.len();
-    let mut index = match PRIMES.binary_search(&(len as u16)) {
-        Ok(i) => i,
-        Err(i) => i,
-    };
-    loop {
-        let p2 = PRIMES[index] as usize;
-        if p2 >= p1 {
-            return 0
+impl<K: Hash, V: Null + Clone, S: BuildHasher + Clone> Clone for StaticMap<K, V, S> {
+    fn clone(&self) -> Self {
+        StaticMap {
+            array: self.array.clone(),
+            p1: self.p1,
+            p2: self.p2,
+            hasher: self.hasher.clone(),
+            _k: PhantomData,
         }
-        result.resize(p1, u16::MAX);
-        result.resize(p1 + p2, u16::MAX);
-        if make3(p1, p2, temp, result) {
-            return p2
-        }
-        index += 1;
     }
 }
-fn make3(p1: usize, p2: usize, temp: &Vec<(u16, usize)>, result: &mut Vec<u16>) -> bool {
-    for &(i, k) in temp {
-        let j = p1 + k%p2;
-        if result[j] != u16::MAX {
-            return false
-        }
-        result[j] = i;
-    }
-    true
+/// 获得k的hash
+#[inline(always)]
+pub fn hash<S: BuildHasher, K: Hash>(hasher: &S, k: &K) -> u64 {
+    let mut state = hasher.build_hasher();
+    k.hash(&mut state);
+    state.finish()
 }
+
+
 
 #[cfg(test)]
 mod test_mod {
-    extern crate pcg_rand;
-    extern crate rand_core;
+    extern crate rand;
 
 
     use std::collections::HashMap;
 
     use crate::*;
-    use self::rand_core::{RngCore,SeedableRng};
+    use rand::Rng;
+    //use self::rand_core::{RngCore,SeedableRng};
     use test::Bencher;
+    use fxhash;
 
     #[test]
     fn test() {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222);
+        // 32 - 126
+        // 128 - 600
+        // 512 - 3200
+        let mut rng = rand::thread_rng();
+        //let mut rng = pcg_rand::Pcg32::seed_from_u64(22222);
         let mut arr = Vec::new();
-        for _ in 0..500 {
-            let k = rng.next_u32() as usize;
+        for _ in 0..512 {
+            let k = rng.gen::<usize>();
             arr.push((k, k + 1));
         }
-        let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 0, || {usize::MAX});
-        println!("map len:{}", map.len());
+        let map = StaticMap::with_hasher(arr.clone(), fxhash::FxBuildHasher::default());
+        println!("map len:{}, p:{:?}", map.len(), map.p());
         for (k, v) in arr {
             let n = map[k];
             assert_eq!(n, v);
@@ -228,14 +278,17 @@ mod test_mod {
 
     #[bench]
     fn bench_make(b: &mut Bencher) {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222222);
+        use rand::Rng;
+
+        let mut rng = rand::thread_rng();
         let mut arr = Vec::new();
         for _ in 0..1000 {
-            let k = rng.next_u32() as usize;
+            let k = rng.gen::<usize>();
             arr.push((k, k + 1));
         }
         b.iter(move|| {
-            let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 4000,|| {usize::MAX});
+            let map = StaticMap::with_hasher(arr.clone(), fxhash::FxBuildHasher::default());
+            //let map: StaticMap<usize, usize> = StaticMap::new(arr.clone());
             for (k, v) in arr.clone() {
                 let n = map.get(k);
                 assert_eq!(*n, v);
@@ -244,13 +297,15 @@ mod test_mod {
     }
     #[bench]
     fn bench_test(b: &mut Bencher) {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222);
+        use rand::Rng;
+
+        let mut rng = rand::thread_rng();
         let mut arr = Vec::new();
-        for _ in 0..100 {
-            let k = rng.next_u32() as usize;
+        for _ in 0..1000 {
+            let k = rng.gen::<usize>();
             arr.push((k, k + 1));
         }
-        let map: StaticMap<usize, usize> = StaticMap::new(arr.clone(), 0, || {usize::MAX});
+        let map = StaticMap::with_hasher(arr.clone(), fxhash::FxBuildHasher::default());
         println!("map len:{}", map.len());
         b.iter(move|| {
             for &(k, v) in &arr {
@@ -261,11 +316,13 @@ mod test_mod {
     }
     #[bench]
     fn bench_test_map(b: &mut Bencher) {
-        let mut rng = pcg_rand::Pcg32::seed_from_u64(22222);
+        use rand::Rng;
+
+        let mut rng = rand::thread_rng();
         let mut arr = Vec::new();
         let mut map: HashMap<usize, usize> = HashMap::new();
-        for _ in 0..100 {
-            let k = rng.next_u32() as usize;
+        for _ in 0..1000 {
+            let k = rng.gen::<usize>();
             arr.push((k, k + 1));
             map.insert(k, k + 1);
         }

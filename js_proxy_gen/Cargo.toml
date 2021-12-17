@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
+[features]
+default = []
+ts_lower_camel_case = ["heck"]
+
 [dependencies]
 proc-macro2 = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
@@ -11,9 +15,10 @@ futures = "0.3"
 serde = "1.0"
 serde_derive = "1.0"
 toml = "0.5"
+bytes = "0.5"
 num_cpus = "1.13"
 lazy_static = '1.4'
+heck = { verson = "0.4", optional = true }
 async = { path = "../../pi_lib/async" }
 async_file = { path = "../../pi_lib/async_file" }
 hash = { path = "../../pi_lib/hash" }
-bytes = "0.5"

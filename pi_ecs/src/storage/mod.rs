@@ -21,8 +21,8 @@ impl Deref for LocalVersion {
 		&self.0
 	}
 }
-
-impl Key for LocalVersion {
+ 
+unsafe impl Key for LocalVersion {
 	#[inline]
     fn data(&self) -> KeyData {
 		KeyData::from_ffi(self.0)
@@ -62,7 +62,7 @@ impl Local {
 	}	
 }
 
-impl Key for Local {
+unsafe impl Key for Local {
 	#[inline]
     fn data(&self) -> KeyData {
 		KeyData::from_ffi(self.0 as u64 | 1 << 32)

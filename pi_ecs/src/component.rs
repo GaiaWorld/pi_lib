@@ -60,6 +60,14 @@ impl Components {
     //     Ok(ComponentId::new(index))
     // }
 
+	pub fn new() -> Self {
+		Self {
+			infos: Vec::new(),
+			indices: XHashMap::default(),
+			resource_indices: XHashMap::default(),
+		}
+	}
+
     #[inline]
     pub fn get_or_insert_id<T: Component>(&mut self) -> ComponentId {
         self.get_or_insert_with(TypeId::of::<T>())

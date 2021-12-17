@@ -68,5 +68,7 @@ members = [
   "map_new",
   "flex_layout_new",
   "idtree_new",
-  "pi_ecs",
+  "hash_value",
+  "graph",
+  "async_graph",
 ]
