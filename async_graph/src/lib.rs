@@ -24,11 +24,12 @@ pub trait Runner {
 }
 
 /// 可运行节点
-pub trait Runnble<T: Runner + Send + 'static> {
+pub trait Runnble {
+    type R: Runner + Send + 'static;
     /// 判断是否同步运行， None表示不是可运行节点，true表示异步运行， false表示同步运行
     fn is_async(&self) -> Option<bool>;
     /// 获得需要执行的同步函数
-    fn get_sync(&self) -> T;
+    fn get_sync(&self) -> Self::R;
     /// 获得需要执行的异步块
     fn get_async(&self) -> BoxFuture<'static, Result<()>>;
 }
@@ -36,9 +37,8 @@ pub trait Runnble<T: Runner + Send + 'static> {
 /// 异步图执行
 pub async fn async_graph<
     K: Hash + Eq + Sized + Clone + Send + Debug + 'static,
-    R: Runner + Send + 'static,
-    RR: Runnble<R> + 'static,
-    G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
+    R: Runnble + 'static,
+    G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
     P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
 >(rt: AsyncRuntime<(), P>, graph: Arc<G>) {
     // 获得图的to节点的数量
@@ -100,47 +100,41 @@ impl AsyncGraphResult {
 /// 异步图节点执行
 pub struct AsyncGraphNode<
     K: Hash + Eq + Sized + Send + Debug + 'static,
-    R: Runner + Send + 'static,
-    RR: Runnble<R>,
-    G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
+    R: Runnble,
+    G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
 > {
     graph: Arc<G>,
     key: K,
     producor: Sender<Result<usize>>, //异步返回值生成器
     _k: PhantomData<R>,
-    _kk: PhantomData<RR>,
 }
 impl<
     K: Hash + Eq + Sized + Send + Debug + 'static,
-    R: Runner + Send + 'static,
-    RR: Runnble<R>,
-    G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
-> AsyncGraphNode<K, R, RR, G> {
+    R: Runnble,
+    G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
+> AsyncGraphNode<K, R, G> {
     pub fn new(graph: Arc<G>, key: K, producor: Sender<Result<usize>>) -> Self {
         AsyncGraphNode {
             graph,
             key,
             producor,
             _k: PhantomData,
-            _kk: PhantomData,
         }
     }
 }
 unsafe impl<
         K: Hash + Eq + Sized + Clone + Send + Debug + 'static,
-        R: Runner + Send + 'static,
-        RR: Runnble<R>,
-        G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
-    > Send for AsyncGraphNode<K, R, RR, G>
+        R: Runnble,
+        G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
+    > Send for AsyncGraphNode<K, R, G>
 {
 }
 
 impl<
         K: Hash + Eq + Sized + Clone + Send + Debug + 'static,
-        R: Runner + Send + 'static,
-        RR: Runnble<R> + 'static,
-        G: DirectedGraph<K, RR, Node: Send + 'static> + Send + 'static,
-    > AsyncGraphNode<K, R, RR, G>
+        R: Runnble + 'static,
+        G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
+    > AsyncGraphNode<K, R, G>
 {
     /// 执行指定异步图节点到指定的运行时，并返回任务同步情况下的结束数量
     pub fn exec<P>(self, rt: AsyncRuntime<(), P>, node: &G::Node) -> Result<usize>
@@ -230,7 +224,8 @@ pub enum ExecNode<Run: Runner, Fac:RunFactory<R=Run>> {
 	Sync(Fac),
 	Async(Box<dyn Fn() -> BoxFuture<'static, Result<()>> + 'static + Send + Sync>),
 }
-impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble<Run> for ExecNode<Run, Fac> {
+impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble for ExecNode<Run, Fac> {
+    type R = Run;
     fn is_async(&self) -> Option<bool> {
         match self {
             ExecNode::None => None,
@@ -239,7 +234,7 @@ impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble<Run> for ExecN
         }
     }
     /// 获得需要执行的同步函数
-    fn get_sync(&self) -> Run {
+    fn get_sync(&self) -> Self::R {
         match self {
             ExecNode::Sync(r) => r.create(),
             _ => panic!()
