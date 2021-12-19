@@ -3,7 +3,6 @@
 #![feature(test)]
 extern crate test;
 
-// pub mod zindex;
 
 use core::hash::Hash;
 
@@ -59,39 +58,6 @@ pub async fn async_graph<
     let _ = r.reduce().await;
 }
 
-pub trait RunFactory {
-    type R: Runner;
-    fn create(&self) -> Self::R;
-}
-
-pub enum ExecNode<Run: Runner, Fac:RunFactory<R=Run>> {
-	None,
-	Sync(Fac),
-	Async(Box<dyn Fn() -> BoxFuture<'static, Result<()>> + 'static + Send + Sync>),
-}
-impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble<Run> for ExecNode<Run, Fac> {
-    fn is_async(&self) -> Option<bool> {
-        match self {
-            ExecNode::None => None,
-            ExecNode::Sync(_) => Some(false),
-            _ => Some(true)
-        }
-    }
-    /// 获得需要执行的同步函数
-    fn get_sync(&self) -> Run {
-        match self {
-            ExecNode::Sync(r) => r.create(),
-            _ => panic!()
-        }
-    }
-    /// 获得需要执行的异步块
-    fn get_async(&self) -> BoxFuture<'static, Result<()>> {
-        match self {
-            ExecNode::Async(f) => f(),
-            _ => panic!()
-        }
-    }
-}
 /// 异步结果
 pub struct AsyncGraphResult {
     count: usize,                           //派发的任务数量
@@ -182,10 +148,10 @@ impl<
         P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
         match node.value().is_async() {
-            None => { // 该节点为同步节点，没有异步任务
+            None => { // 该节点为空节点
                 return self.exec_next(rt, node);
             },
-            Some(false) => {
+            Some(false) => { // 同步节点
                 let r = node.value().get_sync();
                 rt.clone().spawn(rt.alloc(), async move {
                     // 执行同步任务
@@ -216,7 +182,7 @@ impl<
     where
         P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
-        // 获取同步执行的结果， 为了不让node引用穿过await，显示声明它的生命周期
+        // 获取同步执行exec_next的结果， 为了不让node引用穿过await，显示声明它的生命周期
         let r = {
             let node = self.graph.get(&self.key).unwrap();
             self.exec_next(rt, node)
@@ -253,6 +219,40 @@ impl<
     }
 }
 
+
+pub trait RunFactory {
+    type R: Runner;
+    fn create(&self) -> Self::R;
+}
+
+pub enum ExecNode<Run: Runner, Fac:RunFactory<R=Run>> {
+	None,
+	Sync(Fac),
+	Async(Box<dyn Fn() -> BoxFuture<'static, Result<()>> + 'static + Send + Sync>),
+}
+impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble<Run> for ExecNode<Run, Fac> {
+    fn is_async(&self) -> Option<bool> {
+        match self {
+            ExecNode::None => None,
+            ExecNode::Sync(_) => Some(false),
+            _ => Some(true)
+        }
+    }
+    /// 获得需要执行的同步函数
+    fn get_sync(&self) -> Run {
+        match self {
+            ExecNode::Sync(r) => r.create(),
+            _ => panic!()
+        }
+    }
+    /// 获得需要执行的异步块
+    fn get_async(&self) -> BoxFuture<'static, Result<()>> {
+        match self {
+            ExecNode::Async(f) => f(),
+            _ => panic!()
+        }
+    }
+}
 
 #[test]
 fn test_graph() {
