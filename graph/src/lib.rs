@@ -6,8 +6,10 @@ extern crate test;
 // pub mod zindex;
 
 use core::hash::Hash;
+use std::mem::replace;
+use std::ptr::eq;
 
-use hash::XHashMap;
+use hash::{XHashMap, XHashSet};
 use share::{ShareUsize};
 use std::fmt::Debug;
 use std::{slice::Iter, sync::atomic::Ordering};
@@ -242,6 +244,7 @@ impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
     }
     /// 返回图，或者回环的节点
     pub fn build(mut self) -> Result<NGraph<K, T>, Vec<K>> {
+        // 计算开头和结尾的节点
         for (k, v) in self.graph.map.iter() {
             if v.from.is_empty() {
                 self.graph.from.push(k.clone());
@@ -250,6 +253,92 @@ impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
                 self.graph.to.push(k.clone());
             }
         }
+        let mut set = XHashSet::default();
+        let mut vec = Vec::new();
+        for k in self.graph.from() {
+            // 记录第一层节点
+            vec.push(k.clone());
+            // 初始的节点
+            let node = self.graph.get(k).unwrap();
+            // 遍历节点的后续节点
+            for to in node.to() {
+                set.insert(to.clone());
+                let n = self.graph.get(to).unwrap();
+                // 将节点的计数加1
+                n.add_count(1);
+                println!("add n: k: {:?}, from:{} count:{}", to, n.from_len(), n.load_count());
+            }
+        }
+        let mut set1 = XHashSet::default();
+        while set.len() > 0 {
+            println!("set: {:?}", set);
+            let mut cycle = true;
+            // 遍历后续节点
+            for k in set.iter() {
+                let n = self.graph.get(k).unwrap();
+                println!("set n: k: {:?}, from:{} count:{}", k, n.from_len(), n.load_count());
+                // 如果节点的计数等于from_len，表示from都处理了，节点已经就绪
+                if n.from_len() == n.load_count() {
+                    // 将计数器归0
+                    n.set_count(0);
+                    // 记录已经就绪的节点
+                    vec.push(k.clone());
+                    // 遍历该节点的后续节点
+                    for to in n.to() {
+                        set1.insert(to.clone());
+                        let n = self.graph.get(to).unwrap();
+                        // 将节点的计数加1
+                        n.add_count(1);
+                    }
+                    cycle = false;
+                }else{
+                    set1.insert(k.clone());
+                }
+            }
+            if cycle {
+                let mut vec = Vec::new();
+                vec.extend(set1.into_iter());
+                return Result::Err(vec)
+            }
+            set.clear();
+            set1 = replace(&mut set, set1);
+        }
+        let _ = replace(&mut self.graph.topological, vec);
         Result::Ok(self.graph)
     }
+}
+
+
+#[test]
+fn test_graph() {
+
+    struct A (usize);
+
+
+    let graph = NGraphBuilder::new()
+    .node(1, 1)
+    .node(2, 2)
+    .node(3, 3)
+    .node(4, 4)
+    .node(5, 5)
+    .node(6, 6)
+    .node(7, 7)
+    .node(8, 8)
+    .node(9, 9)
+    .node(10, 10)
+    .node(11, 11)
+    .edge(1, 4)
+    .edge(2, 4)
+    .edge(2, 5)
+    .edge(3, 5)
+    .edge(4, 6)
+    .edge(4, 7)
+    .edge(5, 8)
+    .edge(9, 10)
+    .edge(10, 11)
+    .edge(11, 5)
+    .edge(5, 10)
+    .build();
+    println!("{:?}", graph);
+    //assert_eq!(graph.is_ok(), true)
 }
