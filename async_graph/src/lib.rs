@@ -40,7 +40,7 @@ pub async fn async_graph<
     R: Runnble + 'static,
     G: DirectedGraph<K, R, Node: Send + 'static> + Send + 'static,
     P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
->(rt: AsyncRuntime<(), P>, graph: Arc<G>) {
+>(rt: AsyncRuntime<(), P>, graph: Arc<G>) -> Result<()> {
     // 获得图的to节点的数量
     let mut count = graph.to_len();
     let (producor, consumer) = bounded(count);
@@ -55,7 +55,7 @@ pub async fn async_graph<
         count,
         consumer,
     };
-    let _ = r.reduce().await;
+    r.reduce().await
 }
 
 /// 异步结果
