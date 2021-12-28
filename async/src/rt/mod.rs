@@ -102,7 +102,7 @@ impl<
                 if is_sleep.load(Ordering::Relaxed) {
                     //待唤醒的工作者，正在休眠，则立即唤醒此工作者
                     if let Ok(true) = is_sleep
-                        .compare_exchange_weak(true,
+                        .compare_exchange(true,
                                                false,
                                                Ordering::SeqCst,
                                                Ordering::SeqCst) {
@@ -120,7 +120,7 @@ impl<
                     let locked = lock.lock();
                     //待唤醒的线程，正在休眠，则立即唤醒此线程
                     if let Ok(true) = is_sleep
-                        .compare_exchange_weak(true,
+                        .compare_exchange(true,
                                                false,
                                                Ordering::SeqCst,
                                                Ordering::SeqCst) {
@@ -560,7 +560,7 @@ impl<
     pub fn close(&self) -> bool {
         match self {
             AsyncRuntime::Worker(worker_status, worker_waker, rt) => {
-                if let Ok(true) = worker_status.compare_exchange_weak(true,
+                if let Ok(true) = worker_status.compare_exchange(true,
                                                                       false,
                                                                       Ordering::SeqCst,
                                                                       Ordering::SeqCst) {
@@ -1288,7 +1288,7 @@ impl<
 
                     //执行任务，并检查是否由当前任务唤醒等待的任务
                     let r = future.await;
-                    if let Ok(false) = is_finish_copy.compare_exchange_weak(false,
+                    if let Ok(false) = is_finish_copy.compare_exchange(false,
                                                                             true,
                                                                             Ordering::SeqCst,
                                                                             Ordering::SeqCst) {
@@ -1301,7 +1301,7 @@ impl<
                     Default::default()
                 }) {
                     //派发指定的任务失败，则退出派发循环
-                    if let Ok(false) = is_finish.compare_exchange_weak(false,
+                    if let Ok(false) = is_finish.compare_exchange(false,
                                                                        true,
                                                                        Ordering::SeqCst,
                                                                        Ordering::SeqCst) {
@@ -1430,7 +1430,7 @@ impl<
                         //有检查器
                         if check(&r) {
                             //检查通过，则立即唤醒等待的任务，否则等待其它任务唤醒
-                            if let Ok(false) = is_finish_copy.compare_exchange_weak(false,
+                            if let Ok(false) = is_finish_copy.compare_exchange(false,
                                                                                     true,
                                                                                     Ordering::SeqCst,
                                                                                     Ordering::SeqCst) {
@@ -1440,7 +1440,7 @@ impl<
                         }
                     } else {
                         //无检查器，则立即唤醒等待的任务
-                        if let Ok(false) = is_finish_copy.compare_exchange_weak(false,
+                        if let Ok(false) = is_finish_copy.compare_exchange(false,
                                                                                 true,
                                                                                 Ordering::SeqCst,
                                                                                 Ordering::SeqCst) {
@@ -1453,7 +1453,7 @@ impl<
                     Default::default()
                 }) {
                     //派发指定的任务失败，则退出派发循环
-                    if let Ok(false) = is_finish.compare_exchange_weak(false,
+                    if let Ok(false) = is_finish.compare_exchange(false,
                                                                        true,
                                                                        Ordering::SeqCst,
                                                                        Ordering::SeqCst) {

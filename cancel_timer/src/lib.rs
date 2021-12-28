@@ -76,9 +76,9 @@ impl<T, const N0: usize, const N: usize, const L: usize> Timer<T, N0, N, L> {
                     set_index::<T, N0, N, L>,
                 );
                 // 修正所在的堆位置
-                unsafe {
-                    self.slot.get_unchecked_mut(key).el.index += loc;
-                }
+                // unsafe {
+                //     self.slot.get_unchecked_mut(key).el.index += loc;
+                // }
                 key
             }
         }

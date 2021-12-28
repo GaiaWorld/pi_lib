@@ -472,7 +472,7 @@ impl<
     pub fn startup(&self) -> Option<SingleTaskRuntime<O, P>> {
         match self
             .is_running
-            .compare_exchange_weak(false,
+            .compare_exchange(false,
                                    true,
                                    Ordering::SeqCst,
                                    Ordering::SeqCst) {
