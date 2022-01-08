@@ -26,8 +26,8 @@ pub trait Runner {
 /// 可运行节点
 pub trait Runnble {
     type R: Runner + Send + 'static;
-    /// 判断是否同步运行， None表示不是可运行节点，true表示异步运行， false表示同步运行
-    fn is_async(&self) -> Option<bool>;
+    /// 判断是否同步运行， None表示不是可运行节点，true表示同步运行， false表示异步运行
+    fn is_sync(&self) -> Option<bool>;
     /// 获得需要执行的同步函数
     fn get_sync(&self) -> Self::R;
     /// 获得需要执行的异步块
@@ -141,11 +141,11 @@ impl<
     where
         P: AsyncTaskPoolExt<()> + AsyncTaskPool<(), Pool = P>,
     {
-        match node.value().is_async() {
+        match node.value().is_sync() {
             None => { // 该节点为空节点
                 return self.exec_next(rt, node);
             },
-            Some(false) => { // 同步节点
+            Some(true) => { // 同步节点
                 let r = node.value().get_sync();
                 rt.clone().spawn(rt.alloc(), async move {
                     // 执行同步任务
@@ -226,11 +226,11 @@ pub enum ExecNode<Run: Runner, Fac:RunFactory<R=Run>> {
 }
 impl<Run: Runner + Send + 'static, Fac:RunFactory<R=Run>> Runnble for ExecNode<Run, Fac> {
     type R = Run;
-    fn is_async(&self) -> Option<bool> {
+    fn is_sync(&self) -> Option<bool> {
         match self {
             ExecNode::None => None,
-            ExecNode::Sync(_) => Some(false),
-            _ => Some(true)
+            ExecNode::Sync(_) => Some(true),
+            _ => Some(false)
         }
     }
     /// 获得需要执行的同步函数
