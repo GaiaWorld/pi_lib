@@ -1,1 +1,0 @@
-cargo rustc -- -Z unstable-options --pretty=expanded
