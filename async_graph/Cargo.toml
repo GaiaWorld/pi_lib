@@ -10,10 +10,10 @@ async = { path = "../async" }
 futures = "0.3"
 flume = "0.10"
 log = "0.4"
+env_logger = "0.9"
 
 [dev-dependencies]
 pcg_rand = "0.13"
 rand_core = "0.6"
-env_logger = "0.9"
 
 
