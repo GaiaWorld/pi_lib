@@ -479,13 +479,14 @@ impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
 }
 
 mod tests {
-    use crate::{DirectedGraph, NGraphBuilder};
-    use env_logger::{Builder, Env};
+    use crate::*;
+
     use std::sync::Once;
 
     static INIT: Once = Once::new();
-
     fn setup_logger() {
+        use env_logger::{Builder, Env};
+
         INIT.call_once(|| {
             Builder::from_env(Env::default().default_filter_or("debug")).init();
         });
