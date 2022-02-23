@@ -4,7 +4,7 @@ use core::hash::Hash;
 use hash::{XHashMap, XHashSet};
 use log::{debug, error};
 use share::ShareUsize;
-use std::{fmt::Debug, mem::replace, option::Iter, sync::atomic::Ordering};
+use std::{fmt::Debug, mem::replace, option::Iter, sync::atomic::Ordering, thread::current};
 
 /// 有向无环图
 /// K 节点的键
@@ -142,6 +142,18 @@ pub struct NGraphNode<K: Hash + Eq + Sized + Debug, T> {
     count: ShareUsize,
 }
 
+impl<K: Clone + Hash + Eq + Sized + Debug, T: Clone> Clone for NGraphNode<K, T> {
+    fn clone(&self) -> Self {
+        Self {
+            from: self.from.clone(),
+            to: self.to.clone(),
+            key: self.key.clone(),
+            value: self.value.clone(),
+            count: ShareUsize::new(self.count.load(Ordering::Relaxed)),
+        }
+    }
+}
+
 impl<K: Hash + Eq + Sized + Debug, T> DirectedGraphNode<K, T> for NGraphNode<K, T> {
     fn from_len(&self) -> usize {
         self.from.len()
@@ -185,6 +197,15 @@ impl<K: Hash + Eq + Sized + Debug, T> DirectedGraphNode<K, T> for NGraphNode<K, 
 }
 
 impl<K: Hash + Eq + Sized + Debug, T> NGraph<K, T> {
+    pub(crate) fn new() -> Self {
+        Self {
+            map: Default::default(),
+            from: Default::default(),
+            to: Default::default(),
+            topological: Default::default(),
+        }
+    }
+
     /// 重置 图
     pub fn reset(&self) {
         for n in self.map.values() {
@@ -259,6 +280,58 @@ impl<K: Hash + Eq + Sized + Debug, T> DirectedGraph<K, T> for NGraph<K, T> {
     // }
 }
 
+impl<K: Clone + Hash + Eq + Sized + Debug, T: Clone> NGraph<K, T> {
+    /// 遍历 局部图
+    pub fn gen_graph_from_keys(&self, keys: &[K]) -> Self {
+        let mut builder = NGraphBuilder::new();
+
+        debug!("gen_graph_from_keys, param keys = {:?}", keys);
+
+        let mut current_keys = vec![];
+        for k in keys {
+            current_keys.push(k.clone());
+
+            let n = self.map.get(k).unwrap();
+
+            // 防止 keys的 重复 元素
+            if !builder.has_node(k) {
+                debug!("gen_graph_from_keys, add node k = {:?}", k);
+                builder = builder.node(k.clone(), n.value.clone());
+            }
+        }
+
+        while !current_keys.is_empty() {
+            debug!("gen_graph_from_keys, current_keys = {:?}", current_keys);
+
+            let mut next_keys = vec![];
+
+            for curr in current_keys.iter() {
+                let curr_node = self.map.get(curr).unwrap();
+
+                // 下一轮 出点
+                for next in curr_node.to() {
+                    let next_node = self.map.get(next).unwrap();
+
+                    if !builder.has_node(next) {
+                        debug!("gen_graph_from_keys, add node next = {:?}", next);
+                        builder = builder.node(next.clone(), next_node.value.clone());
+                    }
+
+                    debug!("gen_graph_from_keys, add edge = ({:?}, {:?})", curr, next);
+                    builder = builder.edge(curr.clone(), next.clone());
+                    next_keys.push(next.clone());
+                }
+            }
+
+            debug!("gen_graph_from_keys, next_keys = {:?}", next_keys);
+
+            let _ = replace(&mut current_keys, next_keys);
+        }
+
+        builder.build().unwrap()
+    }
+}
+
 /// 图 构建器
 pub struct NGraphBuilder<K: Hash + Eq + Sized + Debug, T> {
     graph: NGraph<K, T>,
@@ -267,14 +340,9 @@ pub struct NGraphBuilder<K: Hash + Eq + Sized + Debug, T> {
 impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
     /// 创建 默认
     pub fn new() -> Self {
-        let graph: NGraph<K, T> = NGraph {
-            map: Default::default(),
-            from: Default::default(),
-            to: Default::default(),
-            topological: Default::default(),
-        };
-
-        NGraphBuilder { graph }
+        NGraphBuilder {
+            graph: NGraph::new(),
+        }
     }
 
     /// 用已有的图 重新 构建
@@ -284,6 +352,11 @@ impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
         graph.topological.clear();
 
         NGraphBuilder { graph }
+    }
+
+    /// 对应节点是否存在
+    pub fn has_node(&self, key: &K) -> bool {
+        self.graph.map.get(key).is_some()
     }
 
     /// 添加 节点
@@ -479,6 +552,8 @@ impl<K: Hash + Eq + Sized + Clone + Debug, T> NGraphBuilder<K, T> {
 }
 
 mod tests {
+    use log::info;
+
     use crate::*;
 
     use std::sync::Once;
@@ -628,6 +703,38 @@ mod tests {
         if let Err(r) = graph {
             assert_eq!(&r, &[2]);
         }
+    }
+
+    // 生成局部图
+    #[test]
+    fn test_gen_graph() {
+        setup_logger();
+
+        // 7 --> 2, 6
+        // 2, 3 --> 1
+        // 5, 6 --> 4
+        let graph = NGraphBuilder::new()
+            .node(1, 1)
+            .node(2, 2)
+            .node(3, 3)
+            .node(4, 4)
+            .node(5, 5)
+            .node(6, 6)
+            .node(7, 7)
+            .edge(7, 2)
+            .edge(7, 6)
+            .edge(2, 1)
+            .edge(3, 1)
+            .edge(5, 4)
+            .edge(6, 4)
+            .build();
+
+        assert_eq!(graph.is_ok(), true);
+
+        let graph = graph.unwrap();
+        let g2 = graph.gen_graph_from_keys(&[7]);
+        assert_eq!(g2.node_count(), 5);
+        info!("g2 = {:?}", g2);
     }
 
     // 复杂
