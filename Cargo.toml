@@ -71,4 +71,6 @@ members = [
   "hash_value",
   "graph",
   "async_graph",
+  "slotmap",
+  "tree"
 ]

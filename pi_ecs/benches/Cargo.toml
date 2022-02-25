@@ -1,0 +1,20 @@
+[package]
+name = "benches"
+version = "0.1.0"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+
+[dev-dependencies]
+cgmath = { version = "0.17", feature = ["serde"] }
+criterion = "0.3"
+pi_ecs = { path = "../" }
+bevy_5_ecs = {git="https://github.com/bevyengine/bevy.git", package="bevy_ecs"}
+
+[[bench]]
+name = "benchmarks"
+harness = false
+
+# [[bench]]
+# name = "iter"
+# path = "benches/bevy_tasks/iter.rs"
+# harness = false
