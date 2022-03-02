@@ -214,6 +214,12 @@ impl<K: Hash + Eq + Sized + Debug, T> NGraph<K, T> {
     }
 }
 
+impl<K: Hash + Eq + Sized + Debug, T> NGraph<K, T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.map.values().into_iter().map(|v| v.value())
+    }
+}
+
 impl<K: Hash + Eq + Sized + Debug, T> DirectedGraph<K, T> for NGraph<K, T> {
     // /// 迭代器的关联类型，指定了迭代器`Item`为`K`
     // type NodeIter = NodeIterator<'a, K>;
