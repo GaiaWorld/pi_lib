@@ -1,0 +1,9 @@
+[package]
+name = "tree"
+version = "0.1.0"
+authors = ["sun <530739162@qq.com>"]
+
+[dependencies]
+slotmap = {path="../slotmap"}
+log = "*"
+
