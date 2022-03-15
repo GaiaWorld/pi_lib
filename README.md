@@ -1,4 +1,4 @@
-# pi_lib 简介
+# pi_lib
 
 ## Deprecated【已废弃】！（对 pi_lib/*** 请使用 pi_*** 对应的库 代替）。
 
