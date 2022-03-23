@@ -7,7 +7,7 @@ use bytes::BufMut;
 #[cfg(feature = "ts_lower_camel_case")]
 use heck::AsLowerCamelCase;
 
-use async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
+use pi_async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
 
 use crate::{WORKER_RUNTIME,
             utils::{ParseContext, ExportItem, Const, Function, Document, Generic, ConstList, TraitImpls, Impls, TypeName, ProxySourceGenerater, create_tab, get_specific_ts_function_name, get_specific_ts_class_name}};

@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf, Component};
 use futures::future::FutureExt;
 use toml;
 
-use r#async::rt::AsyncRuntime;
-use async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
+use pi_async::rt::AsyncRuntime;
+use pi_async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
 use bytes::{BufMut};
 
 use crate::{WORKER_RUNTIME,

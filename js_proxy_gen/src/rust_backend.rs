@@ -3,7 +3,7 @@ use std::io::{Error, Result, ErrorKind};
 
 use bytes::{BufMut};
 
-use async_file::file::{AsyncFileOptions, AsyncFile};
+use pi_async_file::file::{AsyncFileOptions, AsyncFile};
 
 use crate::{WORKER_RUNTIME,
             utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, get_target_type_name, get_specific_ts_function_name}};

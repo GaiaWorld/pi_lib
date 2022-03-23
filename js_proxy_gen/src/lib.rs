@@ -17,9 +17,9 @@ use std::io::{Error, Result, ErrorKind};
 use futures::future::{FutureExt, BoxFuture};
 use num_cpus;
 
-use r#async::rt::{AsyncRuntime,
+use pi_async::rt::{AsyncRuntime,
                    multi_thread::{MultiTaskRuntimeBuilder, StealableTaskPool, MultiTaskRuntime}};
-use async_file::file::{rename, AsyncFileOptions, AsyncFile};
+use pi_async_file::file::{rename, AsyncFileOptions, AsyncFile};
 
 mod frontend;
 mod backend;
