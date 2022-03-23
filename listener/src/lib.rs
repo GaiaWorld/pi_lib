@@ -41,10 +41,15 @@ impl<E> Clone for FnListener<E> {
 pub type FnListeners<E> = Listeners<FnListener<E>>;
 
 /// 监听器列表
-#[derive(Clone)]
-pub struct Listeners<T: Clone> (Vec<T>);
+pub struct Listeners<T> (Vec<T>);
 
-impl<T: Clone + PartialEq> Listeners<T> {
+impl<T: Clone> Clone for Listeners<T> {
+	fn clone(&self) -> Self {
+		Listeners(self.0.clone())
+	}
+}
+
+impl<T: PartialEq> Listeners<T> {
     /// 获取监听器列表的内存大小
     pub fn mem_size(&self) -> usize {
         self.0.len() * std::mem::size_of::<T>()
@@ -60,7 +65,7 @@ impl<T: Clone + PartialEq> Listeners<T> {
         return false;
     }
 }
-impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
+impl<T: Listener<E>, E> Listener<E> for Listeners<T> {
     fn listen(&self, e: &E) {
 		if self.0.len() > 0 {
 			for l in self.0.iter() {
@@ -72,20 +77,20 @@ impl<T: Clone + Listener<E>, E> Listener<E> for Listeners<T> {
     }
 }
 
-impl<T: Clone> Default for Listeners<T> {
+impl<T> Default for Listeners<T> {
     fn default() -> Self{
         Listeners(Vec::new())
     }
 }
 
-impl<T: Clone> Deref for Listeners<T> {
+impl<T> Deref for Listeners<T> {
     type Target=Vec<T>;
     fn deref(&self) -> &Self::Target{
         &self.0
     }
 }
 
-impl<T: Clone> DerefMut for Listeners<T> {
+impl<T> DerefMut for Listeners<T> {
     fn deref_mut(&mut self) -> &mut Self::Target{
         &mut self.0
     }

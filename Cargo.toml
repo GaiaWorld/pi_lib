@@ -70,4 +70,7 @@ members = [
   "idtree_new",
   "hash_value",
   "graph",
+  "async_graph",
+  "slotmap",
+  "tree"
 ]

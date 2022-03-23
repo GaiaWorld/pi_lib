@@ -4,6 +4,7 @@
 
 use std::hash::Hash;
 use std::ops::Deref;
+use std::str::FromStr;
 
 #[cfg(feature="rc")]
 use any::RcAny;
@@ -14,7 +15,7 @@ use hash::XHashMap;
 use lru::{Entry, LruCache};
 use share::{Share, ShareWeak};
 use slab::Slab;
-
+use serde::{Serialize, Deserialize};
 /// 资源，放入资源表的资源必须实现该trait
 #[cfg(feature="rc")]
 pub trait Res: 'static {
@@ -22,15 +23,11 @@ pub trait Res: 'static {
     type Key: Hash + Eq + Clone + std::fmt::Debug;
 }
 
-
 /// 资源整理接口
 #[cfg(feature="rc")]
 pub trait ResCollect: RcAny {
 	 /// 计算资源的内存占用
-	fn use_cost(&self) -> usize;
-
-	/// 计算资源的内存占用
-	fn lru_cost(&self) -> usize;
+	fn debug(&self) -> XHashMap<usize, ResDebug>;
 
     /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
@@ -49,14 +46,27 @@ pub trait Res: Send + Sync + 'static {
     /// 关联键的类型
     type Key: Hash + Eq + Clone + std::fmt::Debug + Send + Sync;
 }
+
+#[derive(Serialize)]
+pub struct ResDebug{
+	pub group: usize,
+	pub using_total_cost: usize,
+	pub un_use_total_cost: usize,
+	pub unuse: Vec<ResItem>,
+	pub using: Vec<ResItem>,
+}
+
+#[derive(Serialize)]
+pub struct ResItem{
+	pub key: u32,
+	pub cost: usize,
+}
+
 /// 资源整理接口
 #[cfg(not(feature="rc"))]
 pub trait ResCollect: ArcAny {
      /// 计算资源的内存占用
-	fn use_cost(&self) -> usize;
-
-	/// 计算资源的内存占用
-	fn lru_cost(&self) -> usize;
+	fn debug(&self) -> XHashMap<usize, ResDebug> ;
 
     /// 计算资源的内存占用
     fn mem_size(&self) -> usize;
@@ -185,16 +195,70 @@ impl<T: Res + 'static> ResMap<T> {
 }
 
 impl<T: Res + 'static> ResCollect for ResMap<T> {
-	fn use_cost(&self) -> usize {
-		let mut r = 0;
-		for i in self.array.iter() {
-			r += i.1;
-		}
-		r
-	}
+	fn debug(&self) -> XHashMap<usize, ResDebug> {
+        let mut map = XHashMap::default();
 
-	fn lru_cost(&self) -> usize {
-		self.cache.size()
+        // 处理unuse
+        for item in self.map.iter() {
+            let key = format!("{:?}", item.0);
+            let key_number: u32 = match u32::from_str(key.as_str()) {
+                Ok(r) => r,
+                Err(_) => 0,
+            };
+
+            let res = item.1;
+            let list = match map.get_mut(res.get_group_i()) {
+                Some(r) => r,
+                None => {
+                    map.insert(*res.get_group_i(), ResDebug {
+                        group: *res.get_group_i(),
+                        un_use_total_cost: 0,
+                        using_total_cost:0,
+                        unuse: Vec::new(),
+                        using: Vec::new(),
+                    });
+                    map.get_mut(res.get_group_i()).unwrap()
+                }
+            };
+
+            if *res.get_id() > 0 {
+                if let Some(r) = self.slab.get(*res.get_id()) {
+                    list.un_use_total_cost += r.elem.cost;
+                    list.unuse.push(ResItem {
+						cost: r.elem.cost,
+						key: key_number,
+					});
+                }
+            }
+        }
+
+        for item in self.array.iter() {
+            let key = format!("{:?}", item.0.get_key());
+            let key_number: u32 = match u32::from_str(key.as_str()) {
+                Ok(r) => r,
+                Err(_) => 0,
+            };
+
+            let list = match map.get_mut(&item.2) {
+                Some(r) => r,
+                None => {
+                    map.insert(item.2, ResDebug {
+                        group: item.2,
+                        un_use_total_cost: 0,
+                        using_total_cost:0,
+                        unuse: Vec::new(),
+                        using: Vec::new(),
+                    });
+                    map.get_mut(&item.2).unwrap()
+                }
+            };
+            list.using_total_cost += item.1;
+            list.using.push(ResItem {
+				cost: item.1,
+				key: key_number,
+			});
+        }
+		map
 	}
     fn mem_size(&self) -> usize {
         let mut r = 0;

@@ -96,6 +96,10 @@ impl<T> TrustCell<T> {
         }
     }
 
+	pub fn as_ptr(&self) -> *mut T {
+		self.inner.get()
+	}
+
     /// Consumes this cell and returns ownership of `T`.
     pub fn into_inner(self) -> T {
         self.inner.into_inner()
@@ -167,6 +171,11 @@ impl<T> TrustCell<T> {
     pub fn get_mut(&mut self) -> &mut T {
         // safe because we have exclusive access via &mut self
         unsafe { &mut *self.inner.get() }
+    }
+
+	pub fn get(&self) -> &T {
+        // safe because we have exclusive access via &mut self
+        unsafe { &*self.inner.get() }
     }
 
     /// Make sure we are allowed to aquire a read lock, and increment the read
