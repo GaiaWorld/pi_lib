@@ -1,7 +1,12 @@
 [package]
-name = "lfstack"
-version = "0.1.0"
-authors = ["vmos <vmos@fairblock.io>"]
+name = "pi_lfstack"
+version = "0.1.5"
+authors = ["zuon<zuon@yinengyun.com>"]
+edition = "2018"
+description = "A lock free stack"
+repository = "https://github.com/GaiaWorld/pi_lfstack"
+license = "MIT OR Apache-2.0"
+keywords = ["pi", "lock", "free", "stack"]
 
 [dependencies]
 crossbeam-channel = "0.3"

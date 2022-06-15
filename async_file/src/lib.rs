@@ -3,6 +3,6 @@
 
 #![allow(warnings)]
 extern crate parking_lot;
-extern crate r#async;
+extern crate pi_async;
 
 pub mod file;

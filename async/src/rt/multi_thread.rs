@@ -1271,7 +1271,7 @@ fn timer_work_loop<
     let mut sleep_count = 0; //连续休眠计数器
     loop {
         //设置新的定时异步任务，并唤醒已到期的定时异步任务
-        let mut timer_run_millis = minstant::now(); //重置定时器运行时长
+        let mut timer_run_millis = minstant::Instant::now(); //重置定时器运行时长
         timer.lock().consume(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
         loop {
             let current_time = timer.lock().is_require_pop(); //运行时内部的锁临界区要尽可能的小，避免出现锁重入
@@ -1339,7 +1339,9 @@ fn timer_work_loop<
                     is_sleep.store(true, Ordering::SeqCst);
 
                     //获取休眠的实际时长
-                    let diff_time = ((minstant::now() - timer_run_millis) as f64 * minstant::nanos_per_cycle() / 1000000.0).trunc() as u64; //获取定时器运行时长
+                    let diff_time =  minstant::Instant::now()
+                        .duration_since(timer_run_millis)
+                        .as_millis() as u64; //获取定时器运行时长
                     let real_timeout = if timer.lock().len() == 0 {
                         //当前定时器没有未到期的任务，则休眠指定时长
                         sleep_timeout

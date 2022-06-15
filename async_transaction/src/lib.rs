@@ -11,7 +11,7 @@ use std::io::Result as IOResult;
 use futures::future::BoxFuture;
 use bytes::BufMut;
 
-use atom::Atom;
+use pi_atom::Atom;
 
 pub mod manager_2pc;
 

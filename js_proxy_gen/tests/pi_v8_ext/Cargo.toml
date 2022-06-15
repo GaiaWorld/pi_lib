@@ -6,9 +6,11 @@ edition = "2018"
 
 [dependencies]
 futures = "0.3"
+num-bigint = "0.4"
+num-traits = "0.2"
 
 [dependencies.export_crate]
-path = "E:\\rust\\pi_mastser\\pi_lib\\js_proxy_gen\\tests\\export_crate"
+path = "E:\\rust\\pi_mastser\\crate branch\\pi_lib\\js_proxy_gen\\tests\\export_crate"
 
 [dependencies.vm_builtin]
-path = "E:\\rust\\pi_mastser\\pi_lib\\js_proxy_gen\\tests\\pi_v8\\vm_builtin"
+path = "E:\\rust\\pi_mastser\\crate branch\\pi_lib\\js_proxy_gen\\tests\\pi_v8\\vm_builtin"

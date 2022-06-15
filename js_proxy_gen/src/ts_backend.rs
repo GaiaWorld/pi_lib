@@ -7,7 +7,7 @@ use bytes::BufMut;
 #[cfg(feature = "ts_lower_camel_case")]
 use heck::AsLowerCamelCase;
 
-use async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
+use pi_async_file::file::{create_dir, AsyncFile, AsyncFileOptions, WriteOptions};
 
 use crate::{WORKER_RUNTIME,
             utils::{ParseContext, ExportItem, Const, Function, Document, Generic, ConstList, TraitImpls, Impls, TypeName, ProxySourceGenerater, create_tab, get_specific_ts_function_name, get_specific_ts_class_name}};
@@ -946,11 +946,13 @@ fn get_specific_arg_name(arg_name: &String, index: usize) -> String {
 fn get_ts_type_name(specific_arg_type_name: &str) -> String {
     match specific_arg_type_name {
         "bool" => "boolean".to_string(),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" => "number".to_string(),
+        "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" => "number".to_string(),
+        "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "bigint".to_string(),
         "str" | "String" => "string".to_string(),
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
         "Vec<bool>" => "boolean[]".to_string(),
-        "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u16>" | "Vec<u32>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
+        "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<u16>" | "Vec<u32>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
+        "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "bigint[]".to_string(),
         "Vec<String>" => "string[]".to_string(),
         "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
         "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),

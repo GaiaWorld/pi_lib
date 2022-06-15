@@ -1,8 +1,12 @@
 [package]
-name = "async_macro"
-version = "0.1.0"
-authors = ["zuon <zuon@yinengyun.com>"]
+name = "pi_async_macro"
+version = "0.1.1"
+authors = ["zuon<zuon@yinengyun.com>"]
 edition = "2018"
+description = "A async file macros tools."
+repository = "https://github.com/GaiaWorld/pi_async_macro"
+license = "MIT OR Apache-2.0"
+keywords = ["pi", "async", "future", "macro", "macros"]
 
 [lib]
 proc-macro = true

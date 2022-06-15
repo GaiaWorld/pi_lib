@@ -1,0 +1,9 @@
+[package]
+name = "slot_wheel"
+version = "0.1.0"
+authors = ["zmythleo <zmythleo@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+slotmap = "1.0"
+slot_deque = {path="../slot_deque"}

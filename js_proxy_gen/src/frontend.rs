@@ -3,7 +3,7 @@ use std::io::{Error, Result, ErrorKind};
 use proc_macro2::{TokenTree, TokenStream};
 use syn::{self};
 
-use hash::XHashMap;
+use pi_hash::XHashMap;
 
 use crate::utils::{ParseContext,
                    ImportItem,

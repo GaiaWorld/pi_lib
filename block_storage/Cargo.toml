@@ -1,0 +1,8 @@
+[package]
+name = "block_storage"
+version = "0.1.0"
+authors = ["zuon <zuon@yinengyun.com>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.3"

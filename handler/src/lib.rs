@@ -1,6 +1,6 @@
 extern crate fnv;
-extern crate atom;
-extern crate gray;
+extern crate pi_atom;
+extern crate pi_gray;
 
 use std::rc::Rc;
 use std::any::Any;
@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 use fnv::FnvHashMap;
 
-use atom::Atom;
-use gray::GrayVersion;
+use pi_atom::Atom;
+use pi_gray::GrayVersion;
 /*
 * 环境
 */

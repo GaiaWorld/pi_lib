@@ -1,23 +1,31 @@
 [package]
-name = "async_transaction"
+name = "pi_async_transaction"
 version = "0.1.0"
-authors = ["zuon <zuon@yinengyun.com>"]
+authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
+description = "Asynchronous abstraction for transactions"
+repository = "https://github.com/GaiaWorld/pi_async_transaction.git"
+license = "MIT OR Apache-2.0"
+keywords = ["pi", "async", "transaction"]
 
 [dependencies]
 futures = "0.3"
 bytes = "1.0"
 dashmap = "4.0"
 log = "0.4"
-async = { path = "../async" }
-guid = { path = "../guid" }
-atom = { path = "../atom" }
+pi_async = "0.1"
+pi_guid = "0.1"
+pi_atom = "0.1"
 
 [dev-dependencies]
 parking_lot = "0.11"
 async-stream = "0.3"
-async_file = { path = "../async_file" }
-hash = { path = "../hash" }
-ordmap = { path = "../ordmap" }
-time = { path = "../time" }
-sinfo = { path = "../sinfo" }
+pi_async_file = "0.1"
+pi_hash = "0.1"
+pi_ordmap = "0.1"
+pi_time = "0.1"
+pi_sinfo = "0.1"
+
+
+
+

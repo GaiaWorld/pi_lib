@@ -1,0 +1,17 @@
+[package]
+name = "weight_task"
+version = "0.1.0"
+authors = ["suncy <suncy@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+wheel = {path="../wheel"}
+timer = {path="../timer"}
+cancel_timer = {path="../cancel_timer"}
+ext_heap = {path="../ext_heap"}
+slotmap = "1.0"
+slot_wheel = {path="../slot_wheel"}
+slot_deque = {path="../slot_deque"}
+weight = {path="../weight"}
+wy_rng = {path="../wy_rng"}
+rand_core = "0.6"

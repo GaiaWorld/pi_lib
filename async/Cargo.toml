@@ -1,8 +1,12 @@
 [package]
-name = "async"
-version = "1.0.0"
+name = "pi_async"
+version = "0.2.0"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
+description = "Based on future (MVP), a universal asynchronous runtime and tool used to provide a foundation for the outside world"
+repository = "https://github.com/GaiaWorld/pi_async.git"
+license = "MIT OR Apache-2.0"
+keywords = ["pi", "async"]
 
 [dependencies]
 libc = "0.2"
@@ -15,9 +19,9 @@ flume = "0.10"
 parking_lot = "0.11"
 num_cpus = "1.13"
 log = "0.4"
-minstant = { git = "https://github.com/tikv/minstant.git", branch = "master" }
-hash = { path = "../hash" }
-local_timer = { path = "../local_timer" }
+minstant = "0.1"
+pi_hash = "0.1"
+pi_local_timer = "0.1"
 
 [dev-dependencies]
 rand = "0.7"

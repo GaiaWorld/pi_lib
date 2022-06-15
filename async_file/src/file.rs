@@ -24,7 +24,7 @@ use std::fs::{File, OpenOptions, Metadata,
 use std::io::{Seek, Write, Result, SeekFrom, Error, ErrorKind};
 
 use parking_lot::RwLock;
-use r#async::rt::multi_thread::MultiTaskRuntime;
+use pi_async::rt::multi_thread::MultiTaskRuntime;
 
 /*
 * 异步重命名指定的文件的结果

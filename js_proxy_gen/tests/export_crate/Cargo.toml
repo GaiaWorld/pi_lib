@@ -6,3 +6,5 @@ edition = "2018"
 
 [dependencies]
 parking_lot = "0.11"
+num-bigint = "0.4"
+js_proxy_gen_macro = { path = "../../../js_proxy_gen_macro" }

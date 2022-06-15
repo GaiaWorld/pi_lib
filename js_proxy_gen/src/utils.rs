@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use toml;
 use serde_derive::{Deserialize, Serialize};
 
-use r#async::lock::mutex_lock::Mutex;
-use hash::XHashMap;
+use pi_async::lock::mutex_lock::Mutex;
+use pi_hash::XHashMap;
 
 /*
 * 源码目录名

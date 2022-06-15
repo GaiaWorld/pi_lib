@@ -8,7 +8,7 @@ extern crate futures;
 extern crate crossbeam_channel;
 extern crate parking_lot;
 extern crate log;
-extern crate local_timer;
+extern crate pi_local_timer;
 
 pub mod lock;
 pub mod rt;
