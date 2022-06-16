@@ -5,7 +5,7 @@ use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use parking_lot::Mutex as SyncMutex;
 use log::warn;
 
-use r#async::{lock::mutex_lock::Mutex,
+use pi_async::{lock::mutex_lock::Mutex,
               rt::{AsyncTaskPool, AsyncTaskPoolExt, AsyncRuntime}};
 
 ///
@@ -46,11 +46,12 @@ impl<
     }
 
     /// 构建异步二进制缓冲区，缓冲区会在指定的异步运行时中运行，每次运行会回调指定的回调函数
-    pub fn build<CC, TC>(self,
-                         rt: AsyncRuntime<O, P>,
-                         capacity_callback: CC,
-                         timeout_callback: TC) -> AsyncBytesBuffer<O, P, CC>
-        where CC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
+    pub fn build<RT, CC, TC>(self,
+                            rt: RT,
+                            capacity_callback: CC,
+                            timeout_callback: TC) -> AsyncBytesBuffer<O, P, RT, CC>
+        where RT: AsyncRuntime<O, Pool = P>,
+              CC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
               TC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> CallbackResult + Send + Sync + 'static {
         let rt_copy = rt.clone();
         let inner = InnerBytesBuffer {
@@ -61,6 +62,7 @@ impl<
             capacity: AtomicUsize::new(self.capacity),
             callback: SyncMutex::new(capacity_callback),
             status: AtomicBool::new(true),
+            marker: PhantomData,
         };
         let buffer = AsyncBytesBuffer(Arc::new(inner));
         let buffer_copy = buffer.clone();
@@ -75,11 +77,12 @@ impl<
     }
 
     // 在指定时间后运行一次二进制缓冲区
-    fn run_once<CC, TC>(mut runner: AsyncBytesBufferBuilder<O, P>,
-                        rt: AsyncRuntime<O, P>,
-                        buffer: AsyncBytesBuffer<O, P, CC>,
-                        mut timeout_callback: TC)
-        where CC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
+    fn run_once<RT, CC, TC>(mut runner: AsyncBytesBufferBuilder<O, P>,
+                            rt: RT,
+                            buffer: AsyncBytesBuffer<O, P, RT, CC>,
+                            mut timeout_callback: TC)
+        where RT: AsyncRuntime<O, Pool = P>,
+              CC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
               TC: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> CallbackResult + Send + Sync + 'static {
         let rt_copy = rt.clone();
         let timeout = runner.timeout;
@@ -140,25 +143,29 @@ impl<
 pub struct AsyncBytesBuffer<
     O: Default + Send + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
->(Arc<InnerBytesBuffer<O, P, F>>);
+>(Arc<InnerBytesBuffer<O, P, RT, F>>);
 
 unsafe impl<
     O: Default + Send + 'static,
-    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> Send for AsyncBytesBuffer<O, P, F> {}
+> Send for AsyncBytesBuffer<O, P, RT, F> {}
 unsafe impl<
     O: Default + Send + 'static,
-    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> Sync for AsyncBytesBuffer<O, P, F> {}
+> Sync for AsyncBytesBuffer<O, P, RT, F> {}
 
 impl<
     O: Default + Send + 'static,
-    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> Clone for AsyncBytesBuffer<O, P, F> {
+> Clone for AsyncBytesBuffer<O, P, RT, F> {
     fn clone(&self) -> Self {
         AsyncBytesBuffer(self.0.clone())
     }
@@ -170,8 +177,9 @@ impl<
 impl<
     O: Default + Send + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> AsyncBytesBuffer<O, P, F> {
+> AsyncBytesBuffer<O, P, RT, F> {
     /// 判断异步二进制缓冲区是否正在运行中
     pub fn is_running(&self) -> bool {
         self.0.status.load(Ordering::SeqCst)
@@ -198,8 +206,9 @@ impl<
 impl<
     O: Default + Send + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O, Pool = P>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> AsyncBytesBuffer<O, P, F> {
+> AsyncBytesBuffer<O, P, RT, F> {
     /// 异步阻塞的向缓冲区推送二进制数据
     pub async fn async_push(&self, bin: Arc<Vec<u8>>) -> Result<()> {
         if !self.is_running() {
@@ -242,19 +251,29 @@ impl<
 struct InnerBytesBuffer<
     O: Default + Send + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
 > {
     name:       String,                             //缓冲区名称
-    rt:         AsyncRuntime<O, P>,                 //运行时
+    rt:         RT,                                 //运行时
     buf:        Mutex<Option<Vec<Arc<Vec<u8>>>>>,   //缓冲区
     size:       AtomicUsize,                        //缓冲区长度
     capacity:   AtomicUsize,                        //缓冲区容量
     callback:   SyncMutex<F>,                       //回调函数
     status:     AtomicBool,                         //运行状态
+    marker:     PhantomData<O>,
 }
 
 unsafe impl<
     O: Default + Send + 'static,
     P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    RT: AsyncRuntime<O, Pool = P>,
     F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
-> Send for InnerBytesBuffer<O, P, F> {}
+> Send for InnerBytesBuffer<O, P, RT, F> {}
+
+unsafe impl<
+    O: Default + Send + 'static,
+    P: AsyncTaskPoolExt<O> + AsyncTaskPool<O>,
+    RT: AsyncRuntime<O, Pool = P>,
+    F: FnMut(Vec<Arc<Vec<u8>>>, usize, usize) -> usize + Send + Sync + 'static,
+> Sync for InnerBytesBuffer<O, P, RT, F> {}
