@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf, Component};
 use std::io::{Error, Result, ErrorKind};
 
-use bytes::{BufMut};
+use bytes::BufMut;
 
 use pi_async_file::file::{AsyncFileOptions, AsyncFile};
 

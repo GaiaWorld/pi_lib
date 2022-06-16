@@ -19,6 +19,6 @@ bytes = "0.5"
 num_cpus = "1.13"
 lazy_static = '1.4'
 heck = { verson = "0.4", optional = true }
-pi_async = "0.1"
-pi_async_file = "0.1.5"
+pi_async = "0.2"
+pi_async_file = "0.1"
 pi_hash = "0.1"

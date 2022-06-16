@@ -8,7 +8,7 @@ use toml;
 
 use pi_async::rt::AsyncRuntime;
 use pi_async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
-use bytes::{BufMut};
+use bytes::BufMut;
 
 use crate::{WORKER_RUNTIME,
             rust_backend::{DEFAULT_DEPEND_CRATE_NAME, DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME, DEFAULT_PROXY_FUNCTION_BLOCK_END, DEFAULT_PROXY_LIB_FILE_USED, create_proxy_rust_file, generate_rust_import, generate_rust_functions},
@@ -148,7 +148,7 @@ pub(crate) async fn generate_crates_proxy_source(generater: &ProxySourceGenerate
                 Ok(())
             }.boxed();
 
-            map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+            map.map(WORKER_RUNTIME.clone(), future);
         }
 
         match map.reduce(true).await {

@@ -69,7 +69,7 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
                 }
             }.boxed();
 
-            map.map(AsyncRuntime::Multi(WORKER_RUNTIME.clone()), future);
+            map.map(WORKER_RUNTIME.clone(), future);
         }
 
         match map.reduce(true).await {
