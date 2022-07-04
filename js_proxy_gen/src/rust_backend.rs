@@ -29,7 +29,7 @@ pub(crate) const DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME: &str = "/**\n * 注�
 /*
 * 默认代理Rust文件导入的类型
 */
-pub(crate) const DEFAULT_PROXY_RUST_FILE_USED: &[u8] = b"use std::any::Any;\nuse std::sync::Arc;\n\nuse futures::future::{FutureExt, BoxFuture};\nuse num_bigint::{ToBigInt, BigInt};\n\nuse vm_builtin::{buffer::NativeArrayBuffer, external::{NativeObjectAsyncTaskSpawner, NativeObjectAsyncReply, NativeObjectValue, NativeObjectArgs, NativeObject}};\n\n";
+pub(crate) const DEFAULT_PROXY_RUST_FILE_USED: &[u8] = b"use std::any::Any;\nuse std::sync::Arc;\n\nuse futures::future::{FutureExt, BoxFuture};\n\nuse vm_builtin::{buffer::NativeArrayBuffer, external::{NativeObjectAsyncTaskSpawner, NativeObjectAsyncReply, NativeObjectValue, NativeObjectArgs, NativeObject}};\n\n";
 
 /*
 * 默认的代理函数签名前缀
