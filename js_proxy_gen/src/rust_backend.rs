@@ -29,7 +29,7 @@ pub(crate) const DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME: &str = "/**\n * 注�
 /*
 * 默认代理Rust文件导入的类型
 */
-pub(crate) const DEFAULT_PROXY_RUST_FILE_USED: &[u8] = b"use std::any::Any;\nuse std::sync::Arc;\n\nuse futures::future::{FutureExt, BoxFuture};\nuse num_bigint::{ToBigInt, BigInt};\nuse num_traits::cast::{FromPrimitive, ToPrimitive};\n\nuse vm_builtin::{buffer::NativeArrayBuffer, external::{NativeObjectAsyncTaskSpawner, NativeObjectAsyncReply, NativeObjectValue, NativeObjectArgs, NativeObject}};\n\n";
+pub(crate) const DEFAULT_PROXY_RUST_FILE_USED: &[u8] = b"use std::any::Any;\nuse std::sync::Arc;\n\nuse futures::future::{FutureExt, BoxFuture};\nuse num_bigint::{ToBigInt, BigInt};\n\nuse vm_builtin::{buffer::NativeArrayBuffer, external::{NativeObjectAsyncTaskSpawner, NativeObjectAsyncReply, NativeObjectValue, NativeObjectArgs, NativeObject}};\n\n";
 
 /*
 * 默认的代理函数签名前缀
@@ -653,7 +653,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
-        alias@"i8" | alias@"i16" | alias@"i32" => {
+        alias@"i8" | alias@"i16" | alias@"i32" | alias@"i64" | alias@"i128" | alias@"isize" => {
             //生成匹配有符号整数类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
             if arg_type_name.is_moveable() {
@@ -680,34 +680,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
-        alias@"i64" | alias@"i128" | alias@"isize" => {
-            //生成匹配有符号64位或128位整数类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.to_i128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &(val.to_i128().expect(\"From js bigint to " + alias + " ref failed\")) as " + alias + ";\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let mut val_ = (val.to_i128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");\n").as_bytes());
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        alias@"u8" | alias@"u16" | alias@"u32" => {
+        alias@"u8" | alias@"u16" | alias@"u32" | alias@"u64" | alias@"u128" | alias@"usize" => {
             //生成匹配无符号整数类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
             if arg_type_name.is_moveable() {
@@ -716,33 +689,6 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        alias@"u64" | alias@"u128" | alias@"usize" => {
-            //生成匹配无符号64位或128位整数类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.to_u128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &(val.to_u128().expect(\"From js bigint to " + alias + " ref failed\") as " + alias + ");\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let mut val_ = (val.to_u128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");\n").as_bytes());
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
@@ -822,33 +768,6 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &((*val) as " + alias + ");\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 source_content.put_slice((create_tab(level + 1) + "let mut val_ = ((*val) as " + alias + ");\n").as_bytes());
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "BigInt" => {
-            //生成匹配有符号大整数类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.clone();\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &val;\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let mut val_ = val.clone();\n").as_bytes());
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut val_;\n").as_bytes());
             }
 
@@ -1120,7 +1039,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
-        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" => {
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
             //生成匹配有符号整数数组类型的代码
             let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
             let sub_type = sub_types[1];
@@ -1157,44 +1076,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
-        alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
-            //生成匹配有符号64位或128位整数数组类型的代码
-            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
-            let sub_type = sub_types[1];
-
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.to_i128().expect(\"From js bigint array to " + alias + " failed\") as " + sub_type + ");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        alias@"Vec<u16>" | alias@"Vec<u32>" => {
+        alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
             //生成匹配无符号整数数组类型的代码
             let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
             let sub_type = sub_types[1];
@@ -1204,43 +1086,6 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Uint(val) = obj {\n").as_bytes());
             source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
-            //生成匹配无符号64位或128位整数数组类型的代码
-            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
-            let sub_type = sub_types[1];
-
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.to_u128().expect(\"From js bigint array to " + alias + " failed\") as " + sub_type + ");\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
             source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
@@ -1278,43 +1123,6 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Float(val) = obj {\n").as_bytes());
             source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
-            if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &array_" + arg_name.as_str() + ";\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = &mut array_" + arg_name.as_str() + ";\n").as_bytes());
-            }
-
-            let next_index = index + 1;
-            if next_index == args.len() {
-                //实参列表已生成完成，则生成函数调用代码
-                if let Err(e) = generate_call_function(target, generic, function, level + 1, arg_names, source_content, func_name) {
-                    return Err(e);
-                }
-            } else {
-                //否则继续生成下一个参数的代码
-                if let Err(e) = generate_function_call_args(target, generic, function, args, next_index, level + 1, arg_names, source_content) {
-                    return Err(e);
-                }
-            }
-
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        alias@"Vec<BigInt>" => {
-            //生成匹配无符号大整数数组类型的代码
-            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
-            let sub_type = sub_types[1];
-
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.clone());\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
             source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
@@ -1985,7 +1793,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
             }
         },
-        alias@"i8" | alias@"i16" | alias@"i32" => {
+        alias@"i8" | alias@"i16" | alias@"i32" | alias@"i64" | alias@"i128" | alias@"isize" => {
             //生成匹配有符号整数类型的代码
             let mut current_level = level;
             if let Some(_generic_type) = generic_type {
@@ -2019,109 +1827,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
             }
         },
-        alias@"i64"=> {
-            //生成匹配有符号64位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i64(r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i64(*r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i64(*r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i64(r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i64(*r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i64(*r).expect(\"From i64 to js bigint failed\"))));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"i128" => {
-            //生成匹配有符号128位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i128(r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i128(*r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_i128(*r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i128(r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i128(*r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_i128(*r).expect(\"From i128 to js bigint failed\"))));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"isize" => {
-            //生成匹配有符号128位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_isize(r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_isize(*r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_isize(*r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_isize(r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_isize(*r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_isize(*r).expect(\"From isize to js bigint failed\"))));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"u8" | alias@"u16" | alias@"u32" => {
+        alias@"u8" | alias@"u16" | alias@"u32" | alias@"u64" | alias@"u128" | alias@"usize" => {
             //生成匹配无符号整数类型的代码
             let mut current_level = level;
             if let Some(_generic_type) = generic_type {
@@ -2147,108 +1853,6 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Uint((*r) as u32)));\n").as_bytes());
                 } else if return_type.is_writable() {
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Uint((*r) as u32)));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"u64" => {
-            //生成匹配无符号64位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u64(r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u64(*r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u64(*r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u64(r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u64(*r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u64(*r).expect(\"From u64 to js bigint failed\"))));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"u128" => {
-            //生成匹配无符号128位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u128(r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u128(*r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_u128(*r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u128(r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u128(*r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_u128(*r).expect(\"From u128 to js bigint failed\"))));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"usize" => {
-            //生成匹配无符号128位整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_usize(r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_usize(*r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(BigInt::from_usize(*r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_usize(r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_usize(*r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(BigInt::from_usize(*r).expect(\"From usize to js bigint failed\"))));\n").as_bytes());
                 }
             }
 
@@ -2283,40 +1887,6 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Float((*r) as f64)));\n").as_bytes());
                 } else if return_type.is_writable() {
                     source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Float((*r) as f64)));\n").as_bytes());
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"BigInt" => {
-            //生成匹配有符号大整数类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(r)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(r.clone())));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::BigInt(r.clone())));\n").as_bytes());
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(r)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(r.clone())));\n").as_bytes());
-                } else if return_type.is_writable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::BigInt(r.clone())));\n").as_bytes());
                 }
             }
 
@@ -2636,7 +2206,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
             }
         },
-        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" => {
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
             //生成匹配有符号整数数组类型的代码
             let mut current_level = level;
             if let Some(_generic_type) = generic_type {
@@ -2675,124 +2245,7 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                 source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
             }
         },
-        alias@"Vec<i64>" => {
-            //生成匹配有符号64位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_i64(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<i128>" => {
-            //生成匹配有符号128位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_i128(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<isize>" => {
-            //生成匹配有符号128位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_isize(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<u16>" | alias@"Vec<u32>" => {
+        alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
             //生成匹配无符号整数数组类型的代码
             let mut current_level = level;
             if let Some(_generic_type) = generic_type {
@@ -2804,123 +2257,6 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
             source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
             source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Uint(val));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<u64>" => {
-            //生成匹配无符号64位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_u64(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<u128>" => {
-            //生成匹配无符号128位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_u128(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<usize>" => {
-            //生成匹配无符号128位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(BigInt::from_usize(val).expect(\"From " + alias + " to js bigint array failed\")));\n").as_bytes());
             source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
 
             if function.is_async() {
@@ -2960,45 +2296,6 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
             source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
             source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::Float(val));\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
-
-            if function.is_async() {
-                //生成异步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            } else {
-                //生成同步返回代码
-                if return_type.is_moveable() {
-                    source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Array(array)));\n").as_bytes());
-                } else if return_type.is_only_read() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of Vec<{}> type", func_name, alias)));
-                } else if return_type.is_writable() {
-                    return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of Vec<{}> type", func_name, alias)));
-                }
-            }
-
-            if generic_type.is_some() {
-                //泛型的具体类型，则生成匹配项结束
-                source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
-            }
-        },
-        alias@"Vec<BigInt>"=> {
-            //生成匹配有符号64位整数数组类型的代码
-            let mut current_level = level;
-            if let Some(_generic_type) = generic_type {
-                //泛型的具体类型，则生成匹配项开始
-                source_content.put_slice((create_tab(current_level) + "r if r.is::<" + alias + ">() => {\n").as_bytes());
-                current_level += 1;
-            }
-
-            source_content.put_slice((create_tab(current_level) + "let mut array = Vec::with_capacity(r.len());\n").as_bytes());
-            source_content.put_slice((create_tab(current_level) + "for val in r {\n").as_bytes());
-            source_content.put_slice((create_tab(current_level + 1) + "array.push(NativeObjectValue::BigInt(val));\n").as_bytes());
             source_content.put_slice((create_tab(current_level) + "}\n").as_bytes());
 
             if function.is_async() {
