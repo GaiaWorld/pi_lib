@@ -100,8 +100,8 @@ fn parse_crate_depends(root: PathBuf,
     let mut table = toml::value::Table::new();
     table.insert("path".to_string(), toml::Value::String(export_crate_path.into_os_string().into_string().unwrap()));
     configure.append_depend("futures", toml::Value::String("0.3".to_string())); //异步库
-    // configure.append_depend("num-bigint", toml::Value::String("0.4".to_string())); //大整数库
-    // configure.append_depend("num-traits", toml::Value::String("0.2".to_string())); //数字接口库
+    configure.append_depend("num-bigint", toml::Value::String("0.4".to_string())); //大整数库
+    configure.append_depend("num-traits", toml::Value::String("0.2".to_string())); //数字接口库
     configure.append_depend("vm_builtin", toml::Value::Table(table)); //js虚拟机内置库
 
     for export_crate in export_crates {
