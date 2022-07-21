@@ -611,71 +611,71 @@ fn generate_function_call_args(target: Option<&String>,
         "bool" => {
             //生成将参数转换为布尔值类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = *" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = *" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &*" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &*" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut *" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut *" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"i8" | alias@"i16" | alias@"i32" => {
             //生成将参数转换为符号整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             }
         },
         alias@"i64" | alias@"i128" | alias@"isize" => {
             //生成将参数转换为符号64位或128位整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " ref failed\")) as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " ref failed\")) as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut (" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut (" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");\n\n").as_bytes());
             }
         },
         alias@"u8" | alias@"u16" | alias@"u32" => {
             //生成将参数转换为无符号整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             }
         },
         alias@"u64" | alias@"u128" | alias@"usize" => {
             //生成将参数转换为无符号64位或128位整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " ref failed\") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " ref failed\") as " + alias + ");\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");;\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");;\n\n").as_bytes());
             }
         },
         alias@"f32" | alias@"f64" => {
             //生成将参数转换为浮点数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
             }
         },
         "BigInt" => {
             //生成将参数转换为有符号大整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "str" => {
@@ -683,7 +683,7 @@ fn generate_function_call_args(target: Option<&String>,
             if arg_type_name.is_moveable() {
                 return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of str type", func_name, origin_arg_name)));
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".as_str();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".as_str();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take mutable borrow of str type", func_name, origin_arg_name)))
             }
@@ -691,11 +691,11 @@ fn generate_function_call_args(target: Option<&String>,
         "String" => {
             //生成将参数转换为字符串类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "[u8]" => {
@@ -703,189 +703,189 @@ fn generate_function_call_args(target: Option<&String>,
             if arg_type_name.is_moveable() {
                 return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [u8] type", func_name, origin_arg_name)));
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes_mut();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes_mut();\n\n").as_bytes());
             }
         },
         "Arc<[u8]>" => {
             //生成将参数转换为二进制缓冲区类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": Arc<[u8]> = Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": Arc<[u8]> = Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &Arc<[u8]> = &Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &Arc<[u8]> = &Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &mut Arc<[u8]> = &mut Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &mut Arc<[u8]> = &mut Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n\n").as_bytes());
             }
         },
         "Box<[u8]>" => {
             //生成将参数转换为二进制缓冲区类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n\n").as_bytes());
             }
         },
         "Arc<Vec<u8>>" => {
             //生成将参数转换为二进制缓冲区类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             }
         },
         "Box<Vec<u8>>" => {
             //生成将参数转换为二进制缓冲区类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n\n").as_bytes());
             }
         },
         "Vec<u8>" => {
             //生成将参数转换为二进制缓冲区类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ".bytes().to_vec();;\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ".bytes().to_vec();;\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n\n").as_bytes());
             }
         },
         "Vec<bool>" => {
             //生成将参数转换为布尔值数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" => {
             //生成将参数转换为有符号整数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
             //生成将参数转换为有符号64位或128位整数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<u16>" | alias@"Vec<u32>" => {
             //生成将参数转换为无符号整数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
             //生成将参数转换为无符号64位或128位整数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<f32>" | alias@"Vec<f64>" => {
             //生成将参数转换为浮点数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"Vec<BigInt>" => {
             //生成将参数转换为无符号大整数数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<String>" => {
             //生成将参数转换为字符串数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<Arc<[u8]>>" => {
             //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<Box<[u8]>>" => {
             //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<Arc<Vec<u8>>>" => {
             //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<Box<Vec<u8>>>" => {
             //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         "Vec<Vec<u8>>" => {
             //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         other_type => {
@@ -899,7 +899,7 @@ fn generate_function_call_args(target: Option<&String>,
                     other_type.to_string()
                 };
 
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_ref::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_ref::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 let real_other_type = if arg_type.get_type_args().is_some() {
                     arg_type.to_string()
@@ -907,7 +907,7 @@ fn generate_function_call_args(target: Option<&String>,
                     other_type.to_string()
                 };
 
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_mut::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_mut::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
             }
         },
     }

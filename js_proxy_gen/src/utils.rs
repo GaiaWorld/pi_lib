@@ -310,6 +310,49 @@ impl PackageInfo {
 }
 
 /*
+* 源码宏展开文件的路径
+*/
+#[derive(Clone)]
+pub struct MacroExpandPathBuf(Arc<InnerMacroExpandPathBuf>);
+
+unsafe impl Send for MacroExpandPathBuf {}
+unsafe impl Sync for MacroExpandPathBuf {}
+
+impl AsRef<Path> for MacroExpandPathBuf {
+    fn as_ref(&self) -> &Path {
+        self.0.path.as_path()
+    }
+}
+
+impl MacroExpandPathBuf {
+    //构建一个源码宏展开文件的路径
+    pub fn new(path: PathBuf, is_expanded: bool) -> MacroExpandPathBuf {
+        let inner = InnerMacroExpandPathBuf {
+            path,
+            is_expanded,
+        };
+
+        MacroExpandPathBuf(Arc::new(inner))
+    }
+}
+
+struct InnerMacroExpandPathBuf{
+    path:           PathBuf,    //宏展开文件的路径
+    is_expanded:    bool,       //是否已经宏展开
+}
+
+impl Drop for InnerMacroExpandPathBuf {
+    fn drop(&mut self) {
+        if self.is_expanded {
+            //移除指定的临时宏展开文件
+            if let Err(e) = fs::remove_file(&self.path) {
+                error!("Drop macro expand file failed, path: {:?}, reason: {:?}", self.path, e);
+            }
+        }
+    }
+}
+
+/*
 * 源码宏展开器
 */
 #[derive(Clone)]
@@ -325,15 +368,10 @@ impl MacroExpander {
                      suffix: S,
                      requires: Vec<String>) -> Self
         where P: AsRef<Path>, S: ToString {
-        let expanded = DashMap::default();
-        let uid = AtomicU64::new(0);
-
         let inner = InnerMacroExpander {
             root: root_dir.as_ref().to_path_buf(),
             src: src_path.as_ref().to_path_buf(),
             suffix: suffix.to_string(),
-            expanded,
-            uid,
             requires,
         };
 
@@ -342,7 +380,7 @@ impl MacroExpander {
 
     //展开指定路径的源码文件，成功返回临时生成的宏展开后的源码文件的句柄
     #[cfg(target_os = "windows")]
-    pub fn expand<P: AsRef<Path>>(&self, origin: P) -> Result<Option<u64>> {
+    pub fn expand<P: AsRef<Path>>(&self, origin: P) -> Result<Option<MacroExpandPathBuf>> {
         if let Some(filename) = origin.as_ref().file_name() {
             match filename.to_str() {
                 Some(LIB_FILE_NAME) => {
@@ -425,9 +463,7 @@ impl MacroExpander {
                 arg,
                 expanded_file_path,
                 String::from_utf8(output.stdout).expect("Expand source failed"));
-            let handle = self.0.uid.fetch_add(1, Ordering::Relaxed);
-            self.0.expanded.insert(handle, expanded_file_path);
-            Ok(Some(handle))
+            Ok(Some(MacroExpandPathBuf::new(expanded_file_path, true)))
         } else {
             //无效的源文件路径名
             Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: invalid origin", origin.as_ref(), expanded_file_path)))
@@ -437,7 +473,7 @@ impl MacroExpander {
     pub fn expand<P: AsRef<Path>>(&self,
                                   root_dir: P,
                                   src_path: P,
-                                  origin: P) -> Result<u64> {
+                                  origin: P) -> Result<Option<MacroExpandPathBuf>> {
         if let Some(filename) = origin.as_ref().file_name() {
             match filename.to_str() {
                 Some(LIB_FILE_NAME) => {
@@ -524,31 +560,10 @@ impl MacroExpander {
                 arg,
                 expanded_file_path,
                 String::from_utf8(output.stdout).expect("Expand source failed"));
-            let handle = self.0.uid.fetch_add(1, Ordering::Relaxed);
-            self.0.expanded.insert(handle, expanded_file_path);
-            Ok(Some(handle))
+            Ok(Some(MacroExpandPathBuf::new(expanded_file_path, true)))
         } else {
             //无效的源文件路径名
             Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: invalid origin", origin.as_ref(), expanded_file_path)))
-        }
-    }
-
-    //获取指定源码文件句柄对应的源码文件路径
-    pub fn to_path(&self, handle: &u64) -> Option<PathBuf> {
-        if let Some(kv) = self.0.expanded.get(handle) {
-            Some(kv.value().clone())
-        } else {
-            None
-        }
-    }
-
-    //移除指定源码文件句柄对应的源码文件
-    pub fn destroy(&self, handle: &u64) -> Result<PathBuf> {
-        if let Some((_, path)) = self.0.expanded.remove(handle) {
-            fs::remove_file(&path)?;
-            Ok(path)
-        } else {
-            Err(Error::new(ErrorKind::NotFound, format!("Destroy Expanded source failed, handle: {}, reason: file not exist", handle)))
         }
     }
 }
@@ -558,8 +573,6 @@ struct InnerMacroExpander {
     root:       PathBuf,                //库的根路径
     src:        PathBuf,                //库的源码根路径
     suffix:     String,                 //临时生成的宏展开后的源码文件名后缀
-    expanded:   DashMap<u64, PathBuf>,  //已宏展开的源码文件映射表
-    uid:        AtomicU64,              //宏展开文件的唯一id分配器
     requires:   Vec<String>,            //需要宏展开的文件名列表
 }
 
@@ -2408,24 +2421,16 @@ fn test_macro_expander() {
     match expander.expand(r#"E:\wsl_tmp\pi_ui_render\src\export\mod.rs"#) {
         Err(e) => panic!("{:?}", e),
         Ok(None) => println!("!!!!!!ignore mod file"),
-        Ok(Some(handle)) => {
-            println!("!!!!!!to: {:?}", expander.to_path(&handle));
-            match expander.destroy(&handle) {
-                Err(e) => panic!("{:?}", e),
-                Ok(path) => println!("!!!!!!path: {:?}", path),
-            }
+        Ok(Some(path)) => {
+            println!("!!!!!!to: {:?}", path.as_ref());
         }
     }
 
     match expander.expand(r#"E:\wsl_tmp\pi_ui_render\src\export\style.rs"#) {
         Err(e) => panic!("{:?}", e),
         Ok(None) => panic!("Invalid source file"),
-        Ok(Some(handle)) => {
-            println!("!!!!!!to: {:?}", expander.to_path(&handle));
-            match expander.destroy(&handle) {
-                Err(e) => panic!("{:?}", e),
-                Ok(path) => println!("!!!!!!path: {:?}", path),
-            }
+        Ok(Some(path)) => {
+            println!("!!!!!!to: {:?}", path.as_ref());
         }
     }
 }

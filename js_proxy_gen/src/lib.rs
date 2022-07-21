@@ -37,6 +37,7 @@ use utils::{RUST_SOURCE_FILE_EXTENSION,
             NATIVE_OBJECT_PROXY_FILE_DIR_NAME,
             check_crate,
             Crate,
+            MacroExpandPathBuf,
             MacroExpander,
             ParseContext,
             ProxySourceGenerater,
@@ -240,20 +241,16 @@ pub fn parse_source_dir(path: PathBuf,
                                 },
                                 Ok(None) => {
                                     //当前源文件不需要宏展开
-                                    child_path.clone()
+                                    MacroExpandPathBuf::new(child_path.clone(), false)
                                 },
-                                Ok(Some(handle)) => {
+                                Ok(Some(path)) => {
                                     //宏展开成功
-                                    if let Some(p) = expander.to_path(&handle) {
-                                        p
-                                    } else {
-                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, handle: {:?}, reason: expanded file not exist", child_path, handle)));
-                                    }
+                                    path
                                 },
                             }
                         } else {
                             //当前源文件不需要宏展开
-                            child_path.clone()
+                            MacroExpandPathBuf::new(child_path.clone(), false)
                         };
 
                         match AsyncFile::open(WORKER_RUNTIME.clone(),
@@ -261,14 +258,14 @@ pub fn parse_source_dir(path: PathBuf,
                                               AsyncFileOptions::OnlyRead).await {
                             Err(e) => {
                                 //打开文件失败，则立即返回错误
-                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path, e)));
+                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path.as_ref(), e)));
                             },
                             Ok(file) => {
                                 //打开文件成功，则继续分析源码
                                 match file.read(0, file.get_size() as usize).await {
                                     Err(e) => {
                                         //读文件失败，则立即返回错误
-                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path, e)));
+                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path.as_ref(), e)));
                                     },
                                     Ok(bin) => {
                                         let mut context = ParseContext::new(child_path.as_path());
