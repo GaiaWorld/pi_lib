@@ -35,6 +35,16 @@ const TYPE_DEFINED_IDENT: &str = "type";
 const DOCUMENT_ATTR_PATH_IDENT: &str = "doc";
 
 /*
+* 条件编译标识符
+*/
+const CFG_ATTR_PATH_IDENT: &str = "cfg";
+
+/*
+* 特性标识符
+*/
+const FEATURE_IDENT: &str = "feature";
+
+/*
 * 分析指定的Rust源码
 */
 pub fn parse_source(context: &mut ParseContext,
@@ -59,6 +69,16 @@ fn parse_items(context: &mut ParseContext,
                items: &Vec<syn::Item>) -> Result<()> {
     for item in items {
         match item {
+            syn::Item::Mod(module) => {
+                //模块定义，则继续递归分析模块中的所有条目
+                if let Some((_, mod_items)) = &module.content {
+                    //模块中有条目
+                    if let Err(e) = parse_items(context, mod_items) {
+                        //分析模块中的条目失败，则立即返回错误
+                        return Err(e);
+                    }
+                }
+            },
             syn::Item::Struct(struct_item) => {
                 //结构体定义
                 match parse_struct(context, struct_item) {
@@ -257,6 +277,47 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
                     }
                 }
             }
+        },
+        CFG_ATTR_PATH_IDENT => {
+            //使用了条件编译属性，则检查是否有名为pi_js_export的feature
+            //此分析主要是为了可以导出宏里的待导出条目
+            let mut require_export = 0; //是否满足所有导出的条件
+            for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Group as u8) {
+                if let TokenTree::Group(group) = token {
+                    for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Ident | AttributeTokensFilter::Literal) {
+                        match token {
+                            TokenTree::Ident(ident) => {
+                                //分析特性名称
+                                let id = ident.to_string();
+                                if id.as_str() != FEATURE_IDENT {
+                                    //忽略非特性的名称
+                                    continue;
+                                }
+
+                                require_export += 1;
+                            },
+                            TokenTree::Literal(lit) => {
+                                if lit.to_string()
+                                    .trim_matches(|c| c == ' ' || c == '\"') != EXPORT_ATTR_PATH_IDENT {
+                                    //忽略非导出特性值
+                                    continue;
+                                }
+
+                                require_export += 1;
+                            },
+                            _ => (),
+                        }
+                    }
+                }
+            }
+
+            if require_export < 2 {
+                //当前条目不需要导出，则忽略，并继续分析
+                return;
+            }
+
+            //使用了导出特性，则设置当前正在分析的条目为需要导出
+            context.set_is_export(true);
         },
         _ => {
 

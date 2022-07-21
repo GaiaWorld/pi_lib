@@ -1,16 +1,28 @@
 use std::fs;
 use std::env;
+use std::fs::File;
 use std::sync::Arc;
 use std::ops::BitOr;
+use std::str::pattern::Pattern;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::io::{Error, Result, ErrorKind};
-use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(target_os = "linux")]
+use std::os::unix::io::{FromRawFd, IntoRawFd};
+#[cfg(target_os = "windows")]
+use std::os::windows::io::{FromRawHandle, IntoRawHandle};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use toml;
 use serde_derive::{Deserialize, Serialize};
+use dashmap::DashMap;
+use log::{info, error};
 
 use pi_async::lock::mutex_lock::Mutex;
 use pi_hash::XHashMap;
+use syn::Pat::Or;
+use toml::value::Index;
+use crate::DEAFULT_MACRO_EXPAND_FILE_SUFFIX;
 
 /*
 * 源码目录名
@@ -23,6 +35,11 @@ pub const SRC_DIR_NAME: &str = "src";
 pub const LIB_FILE_NAME: &str = "lib.rs";
 
 /*
+* 模块入口文件名
+*/
+pub const MOD_FILE_NAME: &str = "mod.rs";
+
+/*
 * 构建配置文件名
 */
 pub const BUILD_FILE_NAME: &str = "Cargo.toml";
@@ -31,6 +48,11 @@ pub const BUILD_FILE_NAME: &str = "Cargo.toml";
 * 本地对象代理文件根目录名
 */
 pub const NATIVE_OBJECT_PROXY_FILE_DIR_NAME: &str = "native";
+
+/*
+* Rust源码文件扩展名
+*/
+pub const RUST_SOURCE_FILE_EXTENSION: &str = "rs";
 
 /*
 * 检查指定路径是否是库的根路径，如果是则返回库信息和源码路径
@@ -285,6 +307,260 @@ impl PackageInfo {
     pub fn set_edition(&mut self, edition: &str) {
         self.edition = edition.into();
     }
+}
+
+/*
+* 源码宏展开器
+*/
+#[derive(Clone)]
+pub struct MacroExpander(Arc<InnerMacroExpander>);
+
+unsafe impl Send for MacroExpander {}
+unsafe impl Sync for MacroExpander {}
+
+impl MacroExpander {
+    //构建一个源码宏展开器
+    pub fn new<P, S>(root_dir: P,
+                     src_path: P,
+                     suffix: S,
+                     requires: Vec<String>) -> Self
+        where P: AsRef<Path>, S: ToString {
+        let expanded = DashMap::default();
+        let uid = AtomicU64::new(0);
+
+        let inner = InnerMacroExpander {
+            root: root_dir.as_ref().to_path_buf(),
+            src: src_path.as_ref().to_path_buf(),
+            suffix: suffix.to_string(),
+            expanded,
+            uid,
+            requires,
+        };
+
+        MacroExpander(Arc::new(inner))
+    }
+
+    //展开指定路径的源码文件，成功返回临时生成的宏展开后的源码文件的句柄
+    #[cfg(target_os = "windows")]
+    pub fn expand<P: AsRef<Path>>(&self, origin: P) -> Result<Option<u64>> {
+        if let Some(filename) = origin.as_ref().file_name() {
+            match filename.to_str() {
+                Some(LIB_FILE_NAME) => {
+                    //忽略对库入口文件的宏展开，并立即返回
+                    return Ok(None);
+                },
+                Some(MOD_FILE_NAME) => {
+                    //忽略对模块入口文件的宏展开，并立即返回
+                    return Ok(None);
+                },
+                Some(filename_str) => {
+                    //检查当前文件名是否需要忽略宏展开
+                    for require in &self.0.requires {
+                        if filename_str != require.as_str() {
+                            //忽略宏展开，并立即返回
+                            return Ok(None);
+                        }
+                    }
+                },
+                _ => (),
+            }
+        }
+
+        //生成指定源码文件加指定后缀的宏展开文件
+        let parent_path = origin
+            .as_ref()
+            .parent()
+            .expect("Expand source failed");
+        let file_name_str = origin
+            .as_ref()
+            .file_prefix()
+            .expect("Expand source failed")
+            .to_str()
+            .expect("Expand source failed")
+            .to_string()
+            + self.0.suffix.as_str();
+        let mut file_name = PathBuf::from(file_name_str);
+        file_name.set_extension(RUST_SOURCE_FILE_EXTENSION);
+        let expanded_file_path = parent_path.join(file_name);
+        let file = File::options()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&expanded_file_path)?;
+        let expanded_file_out = unsafe { Stdio::from_raw_handle(file.into_raw_handle()) };
+
+        //执行指定源码文件的宏展开操作，并将宏展开后的源码写入宏展开文件
+        let path = origin
+            .as_ref()
+            .strip_prefix(&self.0.src)
+            .expect("Expand source failed");
+        if let Some(path_str) = path.to_str() {
+            //有效的源文件路径名
+            let vec: Vec<&str> = path_str.split(".rs").collect();
+            let arg = vec[0]
+                .replace("/", "::")
+                .replace("\\", "::");
+
+            let output = Command::new("cargo")
+                .current_dir(&self.0.root)
+                .arg("expand")
+                .arg(&arg)
+                .stdout(expanded_file_out)
+                .output()?;
+            if !output.status.success() {
+                //执行宏展开指令失败，则打印
+                info!("Expand source failed, from: {:?}, to: {:?}, stdout: {:?}",
+                    arg,
+                    expanded_file_path,
+                    String::from_utf8(output.stdout).expect("Expand source failed"));
+                error!("Expand source failed, from: {:?}, to: {:?}, stderr: {:?}",
+                    arg,
+                    expanded_file_path,
+                    String::from_utf8(output.stderr).expect("Expand source failed"));
+                return Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: run cargo expand error", arg, expanded_file_path)));
+            }
+
+            //执行宏展开指定成功，则注册宏展开文件，并返回宏展开文件的句柄
+            info!("Expand source ok, from: {:?}, to: {:?}, stdout: {:?}",
+                arg,
+                expanded_file_path,
+                String::from_utf8(output.stdout).expect("Expand source failed"));
+            let handle = self.0.uid.fetch_add(1, Ordering::Relaxed);
+            self.0.expanded.insert(handle, expanded_file_path);
+            Ok(Some(handle))
+        } else {
+            //无效的源文件路径名
+            Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: invalid origin", origin.as_ref(), expanded_file_path)))
+        }
+    }
+    #[cfg(target_os = "linux")]
+    pub fn expand<P: AsRef<Path>>(&self,
+                                  root_dir: P,
+                                  src_path: P,
+                                  origin: P) -> Result<u64> {
+        if let Some(filename) = origin.as_ref().file_name() {
+            match filename.to_str() {
+                Some(LIB_FILE_NAME) => {
+                    //忽略对库入口文件的宏展开，并立即返回
+                    return Ok(None);
+                },
+                Some(MOD_FILE_NAME) => {
+                    //忽略对模块入口文件的宏展开，并立即返回
+                    return Ok(None);
+                },
+                Some(filename_str) => {
+                    //检查当前文件名是否需要忽略宏展开
+                    for require in &self.0.requires {
+                        if filename_str != require.as_str() {
+                            //忽略宏展开，并立即返回
+                            return Ok(None);
+                        }
+                    }
+                },
+                _ => (),
+            }
+        }
+
+        //生成指定源码文件加指定后缀的宏展开文件
+        let parent_path = origin
+            .as_ref()
+            .parent()
+            .expect("Expand source failed");
+        let file_name_str = origin
+            .as_ref()
+            .file_prefix()
+            .expect("Expand source failed")
+            .to_str()
+            .expect("Expand source failed")
+            .to_string()
+            + self.0.suffix.as_str();
+        if let Some(_) = file_name_str.find(DEAFULT_MACRO_EXPAND_FILE_SUFFIX) {
+            //如果文件是临时生成的宏展开后的源码文件，则立即返回
+            return Ok(None);
+        }
+        let mut file_name = PathBuf::from(file_name_str);
+        file_name.set_extension(RUST_SOURCE_FILE_EXTENSION);
+        let expanded_file_path = parent_path.join(file_name);
+        let file = File::options()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(expanded_file_path)?;
+        let expanded_file_out = unsafe { Stdio::from_raw_fd(file.into_raw_fd()) };
+
+        //执行指定源码文件的宏展开操作，并将宏展开后的源码写入宏展开文件
+        let path = origin
+            .as_ref()
+            .strip_prefix(&self.0.src)
+            .expect("Expand source failed");
+        if let Some(path_str) = path.to_str() {
+            //有效的源文件路径名
+            let vec: Vec<&str> = path_str.split(".rs").collect();
+            let arg = vec[0]
+                .replace("/", "::")
+                .replace("\\", "::");
+
+            let output = Command::new("cargo")
+                .current_dir(&self.0.root)
+                .arg("expand")
+                .arg(&arg)
+                .stdout(expanded_file_out)
+                .output()?;
+            if !output.status.success() {
+                //执行宏展开指令失败，则打印
+                info!("Expand source failed, from: {:?}, to: {:?}, stdout: {:?}",
+                    arg,
+                    expanded_file_path,
+                    String::from_utf8(output.stdout).expect("Expand source failed"));
+                error!("Expand source failed, from: {:?}, to: {:?}, stderr: {:?}",
+                    arg,
+                    expanded_file_path,
+                    String::from_utf8(output.stderr).expect("Expand source failed"));
+                return Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: run cargo expand error", arg, expanded_file_path)));
+            }
+
+            //执行宏展开指定成功，则注册宏展开文件，并返回宏展开文件的句柄
+            info!("Expand source ok, from: {:?}, to: {:?}, stdout: {:?}",
+                arg,
+                expanded_file_path,
+                String::from_utf8(output.stdout).expect("Expand source failed"));
+            let handle = self.0.uid.fetch_add(1, Ordering::Relaxed);
+            self.0.expanded.insert(handle, expanded_file_path);
+            Ok(Some(handle))
+        } else {
+            //无效的源文件路径名
+            Err(Error::new(ErrorKind::Other, format!("Expand source failed, from: {:?}, to: {:?}, reason: invalid origin", origin.as_ref(), expanded_file_path)))
+        }
+    }
+
+    //获取指定源码文件句柄对应的源码文件路径
+    pub fn to_path(&self, handle: &u64) -> Option<PathBuf> {
+        if let Some(kv) = self.0.expanded.get(handle) {
+            Some(kv.value().clone())
+        } else {
+            None
+        }
+    }
+
+    //移除指定源码文件句柄对应的源码文件
+    pub fn destroy(&self, handle: &u64) -> Result<PathBuf> {
+        if let Some((_, path)) = self.0.expanded.remove(handle) {
+            fs::remove_file(&path)?;
+            Ok(path)
+        } else {
+            Err(Error::new(ErrorKind::NotFound, format!("Destroy Expanded source failed, handle: {}, reason: file not exist", handle)))
+        }
+    }
+}
+
+// 内部源码宏展开器
+struct InnerMacroExpander {
+    root:       PathBuf,                //库的根路径
+    src:        PathBuf,                //库的源码根路径
+    suffix:     String,                 //临时生成的宏展开后的源码文件名后缀
+    expanded:   DashMap<u64, PathBuf>,  //已宏展开的源码文件映射表
+    uid:        AtomicU64,              //宏展开文件的唯一id分配器
+    requires:   Vec<String>,            //需要宏展开的文件名列表
 }
 
 /*
@@ -2070,6 +2346,14 @@ pub fn create_tab(mut level: isize) -> String {
     tab
 }
 
+/*
+* 生成临时变量名
+*/
+#[inline]
+pub fn create_tmp_var_name(index: usize) -> String {
+    "val_".to_string() + index.to_string().as_str()
+}
+
 //获取目标类型的类型名，不包括类型参数
 pub fn get_target_type_name(target_name: &String) -> String {
     let mut vec: Vec<String> = target_name.split('<').map(|x| {
@@ -2108,4 +2392,40 @@ pub fn get_specific_ts_class_name(class_name: &String) -> String {
         .replace(", ", "_")
         .replace(",", "_")
         .replace(">", "_")
+}
+
+#[test]
+fn test_macro_expander() {
+    use env_logger;
+
+    //启动日志系统
+    env_logger::builder().format_timestamp_millis().init();
+
+    let mut expander = MacroExpander::new(r#"E:\wsl_tmp\pi_ui_render"#,
+                                          r#"E:\wsl_tmp\pi_ui_render\src"#,
+                                          "__$expand$__",
+                                          vec!["style.rs".to_string()]);
+    match expander.expand(r#"E:\wsl_tmp\pi_ui_render\src\export\mod.rs"#) {
+        Err(e) => panic!("{:?}", e),
+        Ok(None) => println!("!!!!!!ignore mod file"),
+        Ok(Some(handle)) => {
+            println!("!!!!!!to: {:?}", expander.to_path(&handle));
+            match expander.destroy(&handle) {
+                Err(e) => panic!("{:?}", e),
+                Ok(path) => println!("!!!!!!path: {:?}", path),
+            }
+        }
+    }
+
+    match expander.expand(r#"E:\wsl_tmp\pi_ui_render\src\export\style.rs"#) {
+        Err(e) => panic!("{:?}", e),
+        Ok(None) => panic!("Invalid source file"),
+        Ok(Some(handle)) => {
+            println!("!!!!!!to: {:?}", expander.to_path(&handle));
+            match expander.destroy(&handle) {
+                Err(e) => panic!("{:?}", e),
+                Ok(path) => println!("!!!!!!path: {:?}", path),
+            }
+        }
+    }
 }

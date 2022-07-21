@@ -3,10 +3,14 @@
 //! * 整个过程分为两部分：
 //!     - Rust代码分析并生成语法树，也就是前端处理
 //!     - 解析语法树并生成中间Rust代码和Typescript脚本，也就是后端处理
+//! * 注意：用于自动生成的导入库必须与自动生成的导出库在同一个目录下
 //!
+#![feature(pattern)]
+#![feature(path_file_prefix)]
 
 #[macro_use]
 extern crate lazy_static;
+extern crate core;
 
 use std::fs;
 use std::path::PathBuf;
@@ -29,7 +33,19 @@ mod utils;
 
 use frontend::parse_source;
 use backend::{create_bind_crate, generate_crates_proxy_source};
-use utils::{NATIVE_OBJECT_PROXY_FILE_DIR_NAME, check_crate, Crate, ParseContext, ProxySourceGenerater, abs_path};
+use utils::{RUST_SOURCE_FILE_EXTENSION,
+            NATIVE_OBJECT_PROXY_FILE_DIR_NAME,
+            check_crate,
+            Crate,
+            MacroExpander,
+            ParseContext,
+            ProxySourceGenerater,
+            abs_path};
+
+///
+/// 默认的宏展开文件后缀
+///
+const DEAFULT_MACRO_EXPAND_FILE_SUFFIX: &str = "__$expand$__";
 
 ///
 /// 初始化异步运行时
@@ -49,17 +65,20 @@ lazy_static! {
 }
 
 ///
-/// 递归分析指定库列表下的所有源文件，可以指定是否并发分析，返回指定库列表中声明了导出的库列表
+/// 递归分析指定库列表下的所有源文件，可以指定是否展开宏或并发分析，返回指定库列表中声明了导出的库列表
 ///
-pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec<Crate>> {
+pub async fn parse_crates(dirs: Vec<PathBuf>,
+                          requrie_extand_macro_filenames: Option<Vec<String>>,
+                          is_concurrent: bool) -> Result<Vec<Crate>> {
     let mut crates = Vec::new();
 
     if is_concurrent {
         //并发递归分析，导出函数的序号不保证一致
         let mut map = WORKER_RUNTIME.map_reduce(dirs.len());
         for path in dirs {
+            let ignores_copy = requrie_extand_macro_filenames.clone();
             let future = async move {
-                match parse_crate(path).await {
+                match parse_crate(path, ignores_copy).await {
                     Err(e) => {
                         Err(e)
                     },
@@ -92,7 +111,7 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
     } else {
         //顺序递归分析，导出函数的序号保证一致
         for path in dirs {
-            match parse_crate(path).await {
+            match parse_crate(path, requrie_extand_macro_filenames.clone()).await {
                 Err(e) => {
                     return Err(e);
                 },
@@ -107,9 +126,11 @@ pub async fn parse_crates(dirs: Vec<PathBuf>, is_concurrent: bool) -> Result<Vec
 }
 
 ///
-/// 递归分析指定库下的所有源文件，递归调用异步函数，需要使用boxed的Future
+/// 递归分析指定库下的所有源文件，可以指定是否展开宏
+/// 递归调用异步函数，需要使用boxed的Future
 ///
-pub async fn parse_crate(path: PathBuf) -> Result<Crate> {
+pub async fn parse_crate(path: PathBuf,
+                         requrie_extand_macro_filenames: Option<Vec<String>>) -> Result<Crate> {
     if path.is_dir() {
         //是目录，则继续分析
         match check_crate(path.as_path()) {
@@ -117,7 +138,17 @@ pub async fn parse_crate(path: PathBuf) -> Result<Crate> {
                 Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
             },
             Ok((crate_info, src_path)) => {
-                match parse_source_dir(src_path).await {
+                let macro_expander = if let Some(ignores) = requrie_extand_macro_filenames {
+                    //需要宏展开指定库下的所有源文件，则构建一个宏展开器
+                    Some(MacroExpander::new(&path,
+                                            &src_path,
+                                            DEAFULT_MACRO_EXPAND_FILE_SUFFIX,
+                                            ignores))
+                } else {
+                    None
+                };
+
+                match parse_source_dir(src_path, macro_expander).await {
                     Err(e) => {
                         Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
                     },
@@ -135,7 +166,8 @@ pub async fn parse_crate(path: PathBuf) -> Result<Crate> {
 ///
 /// 分析源码目录
 ///
-pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseContext>>> {
+pub fn parse_source_dir(path: PathBuf,
+                        macro_expander: Option<MacroExpander>) -> BoxFuture<'static, Result<Vec<ParseContext>>> {
     async move {
         match fs::read_dir(path.clone()) {
             Err(e) => {
@@ -156,13 +188,13 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
                 for child_path in child_paths {
                     if child_path.is_dir() {
                         //子目录
-                        match parse_source_dir(child_path).await {
+                        match parse_source_dir(child_path, macro_expander.clone()).await {
                             Err(e) => {
                                 //分析子目录失败，则立即返回错误
                                 return Err(e);
                             },
                             Ok(child_vec) => {
-                                //分析子目录成功，则记录分析的子目录上下文列表，并继续
+                                //分析子目录成功，则记录分析的子目录上下文列表，并继续分析下一个文件
                                 for context in child_vec {
                                     vec.push(context);
                                 }
@@ -171,17 +203,72 @@ pub fn parse_source_dir(path: PathBuf) -> BoxFuture<'static, Result<Vec<ParseCon
                         }
                     } else if child_path.is_file() {
                         //文件
-                        match AsyncFile::open(WORKER_RUNTIME.clone(), child_path.clone(), AsyncFileOptions::OnlyRead).await {
+                        if let Some(child_path_str) = child_path.to_str() {
+                            if let Some(_) = child_path_str.find(DEAFULT_MACRO_EXPAND_FILE_SUFFIX) {
+                                //如果文件是临时生成的宏展开后的源码文件，则忽略，并继续分析下一个文件
+                                continue;
+                            }
+                        }
+
+                        if let Some(ext) = child_path.extension() {
+                            //有扩展名
+                            if let Some(ext_str) = ext.to_str() {
+                                if ext_str != RUST_SOURCE_FILE_EXTENSION {
+                                    //不是Rust源码文件，则忽略，并继续分析下一个文件
+                                    continue;
+                                }
+
+                                if child_path.metadata()?.len() == 0 {
+                                    //当前源文件大小为0，则忽略，并继续分析下一个文件
+                                    continue;
+                                }
+                            } else {
+                                //无效扩展名，则忽略，并继续分析下一个文件
+                                continue;
+                            }
+                        } else {
+                            //无扩展名，则忽略，并继续分析下一个文件
+                            continue;
+                        }
+
+                        let real_child_path = if let Some(expander) = &macro_expander {
+                            //当前源文件需要宏展开
+                            match expander.expand(&child_path) {
+                                Err(e) => {
+                                    //宏展开失败，则立即返回错误
+                                    return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                                },
+                                Ok(None) => {
+                                    //当前源文件不需要宏展开
+                                    child_path.clone()
+                                },
+                                Ok(Some(handle)) => {
+                                    //宏展开成功
+                                    if let Some(p) = expander.to_path(&handle) {
+                                        p
+                                    } else {
+                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, handle: {:?}, reason: expanded file not exist", child_path, handle)));
+                                    }
+                                },
+                            }
+                        } else {
+                            //当前源文件不需要宏展开
+                            child_path.clone()
+                        };
+
+                        match AsyncFile::open(WORKER_RUNTIME.clone(),
+                                              real_child_path.clone(),
+                                              AsyncFileOptions::OnlyRead).await {
                             Err(e) => {
                                 //打开文件失败，则立即返回错误
-                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                                return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path, e)));
                             },
                             Ok(file) => {
                                 //打开文件成功，则继续分析源码
                                 match file.read(0, file.get_size() as usize).await {
                                     Err(e) => {
                                         //读文件失败，则立即返回错误
-                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", child_path, e)));
+                                        return Err(Error::new(ErrorKind::Other, format!("Parse crate failed, file: {:?}, reason: {:?}", real_child_path, e)));
                                     },
                                     Ok(bin) => {
                                         let mut context = ParseContext::new(child_path.as_path());
@@ -320,8 +407,47 @@ fn test_create_bind_crate() {
         let filename = PathBuf::from(r#".\tests\pi_v8_ext\"#);
         let path = cwd.join(filename.strip_prefix("./").unwrap());
         let root = PathBuf::from(r#".\tests"#);
-        let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)], true).await.unwrap();
+        let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)],
+                                  None,
+                                  true).await.unwrap();
         let ts_proxy_root = PathBuf::from(r#".\tests\pi_v8_ext\ts"#);
+
+        match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
+            Err(e) => {
+                panic!("Test create bind crate failed, {:?}", e);
+            },
+            Ok(src_path) => {
+                let generater = ProxySourceGenerater::new();
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone(), false).await {
+                    panic!("Test generate proxy file failed, {:?}", e);
+                }
+            },
+        }
+    }).unwrap();
+
+    std::thread::sleep(Duration::from_millis(1000000000));
+}
+
+#[test]
+fn test_parse_crate_by_marco_expand() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use env_logger;
+
+    //启动日志系统
+    env_logger::builder().format_timestamp_millis().init();
+
+    let rt = MultiTaskRuntimeBuilder::default().build();
+
+    rt.spawn(rt.alloc(), async move {
+        let path = PathBuf::from(r#"E:\wsl_tmp\pi_ui_ext"#);
+        let root = PathBuf::from(r#"E:\wsl_tmp\"#);
+        let crates = parse_crates(vec![PathBuf::from(r#"E:\wsl_tmp\pi_ui_render"#)],
+                                  Some(vec!["style.rs".to_string()]),
+                                  true).await.unwrap();
+        let ts_proxy_root = PathBuf::from(r#"E:\wsl_tmp\pi_ui_ext\ts"#);
 
         match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
             Err(e) => {

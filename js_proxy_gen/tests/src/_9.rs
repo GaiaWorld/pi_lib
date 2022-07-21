@@ -8,3 +8,17 @@ pub struct A<'b, 'a: 'b, T: Send + Sync + 'static, B: Send + Sync + 'static> {
     z:      T,
     vec:    Vec<B>,
 }
+
+mod test {
+    ///
+    /// 测试用结构体B
+    ///
+    #[cfg(target_os = "windows")]
+    #[cfg(feature = "pi_js_export")]
+    pub struct B<'b, 'a: 'b, T: Send + Sync + 'static, B: Send + Sync + 'static> {
+        x:      &'a T,
+        y:      &'b T,
+        z:      T,
+        vec:    Vec<B>,
+    }
+}

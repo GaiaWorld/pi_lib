@@ -6,7 +6,7 @@ use bytes::BufMut;
 use pi_async_file::file::{AsyncFileOptions, AsyncFile};
 
 use crate::{WORKER_RUNTIME,
-            utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, get_target_type_name, get_specific_ts_function_name}};
+            utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, create_tmp_var_name, get_target_type_name, get_specific_ts_function_name}};
 
 /*
 * 默认的依赖库名
@@ -530,7 +530,7 @@ fn generate_function_call_args(target: Option<&String>,
                 //获取函数声明的泛型的具体类型，并生成匹配具体类型的代码
                 for generic_type in generic_types {
                     arg_names.push(arg_name.clone()); //记录指定实参的名称
-                    if let Err(e) = generate_function_call_args_match_cause(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name, generic_type) {
+                    if let Err(e) = generate_function_call_args_match_cause_by_generic_type(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name, generic_type) {
                         return Err(e);
                     }
                     let _ = arg_names.pop(); //移除多余实参的名称
@@ -563,7 +563,7 @@ fn generate_function_call_args(target: Option<&String>,
                 //获取函数声明的泛型的具体类型，并生成匹配具体类型的代码
                 for generic_type in generic_types {
                     arg_names.push(arg_name.clone()); //记录指定实参的名称
-                    if let Err(e) = generate_function_call_args_match_cause(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name, generic_type) {
+                    if let Err(e) = generate_function_call_args_match_cause_by_generic_type(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name, generic_type) {
                         return Err(e);
                     }
                     let _ = arg_names.pop(); //移除多余实参的名称
@@ -587,13 +587,12 @@ fn generate_function_call_args(target: Option<&String>,
     }
 
     //参数类型是具体类型，则生成匹配开始代码
-    source_content.put_slice((create_tab(level) + "match &args[" + index.to_string().as_str() + "] {\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "let mut " + create_tmp_var_name(index).as_str() + " = match &args[" + index.to_string().as_str() + "] {\n").as_bytes());
 
     arg_names.push(arg_name.clone()); //记录指定实参的名称
-    if let Err(e) = generate_function_call_args_match_cause(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name, arg_type_name) {
+    if let Err(e) = generate_function_call_args_match_cause(target, generic, function, args, index, level + 1, arg_names, source_content, &func_name, origin_arg_name, &arg_name, &arg_type, arg_type_name) {
         return Err(e);
     }
-    let _ = arg_names.pop(); //移除多余实参的名称
 
     //生成剩余匹配项和匹配结束的代码
     source_content.put_slice((create_tab(level + 1) + "_ => {\n").as_bytes());
@@ -605,26 +604,359 @@ fn generate_function_call_args(target: Option<&String>,
         source_content.put_slice((create_tab(level + 2) + format!("return Some(Err(\"Invalid type of {}th parameter\".to_string()));\n", index).as_str()).as_bytes());
     }
     source_content.put_slice((create_tab(level + 1) + "},\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "};\n").as_bytes());
+
+    //生成匹配布尔值类型的代码
+    match arg_type_name.get_name().as_str() {
+        "bool" => {
+            //生成将参数转换为布尔值类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = *" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &*" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut *" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"i8" | alias@"i16" | alias@"i32" => {
+            //生成将参数转换为符号整数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            }
+        },
+        alias@"i64" | alias@"i128" | alias@"isize" => {
+            //生成将参数转换为符号64位或128位整数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " ref failed\")) as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut (" + create_tmp_var_name(index).as_str() + ".to_i128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");\n").as_bytes());
+            }
+        },
+        alias@"u8" | alias@"u16" | alias@"u32" => {
+            //生成将参数转换为无符号整数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            }
+        },
+        alias@"u64" | alias@"u128" | alias@"usize" => {
+            //生成将参数转换为无符号64位或128位整数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " failed\") as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &(" + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " ref failed\") as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".to_u128().expect(\"From js bigint to " + alias + " mut ref failed\") as " + alias + ");;\n").as_bytes());
+            }
+        },
+        alias@"f32" | alias@"f64" => {
+            //生成将参数转换为浮点数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n").as_bytes());
+            }
+        },
+        "BigInt" => {
+            //生成将参数转换为有符号大整数类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "str" => {
+            //生成将参数转换为字符串类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of str type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".as_str();\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take mutable borrow of str type", func_name, origin_arg_name)))
+            }
+        },
+        "String" => {
+            //生成将参数转换为字符串类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "[u8]" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [u8] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes();\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes_mut();\n").as_bytes());
+            }
+        },
+        "Arc<[u8]>" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": Arc<[u8]> = Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &Arc<[u8]> = &Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + ": &mut Arc<[u8]> = &mut Arc::from(" + create_tmp_var_name(index).as_str() + ".bytes());\n").as_bytes());
+            }
+        },
+        "Box<[u8]>" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec()).into_boxed_slice();\n").as_bytes());
+            }
+        },
+        "Arc<Vec<u8>>" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Arc::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            }
+        },
+        "Box<Vec<u8>>" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut Box::new(" + create_tmp_var_name(index).as_str() + ".bytes().to_vec());\n").as_bytes());
+            }
+        },
+        "Vec<u8>" => {
+            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ".bytes().to_vec();;\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ".bytes().to_vec();\n").as_bytes());
+            }
+        },
+        "Vec<bool>" => {
+            //生成将参数转换为布尔值数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" => {
+            //生成将参数转换为有符号整数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
+            //生成将参数转换为有符号64位或128位整数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<u16>" | alias@"Vec<u32>" => {
+            //生成将参数转换为无符号整数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
+            //生成将参数转换为无符号64位或128位整数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<f32>" | alias@"Vec<f64>" => {
+            //生成将参数转换为浮点数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        alias@"Vec<BigInt>" => {
+            //生成将参数转换为无符号大整数数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<String>" => {
+            //生成将参数转换为字符串数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<Arc<[u8]>>" => {
+            //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<Box<[u8]>>" => {
+            //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<Arc<Vec<u8>>>" => {
+            //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<Box<Vec<u8>>>" => {
+            //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        "Vec<Vec<u8>>" => {
+            //生成将参数转换为二进制缓冲区数组类型和指定所有权的代码
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n").as_bytes());
+            }
+        },
+        other_type => {
+            //生成将参数转换为其它类型的只读引用和指定所有权的代码，例: &NativeObject
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of {} type", func_name, origin_arg_name, other_type)));
+            } else if arg_type_name.is_only_read() {
+                let real_other_type = if arg_type.get_type_args().is_some() {
+                    arg_type.to_string()
+                } else {
+                    other_type.to_string()
+                };
+
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_ref::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                let real_other_type = if arg_type.get_type_args().is_some() {
+                    arg_type.to_string()
+                } else {
+                    other_type.to_string()
+                };
+
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_mut::<" + real_other_type.as_str() + ">().unwrap();\n").as_bytes());
+            }
+        },
+    }
+
+    let next_index = index + 1;
+    if next_index == args.len() {
+        //实参列表已生成完成，则生成函数调用代码
+        if let Err(e) = generate_call_function(target,
+                                               generic,
+                                               function,
+                                               level,
+                                               arg_names,
+                                               source_content,
+                                               &func_name) {
+            return Err(e);
+        }
+    } else {
+        //否则继续生成下一个参数的代码
+        if let Err(e) = generate_function_call_args(target,
+                                                    generic,
+                                                    function,
+                                                    args,
+                                                    next_index,
+                                                    level,
+                                                    arg_names,
+                                                    source_content) {
+            return Err(e);
+        }
+    }
+    let _ = arg_names.pop(); //移除多余实参的名称
 
     Ok(())
 }
 
-//生成函数调用代码的实参列表模式匹配子句
-fn generate_function_call_args_match_cause(target: Option<&String>,
-                                           generic: Option<&Generic>,
-                                           function: &Function,
-                                           args: &[(String, Type)],
-                                           index: usize,
-                                           level: isize,
-                                           arg_names: &mut Vec<String>,
-                                           source_content: &mut Vec<u8>,
-                                           func_name: &String,
-                                           origin_arg_name: &String,
-                                           arg_name: &String,
-                                           arg_type: &Type,
-                                           arg_type_name: &TypeName,
-                                           generic_type: &TypeName) -> Result<()> {
+//生成函数调用代码的实参列表模式匹配子句，实参类型为泛型的某个具体类型
+fn generate_function_call_args_match_cause_by_generic_type(target: Option<&String>,
+                                                           generic: Option<&Generic>,
+                                                           function: &Function,
+                                                           args: &[(String, Type)],
+                                                           index: usize,
+                                                           level: isize,
+                                                           arg_names: &mut Vec<String>,
+                                                           source_content: &mut Vec<u8>,
+                                                           func_name: &String,
+                                                           origin_arg_name: &String,
+                                                           arg_name: &String,
+                                                           arg_type: &Type,
+                                                           arg_type_name: &TypeName,
+                                                           generic_type: &TypeName) -> Result<()> {
     match generic_type.get_name().as_str() {
         "bool" => {
             //生成匹配布尔值类型的代码
@@ -1584,6 +1916,332 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         }
+    }
+
+    Ok(())
+}
+
+//生成函数调用代码的实参列表模式匹配子句
+fn generate_function_call_args_match_cause(target: Option<&String>,
+                                           generic: Option<&Generic>,
+                                           function: &Function,
+                                           args: &[(String, Type)],
+                                           index: usize,
+                                           level: isize,
+                                           arg_names: &mut Vec<String>,
+                                           source_content: &mut Vec<u8>,
+                                           func_name: &String,
+                                           origin_arg_name: &String,
+                                           arg_name: &String,
+                                           arg_type: &Type,
+                                           generic_type: &TypeName) -> Result<()> {
+    match generic_type.get_name().as_str() {
+        "bool" => {
+            //生成匹配布尔值类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bool(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"i8" | alias@"i16" | alias@"i32" => {
+            //生成匹配有符号整数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"i64" | alias@"i128" | alias@"isize" => {
+            //生成匹配有符号64位或128位整数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"u8" | alias@"u16" | alias@"u32" => {
+            //生成匹配无符号整数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"u64" | alias@"u128" | alias@"usize" => {
+            //生成匹配无符号64位或128位整数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"f32" | alias@"f64" => {
+            //生成匹配浮点数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配有符号整数类型的代码，当浮点数被强制转为有符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配无符号整数类型的代码，当浮点数被强制转为无符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "BigInt" => {
+            //生成匹配有符号大整数类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::BigInt(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "str" => {
+            //生成匹配字符串类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Str(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "String" => {
+            //生成匹配字符串类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Str(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "[u8]" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Arc<[u8]>" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Box<[u8]>" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Arc<Vec<u8>>" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Box<Vec<u8>>" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<u8>" => {
+            //生成匹配二进制缓冲区类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<bool>" => {
+            //生成匹配布尔值数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bool(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val);\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to bool failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" => {
+            //生成匹配有符号整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Int(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<i64>" | alias@"Vec<i128>" | alias@"Vec<isize>" => {
+            //生成匹配有符号64位或128位整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.to_i128().expect(\"From js bigint array to " + alias + " failed\") as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<u16>" | alias@"Vec<u32>" => {
+            //生成匹配无符号整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Uint(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<u64>" | alias@"Vec<u128>" | alias@"Vec<usize>" => {
+            //生成匹配无符号64位或128位整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.to_u128().expect(\"From js bigint array to " + alias + " failed\") as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<f32>" | alias@"Vec<f64>" => {
+            //生成匹配浮点数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Float(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        alias@"Vec<BigInt>" => {
+            //生成匹配无符号大整数数组类型的代码
+            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+            let sub_type = sub_types[1];
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::BigInt(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.clone());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<String>" => {
+            //生成匹配字符串数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + " = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Str(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.clone());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to String failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Arc<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Arc<[u8]>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Arc::from(val.bytes()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Arc<[u8]> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Box<[u8]>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Box<[u8]>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Box::new(val.bytes().to_vec()).into_boxed_slice());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Box<[u8]> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Arc<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Arc<Vec<u8>>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Arc::new(val.bytes().to_vec()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Arc<Vec<u8>> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Box<Vec<u8>>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Box<Vec<u8>>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(Box::new(val.bytes().to_vec()));\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Box<Vec<u8>> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        "Vec<Vec<u8>>" => {
+            //生成匹配二进制缓冲区数组类型的代码
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": Vec<Vec<u8>> = Vec::with_capacity(array.len());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Bin(val) = obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(val.bytes().to_vec());\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to Vec<u8> failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
+        other_type => {
+            //生成匹配其它类型的只读引用的代码，例: &NativeObject
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::NatObj(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
     }
 
     Ok(())
