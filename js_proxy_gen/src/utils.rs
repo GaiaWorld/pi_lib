@@ -444,6 +444,7 @@ impl MacroExpander {
                 .arg("expand")
                 .arg(&arg)
                 .stdout(expanded_file_out)
+                .stderr(Stdio::inherit())
                 .output()?;
             if !output.status.success() {
                 //执行宏展开指令失败，则打印
@@ -541,6 +542,7 @@ impl MacroExpander {
                 .arg("expand")
                 .arg(&arg)
                 .stdout(expanded_file_out)
+                .stderr(Stdio::inherit())
                 .output()?;
             if !output.status.success() {
                 //执行宏展开指令失败，则打印
