@@ -3,7 +3,6 @@
 //! * 整个过程分为两部分：
 //!     - Rust代码分析并生成语法树，也就是前端处理
 //!     - 解析语法树并生成中间Rust代码和Typescript脚本，也就是后端处理
-//! * 注意：用于自动生成的导入库必须与自动生成的导出库在同一个目录下
 //!
 #![feature(pattern)]
 #![feature(path_file_prefix)]
@@ -20,6 +19,7 @@ use std::io::{Error, Result, ErrorKind};
 
 use futures::future::{FutureExt, BoxFuture};
 use num_cpus;
+use normpath::PathExt;
 
 use pi_async::rt::{AsyncRuntime,
                    multi_thread::{MultiTaskRuntimeBuilder, StealableTaskPool, MultiTaskRuntime}};
@@ -154,7 +154,17 @@ pub async fn parse_crate(path: PathBuf,
                         Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
                     },
                     Ok(source) => {
-                        Ok(Crate::new(crate_info, source))
+                        match path.normalize() {
+                            Err(e) => {
+                                //获取指定库的本地绝对路径失败
+                                Err(Error::new(ErrorKind::Other, format!("Parse crate path failed, path: {:?}, reason: {:?}", path, e)))
+                            },
+                            Ok(p) => {
+                                //获取指定库的本地绝对路径成功
+                                let crate_path = p.as_path().to_path_buf();
+                                Ok(Crate::new(crate_path, crate_info, source))
+                            },
+                        }
                     },
                 }
             },
@@ -302,6 +312,7 @@ pub fn parse_source_dir(path: PathBuf,
 ///
 pub async fn generate_proxy_crate(path: PathBuf,
                                   ts_proxy_root: PathBuf,
+                                  vm_builtin_path: PathBuf,
                                   version: &str,
                                   edition: &str,
                                   is_concurrent: bool,
@@ -336,13 +347,11 @@ pub async fn generate_proxy_crate(path: PathBuf,
                         },
                     }
 
-                    let parent_path = if let Some(p) = proxy_crate_path.parent() {
-                        p.to_path_buf()
-                    } else {
-                        return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: not allowed for proxy crate with root path", path)));
-                    };
-
-                    match create_bind_crate(proxy_crate_path, parent_path, version, edition, crates.as_slice()).await {
+                    match create_bind_crate(proxy_crate_path,
+                                            vm_builtin_path,
+                                            version,
+                                            edition,
+                                            crates.as_slice()).await {
                         Err(e) => {
                             Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
                         },
@@ -403,13 +412,17 @@ fn test_create_bind_crate() {
         let cwd = env::current_dir().unwrap();
         let filename = PathBuf::from(r#".\tests\pi_v8_ext\"#);
         let path = cwd.join(filename.strip_prefix("./").unwrap());
-        let root = PathBuf::from(r#".\tests"#);
+        let vm_builtin_path = PathBuf::from(r#"..\..\pi_v8\vm_builtin"#);
         let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)],
                                   None,
                                   true).await.unwrap();
         let ts_proxy_root = PathBuf::from(r#".\tests\pi_v8_ext\ts"#);
 
-        match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
+        match create_bind_crate(path,
+                                vm_builtin_path,
+                                "0.1.0",
+                                "2018",
+                                crates.as_slice()).await {
             Err(e) => {
                 panic!("Test create bind crate failed, {:?}", e);
             },
@@ -439,14 +452,14 @@ fn test_parse_crate_by_marco_expand() {
     let rt = MultiTaskRuntimeBuilder::default().build();
 
     rt.spawn(rt.alloc(), async move {
-        let path = PathBuf::from(r#"E:\wsl_tmp\pi_ui_ext"#);
-        let root = PathBuf::from(r#"E:\wsl_tmp\"#);
+        let path = PathBuf::from(r#".\tests\pi_ui_ext"#);
+        let vm_builtin_path = PathBuf::from(r#"..\..\pi_v8\vm_builtin"#);
         let crates = parse_crates(vec![PathBuf::from(r#"E:\wsl_tmp\pi_ui_render"#)],
                                   Some(vec!["style.rs".to_string()]),
                                   true).await.unwrap();
-        let ts_proxy_root = PathBuf::from(r#"E:\wsl_tmp\pi_ui_ext\ts"#);
+        let ts_proxy_root = PathBuf::from(r#".\tests\pi_ui_ext\ts"#);
 
-        match create_bind_crate(path, root, "0.1.0", "2018", crates.as_slice()).await {
+        match create_bind_crate(path, vm_builtin_path, "0.1.0", "2018", crates.as_slice()).await {
             Err(e) => {
                 panic!("Test create bind crate failed, {:?}", e);
             },

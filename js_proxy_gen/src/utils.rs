@@ -104,6 +104,7 @@ pub fn check_crate(path: &Path) -> Result<(CrateInfo, PathBuf)> {
 */
 #[derive(Debug)]
 pub struct Crate {
+    path:   PathBuf,            //库的本地绝对路径
     info:   CrateInfo,          //库信息
     source: Vec<ParseContext>,  //源码信息
 }
@@ -112,11 +113,20 @@ unsafe impl Send for Crate {}
 
 impl Crate {
     //构建导出的库
-    pub fn new(info: CrateInfo, source: Vec<ParseContext>) -> Self {
+    pub fn new<P: AsRef<Path>>(path: P,
+                               info: CrateInfo,
+                               source: Vec<ParseContext>) -> Self {
+        let path = path.as_ref().to_path_buf();
         Crate {
+            path,
             info,
             source,
         }
+    }
+
+    //获取导出库的本地绝对路径
+    pub fn get_path(&self) -> &Path {
+        self.path.as_path()
     }
 
     //获取导出库的库信息

@@ -9,6 +9,7 @@ use toml;
 use pi_async::rt::AsyncRuntime;
 use pi_async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
 use bytes::BufMut;
+use normpath::PathExt;
 
 use crate::{WORKER_RUNTIME,
             rust_backend::{DEFAULT_DEPEND_CRATE_NAME, DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME, DEFAULT_PROXY_FUNCTION_BLOCK_END, DEFAULT_PROXY_LIB_FILE_USED, create_proxy_rust_file, generate_rust_import, generate_rust_functions},
@@ -18,19 +19,33 @@ use crate::{WORKER_RUNTIME,
                     abs_path, create_tab}};
 
 /*
-* 异步创建指定名称、版本号和版本的pi_v8外部绑定库，初始化并返回库的源码路径
+* 异步创建指定了
+* 生成后的外部绑定库所在路径、
+* 本地vm_builtin库所在路径、
+* 生成后的外部绑定库的名称、
+* 生成后的外部绑定库的版本号、
+* 生成后的外部绑定库的版本、
+* 和需要导出的本地外部库列表
+* 的pi_v8外部绑定库，初始化并返回库的源码路径
 */
 pub(crate) async fn create_bind_crate(path: PathBuf,
-                                      root: PathBuf,
+                                      vm_builtin_path: PathBuf,
                                       version: &str,
                                       edition: &str,
                                       export_crates: &[Crate]) -> Result<PathBuf> {
-    let root = abs_path(root.as_path()).unwrap();
     let src_path = path.join(SRC_DIR_NAME);
     if let Err(e) = create_dir(WORKER_RUNTIME.clone(), src_path.clone()).await {
         //创建目录失败，则立即返回错误
-        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, vm_builtin_path: {:?}, reason: {:?}", path, vm_builtin_path, e)));
     }
+    let vm_builtin_path = match vm_builtin_path.normalize() {
+        Err(e) => {
+            return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, vm_builtin_path: {:?}, reason: {:?}", path, vm_builtin_path, e)));
+        },
+        Ok(p) => {
+            p.as_path().to_path_buf()
+        },
+    };
 
     //移除源文件目录中的所有文件
     match fs::read_dir(src_path.clone()) {
@@ -73,7 +88,9 @@ pub(crate) async fn create_bind_crate(path: PathBuf,
                                            version,
                                            vec!["yineng <yineng@foxmail.com>"],
                                            edition);
-            if let Err(e) = parse_crate_depends(root, export_crates, &mut configure) {
+            if let Err(e) = parse_crate_depends(export_crates,
+                                                vm_builtin_path.as_path(),
+                                                &mut configure) {
                 //分析需要增加依赖的导出库失败，则立即返回
                 return Err(e);
             }
@@ -91,14 +108,13 @@ pub(crate) async fn create_bind_crate(path: PathBuf,
 }
 
 //分析库依赖，并将需要导入的导出库写入构建配置的依赖中
-fn parse_crate_depends(root: PathBuf,
-                       export_crates: &[Crate],
+fn parse_crate_depends(export_crates: &[Crate],
+                       vm_builtin_path: &Path,
                        configure: &mut CrateInfo) -> Result<()> {
     //写入默认依赖
-    let export_crate_name = DEFAULT_DEPEND_CRATE_NAME.to_string();
-    let export_crate_path = root.join(export_crate_name.as_str());
     let mut table = toml::value::Table::new();
-    table.insert("path".to_string(), toml::Value::String(export_crate_path.into_os_string().into_string().unwrap()));
+    table.insert("path".to_string(),
+                 toml::Value::String(vm_builtin_path.to_path_buf().into_os_string().into_string().unwrap()));
     configure.append_depend("futures", toml::Value::String("0.3".to_string())); //异步库
     configure.append_depend("num-bigint", toml::Value::String("0.4".to_string())); //大整数库
     configure.append_depend("num-traits", toml::Value::String("0.2".to_string())); //数字接口库
@@ -107,7 +123,7 @@ fn parse_crate_depends(root: PathBuf,
     for export_crate in export_crates {
         let package = export_crate.get_info().get_package();
         let export_crate_name = package.get_name();
-        let export_crate_path = root.join(export_crate_name.as_str());
+        let export_crate_path = export_crate.get_path();
 
         if !export_crate_path.exists() {
             //导出库不在默认的路径下，则立即返回错误
@@ -115,7 +131,8 @@ fn parse_crate_depends(root: PathBuf,
         }
 
         let mut table = toml::value::Table::new();
-        table.insert("path".to_string(), toml::Value::String(export_crate_path.into_os_string().into_string().unwrap()));
+        table.insert("path".to_string(),
+                     toml::Value::String(export_crate_path.to_path_buf().into_os_string().into_string().unwrap()));
         configure.append_depend(export_crate_name.as_str(), toml::Value::Table(table));
     }
 

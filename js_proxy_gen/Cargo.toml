@@ -1,6 +1,6 @@
 [package]
 name = "js_proxy_gen"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
@@ -24,6 +24,7 @@ log = "0.4"
 pi_async = "0.2"
 pi_async_file = "0.1"
 pi_hash = "0.1"
+normpath = "0.3"
 
 [dev-dependencies]
 env_logger = "0.9"
