@@ -540,7 +540,7 @@ fn generate_function_call_args(target: Option<&String>,
                 source_content.put_slice((create_tab(level + 1) + "_ => {\n").as_bytes());
                 if function.is_async() {
                     //生成异步返回错误的代码
-                    source_content.put_slice((create_tab(level + 2) + format!("reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
+                    source_content.put_slice((create_tab(level + 2) + format!("return reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
                 } else {
                     //生成同步返回错误的代码
                     source_content.put_slice((create_tab(level + 2) + format!("return Some(Err(\"Invalid type of {}th parameter\".to_string()));\n", index).as_str()).as_bytes());
@@ -573,7 +573,7 @@ fn generate_function_call_args(target: Option<&String>,
                 source_content.put_slice((create_tab(level + 1) + "_ => {\n").as_bytes());
                 if function.is_async() {
                     //生成异步返回错误的代码
-                    source_content.put_slice((create_tab(level + 2) + format!("reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
+                    source_content.put_slice((create_tab(level + 2) + format!("return reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
                 } else {
                     //生成同步返回错误的代码
                     source_content.put_slice((create_tab(level + 2) + format!("return Some(Err(\"Invalid type of {}th parameter\".to_string()));\n", index).as_str()).as_bytes());
@@ -598,7 +598,7 @@ fn generate_function_call_args(target: Option<&String>,
     source_content.put_slice((create_tab(level + 1) + "_ => {\n").as_bytes());
     if function.is_async() {
         //生成异步返回错误的代码
-        source_content.put_slice((create_tab(level + 2) + format!("reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
+        source_content.put_slice((create_tab(level + 2) + format!("return reply(Err(NativeObjectValue::Str(\"Invalid type of {}th parameter\".to_string())));\n", index).as_str()).as_bytes());
     } else {
         //生成同步返回错误的代码
         source_content.put_slice((create_tab(level + 2) + format!("return Some(Err(\"Invalid type of {}th parameter\".to_string()));\n", index).as_str()).as_bytes());
@@ -1997,7 +1997,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
         "String" => {
             //生成匹配字符串类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Str(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val.clone()\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         "[u8]" => {
