@@ -438,6 +438,7 @@ fn test_create_bind_crate() {
     std::thread::sleep(Duration::from_millis(1000000000));
 }
 
+//测试在导出库中使用宏来生成导出函数
 #[test]
 fn test_parse_crate_by_marco_expand() {
     use std::env;
@@ -458,6 +459,45 @@ fn test_parse_crate_by_marco_expand() {
                                   Some(vec!["style.rs".to_string()]),
                                   true).await.unwrap();
         let ts_proxy_root = PathBuf::from(r#".\tests\pi_ui_ext\ts"#);
+
+        match create_bind_crate(path, vm_builtin_path, "0.1.0", "2018", crates.as_slice()).await {
+            Err(e) => {
+                panic!("Test create bind crate failed, {:?}", e);
+            },
+            Ok(src_path) => {
+                let generater = ProxySourceGenerater::new();
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone(), false).await {
+                    panic!("Test generate proxy file failed, {:?}", e);
+                }
+            },
+        }
+    }).unwrap();
+
+    std::thread::sleep(Duration::from_millis(1000000000));
+}
+
+//测试在导出库中使用第三方库的类型作为导出函数的参数或返回值
+//方法为在导出库的导出函数使用了任意第三方库的任意类型时，使用pub关键字将这个类型单独引入，例：pub use pi_atom::Atom;
+#[test]
+fn test_parse_crate_depends() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use env_logger;
+
+    //启动日志系统
+    env_logger::builder().format_timestamp_millis().init();
+
+    let rt = MultiTaskRuntimeBuilder::default().build();
+
+    rt.spawn(rt.alloc(), async move {
+        let path = PathBuf::from(r#"E:\wsl_tmp\test_depends_ext"#);
+        let vm_builtin_path = PathBuf::from(r#"..\..\pi_v8\vm_builtin"#);
+        let crates = parse_crates(vec![PathBuf::from(r#".\tests\test_depends"#)],
+                                  None,
+                                  true).await.unwrap();
+        let ts_proxy_root = PathBuf::from(r#"E:\wsl_tmp\test_depends_ext\ts"#);
 
         match create_bind_crate(path, vm_builtin_path, "0.1.0", "2018", crates.as_slice()).await {
             Err(e) => {
