@@ -1974,12 +1974,12 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
 
             //生成匹配有符号整数类型的代码，当浮点数被强制转为有符号整数时进行匹配
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val as f64\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
 
             //生成匹配无符号整数类型的代码，当浮点数被强制转为无符号整数时进行匹配
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "val as f64\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         "BigInt" => {
