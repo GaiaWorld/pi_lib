@@ -621,11 +621,11 @@ fn generate_function_call_args(target: Option<&String>,
         alias@"i8" | alias@"i16" | alias@"i32" => {
             //生成将参数转换为符号整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"i64" | alias@"i128" | alias@"isize" => {
@@ -641,11 +641,11 @@ fn generate_function_call_args(target: Option<&String>,
         alias@"u8" | alias@"u16" | alias@"u32" => {
             //生成将参数转换为无符号整数类型和指定所有权的代码
             if arg_type_name.is_moveable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = (*" + create_tmp_var_name(index).as_str() + ") as " + alias + ";\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut ((*" + create_tmp_var_name(index).as_str() + ") as " + alias + ");\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
         alias@"u64" | alias@"u128" | alias@"usize" => {
@@ -1954,7 +1954,17 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
         alias@"i8" | alias@"i16" | alias@"i32" => {
             //生成匹配有符号整数类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配有符号整数类型的代码，当有符号整数被强制转为无符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配有符号整数类型的代码，当有符号整数被强制转为浮点数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         alias@"i64" | alias@"i128" | alias@"isize" => {
@@ -1966,7 +1976,17 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
         alias@"u8" | alias@"u16" | alias@"u32" => {
             //生成匹配无符号整数类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配无符号整数类型的代码，当无符号整数被强制转为有符号整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+            //生成匹配无符号整数类型的代码，当无符号整数被强制转为浮点整数时进行匹配
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "(*val) as " + alias + "\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         alias@"u64" | alias@"u128" | alias@"usize" => {
@@ -2067,10 +2087,19 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Int(val) = obj {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "match obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "_ => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
@@ -2101,10 +2130,19 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Array(array) => {\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "let mut array_" + arg_name.as_str() + ": " + alias + " = Vec::with_capacity(array.len());\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "for obj in array {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "if let NativeObjectValue::Uint(val) = obj {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 2) + "} else {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 2) + "match obj {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "array_" + arg_name.as_str() + ".push(*val as " + sub_type + ");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "_ => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 4) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
@@ -2147,7 +2185,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
             source_content.put_slice((create_tab(level + 3) + "_ => {\n").as_bytes());
             source_content.put_slice((create_tab(level + 4) + "panic!(\"Parse native object in array to " + sub_type + " failed\");\n").as_bytes());
-            source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+            source_content.put_slice((create_tab(level + 3) + "},\n").as_bytes());
             source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());

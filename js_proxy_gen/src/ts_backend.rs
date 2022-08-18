@@ -657,7 +657,7 @@ fn generate_ts_function_return(target: Option<&String>,
                             (return_type.get_type_arg_names().unwrap()[0].clone(), "".to_string())
                         } else {
                             //同步函数
-                            (return_type.get_type_arg_names().unwrap()[0].clone(), "|Error".to_string())
+                            (return_type.get_type_arg_names().unwrap()[0].clone(), "".to_string())
                         }
                     },
                     _ => (return_type.get_type_name(), "".to_string()),
