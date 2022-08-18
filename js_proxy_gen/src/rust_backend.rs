@@ -2665,6 +2665,16 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
                                              return_type: &TypeName,
                                              generic_type: Option<&TypeName>) -> Result<()> {
     match return_type.get_name().as_str() {
+        "()" | "!" => {
+            //生成匹配无返回值类型的代码
+            if function.is_async() {
+                //生成异步返回代码
+                source_content.put_slice((create_tab(level) + "reply(Ok(NativeObjectValue::None));\n").as_bytes());
+            } else {
+                //生成同步返回代码
+                source_content.put_slice((create_tab(level) + "return Some(Ok(NativeObjectValue::None));\n").as_bytes());
+            }
+        },
         "bool" => {
             //生成匹配布尔值类型的代码
             let mut current_level = level;

@@ -759,6 +759,7 @@ fn get_output_type(target_name: &String,
                    return_typed: &syn::Type) -> Result<Type> {
     match get_type(target_name, return_typed) {
         Err(e) => {
+            println!("!!!!!!return_typed: {:?}", return_typed);
             //分析出参类型失败，则立即返回错误
             Err(Error::new(ErrorKind::Other, format!("Parse method output type failed, target: {}, trait: {:?}, method: {}, reason: {:?}", target_name, trait_name, method_name, e)))
         },
@@ -936,6 +937,17 @@ fn get_type(target_name: &String,
                 _ => (),
             }
         },
+        syn::Type::Tuple(tt) => {
+            //指定类型的元组
+            if tt.elems.is_empty() {
+                //空元组，即Unit类型
+                return Ok(Type::new("()".to_string()));
+            }
+        },
+        syn::Type::Never(_) => {
+            //指定!类型
+            return Ok(Type::new("!".to_string()));
+        }
         _ => (),
     }
 
