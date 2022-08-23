@@ -481,10 +481,7 @@ impl MacroExpander {
         }
     }
     #[cfg(target_os = "linux")]
-    pub fn expand<P: AsRef<Path>>(&self,
-                                  root_dir: P,
-                                  src_path: P,
-                                  origin: P) -> Result<Option<MacroExpandPathBuf>> {
+    pub fn expand<P: AsRef<Path>>(&self, origin: P) -> Result<Option<MacroExpandPathBuf>> {
         if let Some(filename) = origin.as_ref().file_name() {
             match filename.to_str() {
                 Some(LIB_FILE_NAME) => {
