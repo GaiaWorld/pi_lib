@@ -529,7 +529,7 @@ impl MacroExpander {
             .write(true)
             .truncate(true)
             .create(true)
-            .open(expanded_file_path)?;
+            .open(&expanded_file_path)?;
         let expanded_file_out = unsafe { Stdio::from_raw_fd(file.into_raw_fd()) };
 
         //执行指定源码文件的宏展开操作，并将宏展开后的源码写入宏展开文件
