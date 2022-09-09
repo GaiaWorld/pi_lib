@@ -142,6 +142,7 @@ impl<T: Default> IdTree<T> {
         node.layer = 0;
         node.prev = 0;
         node.next = 0;
+		// log::warn!("remove: {:?}, is some:{:?}", id, self.map.get(id).is_some());
     }
     /// 销毁子节点， recursive表示是否递归销毁
     pub fn destroy(
@@ -153,6 +154,7 @@ impl<T: Default> IdTree<T> {
         if recursive {
             self.recursive_destroy(id, head);
         } else {
+			// log::warn!("destroy==============={:?}", id);
             self.map.remove(id);
             if layer > 0 {
                 while head > 0 {
@@ -252,8 +254,8 @@ impl<T: Default> IdTree<T> {
                 n.children.head
             }
             _ => {
-                log::error!("invalid id: {}", id);
-                panic!("invalid id: {}", id);
+                log::error!("insert root invalid id: {}", id);
+                panic!("insert root invalid id: {}", id);
             },
         };
         self.insert_tree(head, 2);
@@ -354,7 +356,7 @@ impl<T: Default> IdTree<T> {
             // 递归向上修改count
             self.modify_count(p, count as isize);
         }
-        if layer > 0 {
+        if layer > 0 && count > 0 {
             self.insert_tree(fix_prev, layer + 1);
 		}
         layer
@@ -385,6 +387,7 @@ impl<T: Default> IdTree<T> {
     }
     // 递归销毁
     fn recursive_destroy(&mut self, parent: usize, mut id: usize) {
+		// log::warn!("recursive_destroy==============={:?},{:?}", id, parent);
 		self.map.remove(parent);
         while id > 0 {
             let (next, head) = {

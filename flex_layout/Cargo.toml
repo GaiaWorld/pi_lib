@@ -17,6 +17,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 libm = "0.1.2"
 paste = "0.1"
+log = "0.4"
 idtree = {path="../idtree"}
 dirty = {path="../dirty"}
 heap = {path="../../pi_lib/heap"}
@@ -39,6 +40,11 @@ panic = 'abort'
 [[bench]]
 name = "generated"
 path = "benches/generated/mod.rs"
+harness = false
+
+[[test]]
+name = "test_generated"
+path = "tests/generated/mod.rs"
 harness = false
 
 [[bench]]

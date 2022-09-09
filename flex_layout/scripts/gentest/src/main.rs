@@ -207,29 +207,29 @@ fn generate_bench(description: &json::JsonValue) -> TokenStream {
     let node_description = generate_node(1, &mut 2, "node", &description);
 
     quote!(
-        fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
+        fn print(count: &mut usize, id: usize, layout: &flex_layout::tree::LayoutR) {
             *count += 1;
             debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
         }
         pub fn compute() {
-            let mut layout_tree = layout::tree::LayoutTree::default();
-            layout_tree.insert(1, 0, 0, layout::idtree::InsertType::Back, layout::style::Style{
-                position_type: layout::style::PositionType::Absolute,
-                size: layout::geometry::Size{
-                    width: layout::style::Dimension::Points(1920.0),
-                    height: layout::style::Dimension::Points(1024.0),
+            let mut layout_tree = flex_layout::tree::LayoutTree::default();
+            layout_tree.insert(1, 0, 0, flex_layout::idtree::InsertType::Back, flex_layout::style::Style{
+                position_type: flex_layout::style::PositionType::Absolute,
+                size: flex_layout::geometry::Size{
+                    width: flex_layout::style::Dimension::Points(1920.0),
+                    height: flex_layout::style::Dimension::Points(1024.0),
                 },
-                position: layout::geometry::Rect{
-                    start: layout::style::Dimension::Points(0.0),
-                    end: layout::style::Dimension::Points(0.0),
-                    top: layout::style::Dimension::Points(0.0),
-                    bottom: layout::style::Dimension::Points(0.0),
+                position: flex_layout::geometry::Rect{
+                    start: flex_layout::style::Dimension::Points(0.0),
+                    end: flex_layout::style::Dimension::Points(0.0),
+                    top: flex_layout::style::Dimension::Points(0.0),
+                    bottom: flex_layout::style::Dimension::Points(0.0),
                 },
-                margin: layout::geometry::Rect{
-                    start: layout::style::Dimension::Points(0.0),
-                    end: layout::style::Dimension::Points(0.0),
-                    top: layout::style::Dimension::Points(0.0),
-                    bottom: layout::style::Dimension::Points(0.0),
+                margin: flex_layout::geometry::Rect{
+                    start: flex_layout::style::Dimension::Points(0.0),
+                    end: flex_layout::style::Dimension::Points(0.0),
+                    top: flex_layout::style::Dimension::Points(0.0),
+                    bottom: flex_layout::style::Dimension::Points(0.0),
                 },
                 ..Default::default()
             });
@@ -246,30 +246,30 @@ fn generate_test(name: impl AsRef<str>, description: &json::JsonValue) -> TokenS
     let assertions = generate_assertions(&mut 2, "node", &description);
 
     quote!(
-        fn print(count: &mut usize, id: usize, layout: &layout::tree::LayoutR) {
+        fn print(count: &mut usize, id: usize, layout: &flex_layout::tree::LayoutR) {
             *count += 1;
             debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
         }
         #[test]
         fn #name() {
-            let mut layout_tree = layout::tree::LayoutTree::default();
-            layout_tree.insert(1, 0, 0, layout::idtree::InsertType::Back, layout::style::Style{
-                position_type: layout::style::PositionType::Absolute,
-                size: layout::geometry::Size{
-                    width: layout::style::Dimension::Points(1920.0),
-                    height: layout::style::Dimension::Points(1024.0),
+            let mut layout_tree = flex_layout::tree::LayoutTree::default();
+            layout_tree.insert(1, 0, 0, flex_layout::idtree::InsertType::Back, flex_layout::style::Style{
+                position_type: flex_layout::style::PositionType::Absolute,
+                size: flex_layout::geometry::Size{
+                    width: flex_layout::style::Dimension::Points(1920.0),
+                    height: flex_layout::style::Dimension::Points(1024.0),
                 },
-                position: layout::geometry::Rect{
-                    start: layout::style::Dimension::Points(0.0),
-                    end: layout::style::Dimension::Points(0.0),
-                    top: layout::style::Dimension::Points(0.0),
-                    bottom: layout::style::Dimension::Points(0.0),
+                position: flex_layout::geometry::Rect{
+                    start: flex_layout::style::Dimension::Points(0.0),
+                    end: flex_layout::style::Dimension::Points(0.0),
+                    top: flex_layout::style::Dimension::Points(0.0),
+                    bottom: flex_layout::style::Dimension::Points(0.0),
                 },
-                margin: layout::geometry::Rect{
-                    start: layout::style::Dimension::Points(0.0),
-                    end: layout::style::Dimension::Points(0.0),
-                    top: layout::style::Dimension::Points(0.0),
-                    bottom: layout::style::Dimension::Points(0.0),
+                margin: flex_layout::geometry::Rect{
+                    start: flex_layout::style::Dimension::Points(0.0),
+                    end: flex_layout::style::Dimension::Points(0.0),
+                    top: flex_layout::style::Dimension::Points(0.0),
+                    bottom: flex_layout::style::Dimension::Points(0.0),
                 },
                 ..Default::default()
             });
@@ -332,7 +332,7 @@ fn generate_node(
 
     let display = match style["display"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "none" => quote!(display: layout::style::Display::None,),
+            "none" => quote!(display: flex_layout::style::Display::None,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -340,7 +340,7 @@ fn generate_node(
 
     let position_type = match style["position_type"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "absolute" => quote!(position_type: layout::style::PositionType::Absolute,),
+            "absolute" => quote!(position_type: flex_layout::style::PositionType::Absolute,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -348,8 +348,8 @@ fn generate_node(
 
     let direction = match style["direction"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "rtl" => quote!(direction: layout::style::Direction::RTL,),
-            "ltr" => quote!(direction: layout::style::Direction::LTR,),
+            "rtl" => quote!(direction: flex_layout::style::Direction::RTL,),
+            "ltr" => quote!(direction: flex_layout::style::Direction::LTR,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -357,10 +357,10 @@ fn generate_node(
 
     let flex_direction = match style["flexDirection"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "row-reverse" => quote!(flex_direction: layout::style::FlexDirection::RowReverse,),
-            "column" => quote!(flex_direction: layout::style::FlexDirection::Column,),
+            "row-reverse" => quote!(flex_direction: flex_layout::style::FlexDirection::RowReverse,),
+            "column" => quote!(flex_direction: flex_layout::style::FlexDirection::Column,),
             "column-reverse" => {
-                quote!(flex_direction: layout::style::FlexDirection::ColumnReverse,)
+                quote!(flex_direction: flex_layout::style::FlexDirection::ColumnReverse,)
             }
             _ => quote!(),
         },
@@ -369,8 +369,8 @@ fn generate_node(
 
     let flex_wrap = match style["flexWrap"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "wrap" => quote!(flex_wrap: layout::style::FlexWrap::Wrap,),
-            "wrap-reverse" => quote!(flex_wrap: layout::style::FlexWrap::WrapReverse,),
+            "wrap" => quote!(flex_wrap: flex_layout::style::FlexWrap::Wrap,),
+            "wrap-reverse" => quote!(flex_wrap: flex_layout::style::FlexWrap::WrapReverse,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -378,8 +378,8 @@ fn generate_node(
 
     let overflow = match style["overflow"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "hidden" => quote!(overflow: layout::style::Overflow::Hidden,),
-            "scroll" => quote!(overflow: layout::style::Overflow::Scroll,),
+            "hidden" => quote!(overflow: flex_layout::style::Overflow::Hidden,),
+            "scroll" => quote!(overflow: flex_layout::style::Overflow::Scroll,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -387,10 +387,10 @@ fn generate_node(
 
     let align_items = match style["alignItems"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "flex-start" => quote!(align_items: layout::style::AlignItems::FlexStart,),
-            "flex-end" => quote!(align_items: layout::style::AlignItems::FlexEnd,),
-            "center" => quote!(align_items: layout::style::AlignItems::Center,),
-            "baseline" => quote!(align_items: layout::style::AlignItems::Baseline,),
+            "flex-start" => quote!(align_items: flex_layout::style::AlignItems::FlexStart,),
+            "flex-end" => quote!(align_items: flex_layout::style::AlignItems::FlexEnd,),
+            "center" => quote!(align_items: flex_layout::style::AlignItems::Center,),
+            "baseline" => quote!(align_items: flex_layout::style::AlignItems::Baseline,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -398,11 +398,11 @@ fn generate_node(
 
     let align_self = match style["alignSelf"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "flex-start" => quote!(align_self: layout::style::AlignSelf::FlexStart,),
-            "flex-end" => quote!(align_self: layout::style::AlignSelf::FlexEnd,),
-            "center" => quote!(align_self: layout::style::AlignSelf::Center,),
-            "baseline" => quote!(align_self: layout::style::AlignSelf::Baseline,),
-            "layout" => quote!(align_self: layout::style::AlignSelf::Stretch,),
+            "flex-start" => quote!(align_self: flex_layout::style::AlignSelf::FlexStart,),
+            "flex-end" => quote!(align_self: flex_layout::style::AlignSelf::FlexEnd,),
+            "center" => quote!(align_self: flex_layout::style::AlignSelf::Center,),
+            "baseline" => quote!(align_self: flex_layout::style::AlignSelf::Baseline,),
+            "layout" => quote!(align_self: flex_layout::style::AlignSelf::Stretch,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -410,11 +410,11 @@ fn generate_node(
 
     let align_content = match style["alignContent"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "flex-start" => quote!(align_content: layout::style::AlignContent::FlexStart,),
-            "flex-end" => quote!(align_content: layout::style::AlignContent::FlexEnd,),
-            "center" => quote!(align_content: layout::style::AlignContent::Center,),
-            "space-between" => quote!(align_content: layout::style::AlignContent::SpaceBetween,),
-            "space-around" => quote!(align_content: layout::style::AlignContent::SpaceAround,),
+            "flex-start" => quote!(align_content: flex_layout::style::AlignContent::FlexStart,),
+            "flex-end" => quote!(align_content: flex_layout::style::AlignContent::FlexEnd,),
+            "center" => quote!(align_content: flex_layout::style::AlignContent::Center,),
+            "space-between" => quote!(align_content: flex_layout::style::AlignContent::SpaceBetween,),
+            "space-around" => quote!(align_content: flex_layout::style::AlignContent::SpaceAround,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -422,13 +422,13 @@ fn generate_node(
 
     let justify_content = match style["justifyContent"] {
         json::JsonValue::Short(ref value) => match value.as_ref() {
-            "flex-end" => quote!(justify_content: layout::style::JustifyContent::FlexEnd,),
-            "center" => quote!(justify_content: layout::style::JustifyContent::Center,),
+            "flex-end" => quote!(justify_content: flex_layout::style::JustifyContent::FlexEnd,),
+            "center" => quote!(justify_content: flex_layout::style::JustifyContent::Center,),
             "space-between" => {
-                quote!(justify_content: layout::style::JustifyContent::SpaceBetween,)
+                quote!(justify_content: flex_layout::style::JustifyContent::SpaceBetween,)
             }
-            "space-around" => quote!(justify_content: layout::style::JustifyContent::SpaceAround,),
-            "space-evenly" => quote!(justify_content: layout::style::JustifyContent::SpaceEvenly,),
+            "space-around" => quote!(justify_content: flex_layout::style::JustifyContent::SpaceAround,),
+            "space-evenly" => quote!(justify_content: flex_layout::style::JustifyContent::SpaceEvenly,),
             _ => quote!(),
         },
         _ => quote!(),
@@ -528,8 +528,8 @@ fn generate_node(
             #index1,
             #parent,
             0,
-            layout::idtree::InsertType::Back,
-            layout::style::Style {
+            flex_layout::idtree::InsertType::Back,
+            flex_layout::style::Style {
                 #display
                 #direction
                 #position_type
@@ -573,7 +573,7 @@ fn generate_size(size: &json::object::Object) -> TokenStream {
     dim_quoted!(size, width);
     dim_quoted!(size, height);
     quote!(
-        layout::geometry::Size {
+        flex_layout::geometry::Size {
             #width #height
             ..Default::default()
         }
@@ -586,14 +586,14 @@ fn generate_dimension(dimen: &json::object::Object) -> TokenStream {
 
     match unit {
         json::JsonValue::Short(ref unit) => match unit.as_ref() {
-            "auto" => quote!(layout::style::Dimension::Auto),
+            "auto" => quote!(flex_layout::style::Dimension::Auto),
             "points" => {
                 let value = value();
-                quote!(layout::style::Dimension::Points(#value))
+                quote!(flex_layout::style::Dimension::Points(#value))
             }
             "percent" => {
                 let value = value();
-                quote!(layout::style::Dimension::Percent(#value))
+                quote!(flex_layout::style::Dimension::Percent(#value))
             }
             _ => unreachable!(),
         },
@@ -607,7 +607,7 @@ fn generate_edges(dimen: &json::object::Object) -> TokenStream {
     dim_quoted!(dimen, top);
     dim_quoted!(dimen, bottom);
 
-    quote!(layout::geometry::Rect {
+    quote!(flex_layout::geometry::Rect {
         #start #end #top #bottom
         ..Default::default()
     })

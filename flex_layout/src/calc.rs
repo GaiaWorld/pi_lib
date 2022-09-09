@@ -740,10 +740,10 @@ impl Cache {
                 main: main_d,
                 cross: cross_d,
                 margin_main: 0.0,
-                margin_main_start: calc_number((margin.0).0, self.main_value),
-                margin_main_end: calc_number((margin.0).1, self.main_value),
-                margin_cross_start: calc_number((margin.1).0, self.cross_value),
-                margin_cross_end: calc_number((margin.1).1, self.cross_value),
+                margin_main_start: calc_location_number((margin.0).0, self.main_value),
+                margin_main_end: calc_location_number((margin.0).1, self.main_value),
+                margin_cross_start: calc_location_number((margin.1).0, self.cross_value),
+                margin_cross_end: calc_location_number((margin.1).1, self.cross_value),
                 align_self: AlignSelf::Auto,
                 main_d: Dimension::Points(main_d),
                 cross_d: Dimension::Points(cross_d),
@@ -911,10 +911,10 @@ impl Cache {
                 main: min_max_calc(main_d.resolve_value(self.main_value), min_main, max_main),
 				cross: min_max_calc(cross_d.resolve_value(self.cross_value),min_cross,max_cross),
                 margin_main: 0.0,
-                margin_main_start: calc_number((margin.0).0, self.main_value),
-                margin_main_end: calc_number((margin.0).1, self.main_value),
-                margin_cross_start: calc_number((margin.1).0, self.cross_value),
-                margin_cross_end: calc_number((margin.1).1, self.cross_value),
+                margin_main_start: calc_location_number((margin.0).0, self.main_value),
+                margin_main_end: calc_location_number((margin.0).1, self.main_value),
+                margin_cross_start: calc_location_number((margin.1).0, self.cross_value),
+                margin_cross_end: calc_location_number((margin.1).1, self.cross_value),
                 align_self: style.align_self,
                 main_d: main_d,
                 cross_d: cross_d,
@@ -940,7 +940,7 @@ impl Cache {
                 //  交叉轴有2种情况后面可能会被改变大小
                 if fix && cross_d.is_undefined() {
                     fix = style.align_self != AlignSelf::Stretch
-                        && style.align_items != AlignItems::Stretch;
+                        && self.temp.flex.align_items != AlignItems::Stretch;
                 }
                 debug_println!(
                     "{:?}calc size: id:{:?} fix:{:?} size:{:?} next:{:?}",
@@ -1579,11 +1579,16 @@ pub(crate) fn abs_layout<T>(
         JustifyContent::FlexEnd => 1,
         _ => -1,
     };
-    let a2 = match flex.align_items {
+    let mut a2 = match flex.align_items {
         AlignItems::Center => 0,
         AlignItems::FlexEnd => 1,
         _ => -1,
     };
+	match style.align_self {
+		AlignSelf::Center => a2 = 0,
+		AlignSelf::FlexEnd => a2 = 1,
+		_ => ()
+	};
     let (walign, halign) = if flex.flex_direction == FlexDirection::Row
         || flex.flex_direction == FlexDirection::RowReverse
     {
@@ -2255,16 +2260,20 @@ fn calc_rect(
             );
         }
     };
-    // 左右对齐
-    let rrr = match end {
-        Dimension::Points(rrr) => rrr,
-        Dimension::Percent(rrr) => parent * rrr,
-        _ => {
-            // 前对齐
-            return (Number::Defined(r), rr + margin_start.resolve_value(parent));
-        }
-    };
-    calc_margin(rr, parent - rrr, r, margin_start, margin_end, parent)
+	return (
+		Number::Defined(r),
+		rr + margin_start.resolve_value(parent),
+	);
+    // // 左右对齐
+    // let rrr = match end {
+    //     Dimension::Points(rrr) => rrr,
+    //     Dimension::Percent(rrr) => parent * rrr,
+    //     _ => {
+    //         // 前对齐
+    //         return (Number::Defined(r), rr + margin_start.resolve_value(parent));
+    //     }
+    // };
+    // calc_margin(rr, parent - rrr, r, margin_start, margin_end, parent)
 }
 // 根据宽高获得内容宽高
 fn calc_content_size(
@@ -2388,6 +2397,16 @@ fn calc_number(s: Dimension, parent: f32) -> Number {
     match s {
         Dimension::Points(r) => Number::Defined(r),
         Dimension::Percent(r) => Number::Defined(parent * r),
+        _ => Number::Undefined,
+    }
+}
+
+// 计算定位属性的节点的大小（margin）
+fn calc_location_number(s: Dimension, parent: f32) -> Number {
+    match s {
+        Dimension::Points(r) => Number::Defined(r),
+        Dimension::Percent(r) => Number::Defined(parent * r),
+        Dimension::Undefined => Number::Defined(0.0),
         _ => Number::Undefined,
     }
 }

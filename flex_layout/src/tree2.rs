@@ -320,7 +320,7 @@ fn set_parent(
     }
 }
 // 设置自身样式， 设自身脏，如果节点是size=auto并且不是绝对定位, 则继续设置其父节点脏
-fn set_self_style(tree: &mut IdTree<INode>, dirty: &mut LayerDirty, id: usize, style: &Style) {
+fn set_self_style(tree: &mut IdTree<INode>, dirty: &mut Lcalc_size_defineayerDirty, id: usize, style: &Style) {
     if style.display == Display::None {
         // 如果是隐藏
         return;
