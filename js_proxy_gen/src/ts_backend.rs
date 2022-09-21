@@ -801,10 +801,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         if specific_return_type_name == &get_specific_ts_class_name(target_name) {
                             //当前同步静态方法的返回值类型与目标对象的具体类型相同，则当前同步静态方法是当前目标对象的构造方法
                             source_content.put_slice(b") as object;\n");
-                            source_content.put_slice((create_tab(level) + "if(result instanceof Error) {\n").as_bytes());
+                            source_content.put_slice((create_tab(level) + "if(__result instanceof Error) {\n").as_bytes());
                             source_content.put_slice((create_tab(level + 1) + "throw __result;\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(result);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(__result);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "}\n").as_bytes());
                         } else {
                             //当前同步静态方法，不是当前目标对象的构造方法
