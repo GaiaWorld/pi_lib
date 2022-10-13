@@ -759,7 +759,6 @@ fn get_output_type(target_name: &String,
                    return_typed: &syn::Type) -> Result<Type> {
     match get_type(target_name, return_typed) {
         Err(e) => {
-            println!("!!!!!!return_typed: {:?}", return_typed);
             //分析出参类型失败，则立即返回错误
             Err(Error::new(ErrorKind::Other, format!("Parse method output type failed, target: {}, trait: {:?}, method: {}, reason: {:?}", target_name, trait_name, method_name, e)))
         },
@@ -937,6 +936,47 @@ fn get_type(target_name: &String,
                 _ => (),
             }
         },
+        syn::Type::TraitObject(to) => {
+            for bound in &to.bounds {
+                if let syn::TypeParamBound::Trait(tb) = bound {
+                    for seg in &tb.path.segments {
+                        let ident = seg.ident.to_string();
+                        match ident.as_str() {
+                            "Fn" | "FnMut" | "FnOnce" => {
+                                let mut ty = Type::with(self_to_type(target_name, ident),
+                                                        true);
+
+                                match &seg.arguments {
+                                    syn::PathArguments::None => {
+                                        //函数没有输入参数
+                                        return Ok(ty);
+                                    },
+                                    syn::PathArguments::Parenthesized(type_args) => {
+                                        let inputs = &type_args.inputs;
+                                        for input in inputs {
+                                            match get_type(target_name, input) {
+                                                Err(e) => {
+                                                    //分析函数输入参数类型失败，则立即返回错误
+                                                    return Err(e);
+                                                },
+                                                Ok(t) => {
+                                                    //分析函数输入参数类型成功，则记录
+                                                    ty.append_type_argument(t);
+                                                },
+                                            }
+                                        }
+
+                                        return Ok(ty);
+                                    },
+                                    _ => (),
+                                }
+                            },
+                            _ => (),
+                        }
+                    }
+                }
+            }
+        },
         syn::Type::Tuple(tt) => {
             //指定类型的元组
             if tt.elems.is_empty() {
@@ -947,7 +987,7 @@ fn get_type(target_name: &String,
         syn::Type::Never(_) => {
             //指定!类型
             return Ok(Type::new("!".to_string()));
-        }
+        },
         _ => (),
     }
 

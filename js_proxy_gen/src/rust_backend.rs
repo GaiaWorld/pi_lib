@@ -6,7 +6,7 @@ use bytes::BufMut;
 use pi_async_file::file::{AsyncFileOptions, AsyncFile};
 
 use crate::{WORKER_RUNTIME,
-            utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, create_tab, create_tmp_var_name, get_target_type_name, get_specific_ts_function_name}};
+            utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, ClosureType, create_tab, create_tmp_var_name, get_target_type_name, get_specific_ts_function_name}};
 
 /*
 * 默认的依赖库名
@@ -886,6 +886,13 @@ fn generate_function_call_args(target: Option<&String>,
                 source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
                 source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
+            }
+        },
+        closure_type if closure_type.starts_with("Arc<Fn(") => {
+            if arg_type_name.is_moveable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
+            } else {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take borrow of {} type", func_name, origin_arg_name, closure_type)));
             }
         },
         other_type => {
@@ -2292,6 +2299,362 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level + 1) + "array_" + arg_name.as_str() + "\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
+        closure_type if closure_type.starts_with("Arc<Fn(") => {
+            //生成匹配可重复调用的回调函数类型的代码
+            let vec: Vec<&str> = closure_type.split("Arc<Fn(").collect();
+            let vec: Vec<&str> = vec[1].split(",").collect();
+
+            let (args_type, result) = match vec.len() {
+                2 => {
+                    //回调函数没有参数
+                    let vec: Vec<&str> = vec[0].split("Option<Box<FnOnce(Result<").collect();
+                    (vec![], vec[1].to_string())
+                },
+                len => {
+                    //回调函数有参数
+                    let mut args = Vec::with_capacity(len - 2);
+                    for index in 0..len - 2 {
+                        args.push(vec[index].trim().to_string());
+                    }
+
+                    let vec: Vec<&str> = vec[len - 2].split("Option<Box<FnOnce(Result<").collect();
+
+                    (args, vec[1].to_string())
+                },
+            };
+
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::CallBack(callback) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "Arc::new(\n").as_bytes());
+            match generate_closure_call_args(level + 2, source_content, &args_type, &result) {
+                Err(e) => {
+                    return Err(e);
+                },
+                Ok(args_name) => {
+                    source_content.put_slice((create_tab(level + 3) + "let mut args = Vec::with_capacity(" + args_name.len().to_string().as_str() + ");\n\n").as_bytes());
+
+                    //生成将闭包参数类型转换为js类型的代码
+                    let mut index = 0;
+                    for arg_name in args_name {
+                        match args_type[index].as_str() {
+                            "bool" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bool(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "i8" | "i16" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Int(" + arg_name.as_str() + " as i32));\n").as_bytes());
+                            },
+                            "i32" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Int(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "u8" | "u16" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Uint(" + arg_name.as_str() + " as u32));\n").as_bytes());
+                            },
+                            "u32" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Uint(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "f32" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Float(" + arg_name.as_str() + " as f64));\n").as_bytes());
+                            },
+                            "f64" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Float(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "i64" | "u64" | "i128" | "u128" | "isize" | "usize" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::BigInt(" + arg_name.as_str() + ".to_bigint().unwrap()));\n").as_bytes());
+                            },
+                            "BigInt" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::BigInt(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "str" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Str(" + arg_name.as_str() + ".to_string()));\n").as_bytes());
+                            },
+                            "String" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Str(" + arg_name.as_str() + "));\n").as_bytes());
+                            },
+                            "[u8]" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ".to_vec().into_boxed_slice())));\n").as_bytes());
+                            },
+                            "Arc<[u8]>" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ".to_vec().into_boxed_slice())));\n").as_bytes());
+                            },
+                            "Box<[u8]>" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ")));\n").as_bytes());
+                            },
+                            "Arc<Vec<u8>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ".to_vec().into_boxed_slice())));\n").as_bytes());
+                            },
+                            "Box<Vec<u8>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ".into_boxed_slice())));\n").as_bytes());
+                            },
+                            "Vec<u8>" => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Bin(NativeArrayBuffer::from(" + arg_name.as_str() + ".into_boxed_slice())));\n").as_bytes());
+                            },
+                            "Vec<bool>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for b in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bool(b));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<i8>" | "Vec<i16>"  => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Int(n as i32));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<i32>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Int(n));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<u8>" | "Vec<u16>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Uint(n as u32));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<u32>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Uint(n));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<f32>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Float(n as f64));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<f64>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Float(n));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<i64>" | "Vec<u64>" | "Vec<i128>" | "Vec<u128>" | "Vec<isize>" | "Vec<usize>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::BigInt(n.to_bigint().unwrap()));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<BigInt>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for n in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::BigInt(n));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<String>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for str in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Str(str));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<Arc<[u8]>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for bin in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bin(NativeArrayBuffer::from(bin.to_vec().into_boxed_slice())));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<Box<[u8]>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for bin in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bin(NativeArrayBuffer::from(bin)));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<Arc<Vec<u8>>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for bin in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bin(NativeArrayBuffer::from(bin.to_vec().into_boxed_slice())));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<Box<Vec<u8>>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for bin in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bin(NativeArrayBuffer::from(bin.into_boxed_slice())));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            "Vec<Vec<u8>>" => {
+                                source_content.put_slice((create_tab(level + 3) + "let mut vec = Vec::with_capacity(" + arg_name.as_str() + ".len());\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "for bin in " + arg_name.as_str() + " {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 4) + "vec.push(NativeObjectValue::Bin(NativeArrayBuffer::from(bin.into_boxed_slice())));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "}\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
+                            },
+                            other_type => {
+                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::NatObj(NativeObject::new_owned(" + arg_name.as_str() + ")));\n").as_bytes());
+                            },
+                        }
+                        index += 1;
+                    }
+
+                    //生成闭包调用后返回结果类型转换为js类型的代码
+                    source_content.put_slice((create_tab(level + 3) + "let result = if let Some(result_callback) = result {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 4) + "Some(Box::new(move |r: Result<NativeObjectValue, String>| {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 5) + "match r {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 6) + "Err(e) => {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 7) + "(result_callback)(Err(e));\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 6) + "},\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 6) + "Ok(val) => {\n").as_bytes());
+                    match result.as_str() {
+                        "bool" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Bool(b) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(b));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        alias@"i8" | alias@"i16" | alias@"i32" | alias@"u8" | alias@"u16" | alias@"u32" | alias@"f32" | alias@"f64"  => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Float(n) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(n as " + alias + "));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        alias@"i64" | alias@"u64" | alias@"i128" | alias@"u128" | alias@"isize" | alias@"usize"  => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::BigInt(n) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(n.to_u128().expect(\"From js bigint to " + alias + " failed\") as " + alias + "));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "BigInt" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::BigInt(n) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(n));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "str" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Str(str) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(str.as_str()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "String" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Str(str) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(str));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "[u8]" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Bin(bin) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(bin.bytes()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "Vec<u8>" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Bin(bin) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(bin.bytes().to_vec()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "Vec<bool>" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::Bool(b) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(b);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        alias@"Vec<i8>" | alias@"Vec<i16>" | alias@"Vec<i32>" | alias@"Vec<u8>" | alias@"Vec<u16>" | alias@"Vec<u32>" | alias@"Vec<f32>" | alias@"Vec<f64>" => {
+                            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+                            let sub_type = sub_types[1];
+
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::Float(n) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(n as " + sub_type + ");\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        alias@"Vec<i64>" | alias@"Vec<u64>" | alias@"Vec<i128>" | alias@"Vec<u128>" | alias@"Vec<isize>" | alias@"Vec<usize>" => {
+                            let sub_types: Vec<&str> = alias.split(|c| c == '<' || c == '>').collect();
+                            let sub_type = sub_types[1];
+
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::BigInt(n) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(n.to_u128().expect(\"From js bigint to " + sub_type + " failed\") as " + sub_type + ");\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "Vec<BigInt>" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::BigInt(n) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(n);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "Vec<String>" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::Str(str) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(str);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        "Vec<Vec<u8>>" => {
+                            source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Array(array) = val {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "let mut vec = Vec::with_capacity(array.len());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "while let NativeObjectValue::Bin(bin) = array {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 9) + "vec.push(bin.bytes().to_vec());\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "}\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(vec));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                        },
+                        other_type => {
+                            return Err(Error::new(ErrorKind::Other, format!("Parse callback result failed with js function, type: {:?}, reason: not support this type", other_type)));
+                        },
+                    }
+                    source_content.put_slice((create_tab(level + 6) + "},\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 5) + "}\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 4) + "}))\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 3) + "} else {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 4) + "None\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 3) + "};\n\n").as_bytes());
+
+                    source_content.put_slice((create_tab(level + 3) + "(callback)(args, result);\n").as_bytes());
+
+                    source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
+                },
+            }
+            source_content.put_slice((create_tab(level + 1) + ")\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+        },
         other_type => {
             //生成匹配其它类型的只读引用的代码，例: &NativeObject
             source_content.put_slice((create_tab(level) + "NativeObjectValue::NatObj(val) => {\n").as_bytes());
@@ -2301,6 +2664,44 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
     }
 
     Ok(())
+}
+
+//生成闭包调用参数的代码，返回闭包参数名列表
+fn generate_closure_call_args(level: isize,
+                              source_content: &mut Vec<u8>,
+                              args_type: &Vec<String>,
+                              result_type: &String) -> Result<Vec<String>> {
+    source_content.put_slice((create_tab(level) + "move |").as_bytes());
+
+    //生成闭包形参列表
+    let len = args_type.len() - 1;
+    let mut index = 0;
+    let mut args_name = Vec::with_capacity(args_type.len());
+    for arg_type in args_type {
+        let arg_name = (DEFAULT_ARGUMENT_NAME_PREFIX.to_string() + index.to_string().as_str()).to_string();
+        match arg_type.as_str() {
+            alias@"str" | alias@"[u8]" => {
+                //str和[u8]的只读引用作为闭包参数
+                source_content.put_slice((arg_name.clone() + ": &" + alias).as_bytes());
+            },
+            other_type => {
+                //其它所有权类型作为闭包参数
+                source_content.put_slice((arg_name.clone() + ": " + other_type).as_bytes());
+            },
+        }
+
+        source_content.put_slice(", ".as_bytes());
+        index += 1;
+
+        args_name.push(arg_name);
+    }
+
+    //生成闭包调用后返回结果的回调参数
+    source_content.put_slice(("result: Option<Box<dyn FnOnce(Result<".to_string() + result_type.as_str() + ", String>)>>").as_bytes());
+
+    source_content.put_slice("| {\n".as_bytes());
+
+    Ok(args_name)
 }
 
 //生成调用函数的代码
