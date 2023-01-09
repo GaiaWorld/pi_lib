@@ -1,12 +1,13 @@
 [package]
 name = "js_proxy_gen"
-version = "0.3.3"
+version = "0.3.5"
 authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
 [features]
 default = []
 ts_lower_camel_case = ["heck"]
+pid_statistics = []
 
 [dependencies]
 proc-macro2 = "1.0"
