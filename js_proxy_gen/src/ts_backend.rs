@@ -1036,7 +1036,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
                         source_content.put_slice((create_tab(level + 1) + "let r: any = await __result;\n").as_bytes());
                         source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
-                        source_content.put_slice((create_tab(level + 1) + "return await __result;\n").as_bytes());
+                        source_content.put_slice((create_tab(level + 1) + "return r;\n").as_bytes());
                     } else {
                         //异步静态函数没有有返回值
                         source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
