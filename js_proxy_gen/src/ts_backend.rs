@@ -68,12 +68,44 @@ declare class ESProcessClass {
 }"#;
 
 /*
-* 默认代理ts文件导入的类型
+* 默认的基础文件名
 */
-const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"";
+const DEFAULT_BASE_FILE_NAME: &str = "base.ts";
 
 /*
-* 在指定的ts文件根目录中创建本地环境文件
+* 默认的基础文件内容
+*/
+const DEFAULT_BASE_FILE_CONTENT: &str = r#"/**
+ * 本地对象类型
+ */
+ export class NatObj {
+    /**
+     * 本地对象
+     */
+    private self: object
+
+    /**
+     * 类的公共构造方法
+     */
+    public constructor(self: object) {
+        this.self = self;
+    }
+
+    /**
+     * 获取内部本地对象方法
+     */
+    public get_inner() {
+        return this.self;
+    }
+}"#;
+
+/*
+* 默认代理ts文件导入的类型
+*/
+const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"import { NatObj } from \"../base\";\n";
+
+/*
+* 在指定的ts文件根目录中创建本地环境文件和基础文件
 */
 pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<()> {
     match AsyncFile::open(WORKER_RUNTIME.clone(), generate_ts_path.join(DEFAULT_NATIVE_ENV_FILE_NAME), AsyncFileOptions::TruncateWrite).await {
@@ -88,7 +120,21 @@ pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<(
                 return Err(Error::new(ErrorKind::Other, format!("Generate native env file failed, file: {:?}, reason: {:?}", generate_ts_path, e)));
             }
 
-            Ok(())
+            match AsyncFile::open(WORKER_RUNTIME.clone(), generate_ts_path.join(DEFAULT_BASE_FILE_NAME), AsyncFileOptions::TruncateWrite).await {
+                Err(e) => {
+                    //创建基础文件失败，则立即返回错误
+                    Err(Error::new(ErrorKind::Other, format!("Generate base file failed, file: {:?}, reason: {:?}", generate_ts_path, e)))
+                },
+                Ok(file) => {
+                    let buf: Arc<[u8]> = Arc::from(DEFAULT_BASE_FILE_CONTENT.as_bytes());
+                    if let Err(e) = file.write(0, buf, WriteOptions::SyncAll(true)).await {
+                        //写入本地环境文件内容失败，则立即返回错误
+                        return Err(Error::new(ErrorKind::Other, format!("Generate base file failed, file: {:?}, reason: {:?}", generate_ts_path, e)));
+                    }
+
+                    Ok(())
+                }
+            }
         },
     }
 }
@@ -420,14 +466,14 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 本地对象\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "private self: object;\n\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "private self: NatObj;\n\n").as_bytes());
 
     //生成类的私有构造方法
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 类的私有构造方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
     source_content.put_slice((create_tab(level) + "private constructor(self: object) {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "this.self = self;\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "this.self = new NatObj(self);\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "if(NativeObject.registry != undefined) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 2) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
@@ -452,7 +498,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level + 1) + "if(this.self == undefined) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destroy\");\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(_$cid, this.self);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(_$cid, this.self.get_inner());\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = undefined;\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
@@ -460,8 +506,8 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 从指定本地对象构建当前类方法，此方法是不安全的，使用错误的本地对象将会导致调用时异常\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "static from(obj: object): " + specific_class_name.as_str() + " {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj);\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "static from(obj: NatObj): " + specific_class_name.as_str() + " {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj.get_inner());\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     if let Some(trait_impls) = trait_impls {
