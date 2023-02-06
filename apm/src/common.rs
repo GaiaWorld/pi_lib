@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 
 use fnv::FnvHashMap;
 use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState, SocketInfo, get_sockets_info, iterate_sockets_info};
-use sysinfo::{NetworkExt, System, SystemExt, ProcessorExt, ProcessExt, ProcessStatus, DiskExt};
+use sysinfo::{NetworkExt, System, SystemExt, CpuExt, ProcessExt, ProcessStatus, DiskExt, Pid, PidExt};
 
 use ::SysSpecialStat;
 #[cfg(all(unix, not(target_os="android")))]
@@ -166,11 +166,11 @@ impl SysStat {
         None
     }
 
-    /// 获取cpu逻辑核心数
+    /// 获取cpu物理核心数
     pub fn processor_count(&self) -> usize {
         self.inner.borrow_mut().refresh_system();
 
-        let count = self.inner.borrow().get_processors().len();
+        let count = self.inner.borrow().cpus().len();
         if count == 1 {
             return 1;
         }
@@ -178,51 +178,20 @@ impl SysStat {
         count - 1
     }
 
-    /// 获取cpu占用率
-    pub fn cpu_usage(&self) -> f32 {
-        self.inner.borrow_mut().refresh_system();
-
-        self.inner.borrow().get_global_processor_info().get_cpu_usage()
-    }
-
-    /// 获取指定逻辑核心的占用率
+    /// 获取指定物理核心的占用率
     pub fn processor_usage(&self, n: usize) -> f32 {
         self.inner.borrow_mut().refresh_system();
 
         let inner = self.inner.borrow();
-        let array = inner.get_processors();
+        let array = inner.cpus();
         let count = array.len();
         if count == 1 && n == 0 {
-            return array[n].get_cpu_usage();
+            return array[n].cpu_usage();
         } else if count > 1 && n < count - 1 {
-            return array[n].get_cpu_usage();
+            return array[n].cpu_usage();
         }
 
         0.0
-    }
-
-    /// 获取cpu和所有逻辑核心的占用率
-    pub fn processores_usage(&self) -> (f32, Vec<f32>) {
-        self.inner.borrow_mut().refresh_system();
-
-        let mut vec: Vec<f32>;
-        let inner = self.inner.borrow();
-        let array = inner.get_processors();
-        let count = array.len();
-
-        let cpu_usage = self.cpu_usage();
-
-        if count == 1 {
-            vec = Vec::with_capacity(count);
-            vec.push(cpu_usage);
-        } else {
-            vec = Vec::with_capacity(count - 1);
-            for n in 1..count {
-                vec.push(array[n].get_cpu_usage());
-            }
-        }
-
-        (cpu_usage, vec)
     }
 
     /// 获取系统内存基础状态，单位KB
@@ -230,18 +199,20 @@ impl SysStat {
         self.inner.borrow_mut().refresh_system();
 
         let inner = self.inner.borrow();
-        (inner.get_total_memory(),  //系统总内存
-         inner.get_free_memory(),   //系统空闲内存
-         inner.get_used_memory(),   //系统已使用内存
-         inner.get_total_swap(),    //系统总交换区
-         inner.get_free_swap(),     //系统空闲交换区
-         inner.get_used_swap())     //系统已使用交换区
+        (inner.total_memory(),  //系统总内存
+         inner.free_memory(),   //系统空闲内存
+         inner.used_memory(),   //系统已使用内存
+         inner.total_swap(),    //系统总交换区
+         inner.free_swap(),     //系统空闲交换区
+         inner.used_swap())     //系统已使用交换区
     }
 
     /// 获取当前进程id
     #[cfg(any(windows))]
     pub fn current_pid(&self) -> usize {
-        sysinfo::get_current_pid().unwrap()
+        sysinfo::get_current_pid()
+            .unwrap_or(Pid::from(0))
+            .as_u32() as usize
     }
 
     //获取当前进程的基础状态
@@ -251,8 +222,8 @@ impl SysStat {
         self.inner.borrow_mut().refresh_process(pid);
 
         let inner = self.inner.borrow();
-        let process = inner.get_process(pid).unwrap();
-        (pid,                           //当前进程id
+        let process = inner.process(pid).unwrap();
+        (pid.as_u32() as usize,         //当前进程id
          process.name().to_string(),    //当前进程名
          process.cwd().to_owned(),      //当前进程工作目录
          Vec::from(process.cmd()),   //当前进程指令行
@@ -267,12 +238,12 @@ impl SysStat {
         self.inner.borrow_mut().refresh_disks();
 
         let inner = self.inner.borrow();
-        let disks = inner.get_disks();
+        let disks = inner.disks();
         let mut vec = Vec::with_capacity(disks.len());
 
-        for disk in inner.get_disks() {
+        for disk in inner.disks() {
             let disk_name: String;
-            if let Ok(name) = disk.get_name().to_os_string().into_string() {
+            if let Ok(name) = disk.name().to_os_string().into_string() {
                 disk_name = name;
             } else {
                 disk_name = "".to_string();
@@ -280,12 +251,12 @@ impl SysStat {
 
             vec.push(
                 (
-                        disk_name,                                                          //硬盘名
-                        disk.get_type(),                                                    //硬盘类型
-                        String::from_utf8_lossy(disk.get_file_system()).into_owned(),    //硬盘文件系统
-                        disk.get_mount_point().to_owned(),                                  //硬盘挂载点
-                        disk.get_available_space(),                                         //硬盘可用空间
-                        disk.get_total_space()                                              //硬盘总空间
+                        disk_name,                                                      //硬盘名
+                        disk.type_(),                                               //硬盘类型
+                        String::from_utf8_lossy(disk.file_system()).into_owned(),    //硬盘文件系统
+                        disk.mount_point().to_owned(),                                  //硬盘挂载点
+                        disk.available_space(),                                         //硬盘可用空间
+                        disk.total_space()                                              //硬盘总空间
                     )
             );
         }
@@ -300,10 +271,10 @@ impl SysStat {
         let mut input = 0;
         let mut output = 0;
         let inner = self.inner.borrow();
-        let net = inner.get_networks();
+        let net = inner.networks();
         for (_, network) in net {
-            input += network.get_total_received();
-            output += network.get_total_transmitted();
+            input += network.total_received();
+            output += network.total_transmitted();
         }
 
         (input, output)
@@ -367,7 +338,7 @@ impl SysStat {
     pub fn uptime(&self) -> u64 {
         self.inner.borrow_mut().refresh_system();
 
-        self.inner.borrow().get_uptime()
+        self.inner.borrow().uptime()
     }
 }
 

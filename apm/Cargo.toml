@@ -5,7 +5,7 @@ authors = ["vmos <vmos@fairblock.io>"]
 
 [dependencies]
 fnv = "1.0"
-sysinfo = "0.15"
+sysinfo = "0.27"
 netstat2 = "0.9"
 backtrace = "0.3"
 lazy_static = "1.4"
