@@ -948,10 +948,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
                         if specific_return_type_name.is_some() {
                             //异步方法有返回值
-                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                         } else {
                             //异步方法没有有返回值
-                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                         }
 
                         //生成其它入参
@@ -976,10 +976,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
                         if specific_return_type_name.is_some() {
                             //异步方法有返回值
-                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                         } else {
                             //异步方法没有有返回值
-                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                         }
 
                         //生成其它入参
@@ -1007,10 +1007,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                 if let Some(method_index) = generater.get_method_index(target_name.clone(), specific_function_name).await {
                     if specific_return_type_name.is_some() {
                         //同步方法有返回值
-                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                     } else {
                         //同步方法没有有返回值
-                        source_content.put_slice((create_tab(level) + "NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        source_content.put_slice((create_tab(level) + "NativeObject.call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
                     }
 
                     //生成其它入参
