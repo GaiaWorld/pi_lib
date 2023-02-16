@@ -403,11 +403,18 @@ impl MacroExpander {
                 },
                 Some(filename_str) => {
                     //检查当前文件名是否需要忽略宏展开
+                    let mut is_expand = false;
                     for require in &self.0.requires {
-                        if filename_str != require.as_str() {
-                            //忽略宏展开，并立即返回
-                            return Ok(None);
+                        if filename_str == require.as_str() {
+                            //需要宏展开，则立即退出过滤
+                            is_expand = true;
+                            break;
                         }
+                    }
+
+                    if !is_expand {
+                        //忽略宏展开，并立即返回
+                        return Ok(None);
                     }
                 },
                 _ => (),
