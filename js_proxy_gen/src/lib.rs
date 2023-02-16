@@ -11,7 +11,7 @@
 extern crate lazy_static;
 extern crate core;
 
-use std::fs;
+use std::fs::{self, remove_dir_all};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use std::future::Future;
@@ -382,6 +382,7 @@ pub async fn generate_proxy_source(path: PathBuf,
                                    version: &str,
                                    edition: &str,
                                    is_concurrent: bool,
+                                   is_remove_proxy_ts_path: bool,
                                    crates: Vec<Crate>) -> Result<()> {
     match abs_path(path.as_path()) {
         Err(e) => {
@@ -395,22 +396,31 @@ pub async fn generate_proxy_source(path: PathBuf,
                 Ok(mut proxy_ts_path) => {
                     proxy_ts_path = proxy_ts_path.join(NATIVE_OBJECT_PROXY_FILE_DIR_NAME); //实际的ts代理文件根路径
 
-                    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                        Err(e) => {
-                            //获取当前系统时间失败，则立即返回错误
-                            return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_crate_path, e)));
-                        },
-                        Ok(now) => {
-                            //获取当前系统时间成功，则重命名已存在的ts代理文件根目录
-                            let proxy_ts_path_rename = PathBuf::from(proxy_ts_path.to_str().unwrap().to_string() + "_" + now.as_millis().to_string().as_str());
+                    if is_remove_proxy_ts_path {
+                        //移除ts代理文件目录
+                        if let Err(e) = remove_dir_all(&proxy_ts_path) {
+                            //移除ts代理文件目录失败，则立即返回错误
+                            return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_ts_path, e)));
+                        }
+                    } else {
+                        //不移除ts代理文件目录
+                        match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                            Err(e) => {
+                                //获取当前系统时间失败，则立即返回错误
+                                return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_crate_path, e)));
+                            },
+                            Ok(now) => {
+                                //获取当前系统时间成功，则重命名已存在的ts代理文件根目录
+                                let proxy_ts_path_rename = PathBuf::from(proxy_ts_path.to_str().unwrap().to_string() + "_" + now.as_millis().to_string().as_str());
 
-                            if let Err(e) = rename(WORKER_RUNTIME.clone(), proxy_ts_path.clone(), proxy_ts_path_rename.clone()).await {
-                                if e.kind() != ErrorKind::NotFound {
-                                    //重命名错误不是没找到ts代理文件根目录的错误，则立即返回错误
-                                    return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, old ts path: {:?}, ts path: {:?}, reason: {:?}", proxy_ts_path_rename, proxy_ts_path, e)));
+                                if let Err(e) = rename(WORKER_RUNTIME.clone(), proxy_ts_path.clone(), proxy_ts_path_rename.clone()).await {
+                                    if e.kind() != ErrorKind::NotFound {
+                                        //重命名错误不是没找到ts代理文件根目录的错误，则立即返回错误
+                                        return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, old ts path: {:?}, ts path: {:?}, reason: {:?}", proxy_ts_path_rename, proxy_ts_path, e)));
+                                    }
                                 }
-                            }
-                        },
+                            },
+                        }
                     }
 
                     match create_bind_crate_source(proxy_crate_path,
