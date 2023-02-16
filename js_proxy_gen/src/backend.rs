@@ -26,6 +26,56 @@ use crate::{WORKER_RUNTIME,
 * 生成后的外部绑定库的版本号、
 * 生成后的外部绑定库的版本、
 * 和需要导出的本地外部库列表
+* 的pi_v8外部绑定库的源码路径，初始化并返回库的源码路径
+*/
+pub(crate) async fn create_bind_crate_source(path: PathBuf,
+                                             version: &str,
+                                             edition: &str,
+                                             export_crates: &[Crate]) -> Result<PathBuf> {
+    let src_path = path.join(SRC_DIR_NAME);
+    if let Err(e) = create_dir(WORKER_RUNTIME.clone(), src_path.clone()).await {
+        //创建目录失败，则立即返回错误
+        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+    }
+
+    //移除源文件目录中的所有文件
+    match fs::read_dir(src_path.clone()) {
+        Err(e) => {
+            //获取源文件目录中的成员失败，则立即返回错误
+            return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+        },
+        Ok(mut dir) => {
+            while let Some(entry) = dir.next() {
+                match entry {
+                    Err(e) => {
+                        //获取源文件目录中的成员失败，则立即返回错误
+                        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+                    },
+                    Ok(e) => {
+                        let p = e.path();
+                        if p.is_file() {
+                            if let Err(e) = remove_file(WORKER_RUNTIME.clone(), p.clone()).await {
+                                //移除源文件目录中的文件失败，则立即返回错误
+                                return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", p, e)));
+                            }
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    Ok(src_path)
+}
+
+/*
+* 异步创建指定了
+* 生成后的外部绑定库所在路径、
+* 本地vm_builtin库所在路径、
+* 生成后的外部绑定库的名称、
+* 生成后的外部绑定库的版本号、
+* 生成后的外部绑定库的版本、
+* 和需要导出的本地外部库列表
 * 的pi_v8外部绑定库，初始化并返回库的源码路径
 */
 pub(crate) async fn create_bind_crate(path: PathBuf,
