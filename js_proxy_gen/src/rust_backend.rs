@@ -2323,7 +2323,8 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                 },
             };
 
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::CallBack(callback) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level) + "NativeObjectValue::CallBack(cb) => {\n").as_bytes());
+            source_content.put_slice((create_tab(level + 1) + "let callback = cb.clone();\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "Arc::new(\n").as_bytes());
             match generate_closure_call_args(level + 2, source_content, &args_type, &result) {
                 Err(e) => {
@@ -2500,7 +2501,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                     }
 
                     //生成闭包调用后返回结果类型转换为js类型的代码
-                    source_content.put_slice((create_tab(level + 3) + "let result = if let Some(result_callback) = result {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 3) + "let result: Option<Box<dyn FnOnce(Result<NativeObjectValue, String>) + Send + 'static>> = if let Some(result_callback) = result {\n").as_bytes());
                     source_content.put_slice((create_tab(level + 4) + "Some(Box::new(move |r: Result<NativeObjectValue, String>| {\n").as_bytes());
                     source_content.put_slice((create_tab(level + 5) + "match r {\n").as_bytes());
                     source_content.put_slice((create_tab(level + 6) + "Err(e) => {\n").as_bytes());
@@ -2647,7 +2648,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                     source_content.put_slice((create_tab(level + 4) + "None\n").as_bytes());
                     source_content.put_slice((create_tab(level + 3) + "};\n\n").as_bytes());
 
-                    source_content.put_slice((create_tab(level + 3) + "(callback)(args, result);\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 3) + "callback.call(args, result);\n").as_bytes());
 
                     source_content.put_slice((create_tab(level + 2) + "}\n").as_bytes());
                 },
@@ -2697,7 +2698,7 @@ fn generate_closure_call_args(level: isize,
     }
 
     //生成闭包调用后返回结果的回调参数
-    source_content.put_slice(("result: Option<Box<dyn FnOnce(Result<".to_string() + result_type.as_str() + ", String>)>>").as_bytes());
+    source_content.put_slice(("result: Option<Box<dyn FnOnce(Result<".to_string() + result_type.as_str() + ", String>) + Send + 'static>>").as_bytes());
 
     source_content.put_slice("| {\n".as_bytes());
 
