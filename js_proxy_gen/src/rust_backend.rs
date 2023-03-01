@@ -705,7 +705,7 @@ fn generate_function_call_args(target: Option<&String>,
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes_mut();\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = unsafe { " + create_tmp_var_name(index).as_str() + ".unsafe_bytes_mut() };\n\n").as_bytes());
             }
         },
         "Arc<[u8]>" => {
@@ -1267,7 +1267,7 @@ fn generate_function_call_args_match_cause_by_generic_type(target: Option<&Strin
             } else if arg_type_name.is_only_read() {
                 source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.bytes();\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = val.bytes_mut();\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "let " + arg_name.as_str() + " = unsafe { val.unsafe_bytes_mut() };\n").as_bytes());
             }
 
             let next_index = index + 1;
