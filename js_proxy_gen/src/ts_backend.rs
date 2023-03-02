@@ -68,43 +68,6 @@ declare class ESProcessClass {
 }"#;
 
 /*
-* 默认的基础文件名
-*/
-const DEFAULT_BASE_FILE_NAME: &str = "base.ts";
-
-/*
-* 默认的基础文件内容
-*/
-const DEFAULT_BASE_FILE_CONTENT: &str = r#"/**
- * 本地对象类型
- */
- export class NatObj {
-    /**
-     * 本地对象
-     */
-    private self: object
-
-    /**
-     * 类的公共构造方法
-     */
-    public constructor(self: object) {
-        this.self = self;
-    }
-
-    /**
-     * 获取内部本地对象方法
-     */
-    public get_inner() {
-        return this.self;
-    }
-}"#;
-
-/*
-* 默认代理ts文件导入的类型
-*/
-const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"import { NatObj } from \"../base\";\n";
-
-/*
 * 在指定的ts文件根目录中创建本地环境文件和基础文件
 */
 pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<()> {
@@ -120,21 +83,7 @@ pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<(
                 return Err(Error::new(ErrorKind::Other, format!("Generate native env file failed, file: {:?}, reason: {:?}", generate_ts_path, e)));
             }
 
-            match AsyncFile::open(WORKER_RUNTIME.clone(), generate_ts_path.join(DEFAULT_BASE_FILE_NAME), AsyncFileOptions::TruncateWrite).await {
-                Err(e) => {
-                    //创建基础文件失败，则立即返回错误
-                    Err(Error::new(ErrorKind::Other, format!("Generate base file failed, file: {:?}, reason: {:?}", generate_ts_path, e)))
-                },
-                Ok(file) => {
-                    let buf: Arc<[u8]> = Arc::from(DEFAULT_BASE_FILE_CONTENT.as_bytes());
-                    if let Err(e) = file.write(0, buf, WriteOptions::SyncAll(true)).await {
-                        //写入本地环境文件内容失败，则立即返回错误
-                        return Err(Error::new(ErrorKind::Other, format!("Generate base file failed, file: {:?}, reason: {:?}", generate_ts_path, e)));
-                    }
-
-                    Ok(())
-                }
-            }
+            Ok(())
         },
     }
 }
@@ -200,12 +149,6 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
             Some(Ok((file_path_copy, file)))
         }
     }
-}
-
-//生成ts文件的导入
-pub(crate) fn generate_ts_import(mut _path_buf: PathBuf) -> Vec<u8> {
-    let source_content = Vec::from(DEFAULT_PROXY_TS_FILE_USED);
-    source_content
 }
 
 //生成ts文件的所有代理类、代理函数和代理常量的实现
@@ -466,14 +409,14 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 本地对象\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "private self: NatObj;\n\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "private self: object;\n\n").as_bytes());
 
     //生成类的私有构造方法
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 类的私有构造方法\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
     source_content.put_slice((create_tab(level) + "private constructor(self: object) {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "this.self = new NatObj(self);\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "this.self = self;\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "if(NativeObject.registry != undefined) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 2) + "NativeObject.registry.register(self, [self]);\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
@@ -498,7 +441,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level + 1) + "if(this.self == undefined) {\n").as_bytes());
     source_content.put_slice((create_tab(level + 2) + "throw new Error(\"" + specific_class_name.as_str() + " already destroy\");\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "}\n\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(_$cid, this.self.get_inner());\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "NativeObject.release(_$cid, this.self);\n").as_bytes());
     source_content.put_slice((create_tab(level + 1) + "this.self = undefined;\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
@@ -506,8 +449,8 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 从指定本地对象构建当前类方法，此方法是不安全的，使用错误的本地对象将会导致调用时异常\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "static from(obj: NatObj): " + specific_class_name.as_str() + " {\n").as_bytes());
-    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj.get_inner());\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "static from(obj: object): " + specific_class_name.as_str() + " {\n").as_bytes());
+    source_content.put_slice((create_tab(level + 1) + "return new " + specific_class_name.as_str() + "(obj);\n").as_bytes());
     source_content.put_slice((create_tab(level) + "}\n\n").as_bytes());
 
     if let Some(trait_impls) = trait_impls {
@@ -948,10 +891,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
                         if specific_return_type_name.is_some() {
                             //异步方法有返回值
-                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                         } else {
                             //异步方法没有有返回值
-                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                         }
 
                         //生成其它入参
@@ -976,10 +919,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
                         if specific_return_type_name.is_some() {
                             //异步方法有返回值
-                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                         } else {
                             //异步方法没有有返回值
-                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                         }
 
                         //生成其它入参
@@ -1007,10 +950,10 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                 if let Some(method_index) = generater.get_method_index(target_name.clone(), specific_function_name).await {
                     if specific_return_type_name.is_some() {
                         //同步方法有返回值
-                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                     } else {
                         //同步方法没有有返回值
-                        source_content.put_slice((create_tab(level) + "NativeObject.call(" + method_index.to_string().as_str() + ", this.self.get_inner()").as_bytes());
+                        source_content.put_slice((create_tab(level) + "NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                     }
 
                     //生成其它入参
@@ -1137,12 +1080,12 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
     match specific_arg_type_name {
         "bool" => "boolean".to_string(),
         "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" => "number".to_string(),
-        "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "bigint".to_string(),
+        "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "number|bigint".to_string(),
         "str" | "String" => "string".to_string(),
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
         "Vec<bool>" => "boolean[]".to_string(),
         "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<u16>" | "Vec<u32>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
-        "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "bigint[]".to_string(),
+        "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "number[]|bigint[]".to_string(),
         "Vec<String>" => "string[]".to_string(),
         "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
         "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),
