@@ -151,6 +151,11 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
     }
 }
 
+//生成ts文件的导入
+pub(crate) fn generate_ts_import(mut _path_buf: PathBuf) -> Vec<u8> {
+    vec![]
+}
+
 //生成ts文件的所有代理类、代理函数和代理常量的实现
 pub(crate) async fn generate_ts_impls(generater: &ProxySourceGenerater,
                                       source: &ParseContext,
