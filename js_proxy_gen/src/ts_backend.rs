@@ -68,6 +68,11 @@ declare class ESProcessClass {
 }"#;
 
 /*
+* 默认的获取Raw NativeObject的方法名
+*/
+const DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME: &'static str = "get_self";
+
+/*
 * 在指定的ts文件根目录中创建本地环境文件和基础文件
 */
 pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<()> {
@@ -565,7 +570,7 @@ async fn generate_ts_specific_class_method(generater: &ProxySourceGenerater,
 fn generate_ts_function_args(generic: Option<&Generic>,
                              _source: &ParseContext,
                              function: &Function,
-                             source_content: &mut Vec<u8>) -> Result<Vec<String>> {
+                             source_content: &mut Vec<u8>) -> Result<Vec<(String, String)>> {
     let mut specific_arg_names = Vec::new(); //具体参数名称列表
 
     if let Some(input) = function.get_input() {
@@ -592,7 +597,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
                     if arg_type.get_type_name().get_name() == generic_name {
                         //泛型参数名相同，则使用具体类型替换泛型类型
                         let specific_arg_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-                        specific_arg_names.push(specific_arg_name.clone());
+                        specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
                         source_content.put_slice((specific_arg_name.clone() + ": " + specific_arg_type_name.as_str()).as_bytes());
                         args_len -= 1; //已生成指定参数，则减少未生成的参数数量
                         break;
@@ -616,7 +621,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
                     if arg_type.get_type_name().get_name() == generic_name {
                         //泛型参数名相同，则使用具体类型替换泛型类型
                         let specific_arg_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-                        specific_arg_names.push(specific_arg_name.clone());
+                        specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
                         source_content.put_slice((specific_arg_name.clone() + ": " + specific_arg_type_name.as_str()).as_bytes());
                         args_len -= 1; //已生成指定参数，则减少未生成的参数数量
                         break;
@@ -636,7 +641,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
 
             //没有任何泛型参数
             let specific_arg_type_name = get_ts_type_name(arg_type.get_type_name().get_name().as_str());
-            specific_arg_names.push(specific_arg_name.clone());
+            specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
             source_content.put_slice((specific_arg_name + ": " + specific_arg_type_name.as_str()).as_bytes());
             args_len -= 1; //已生成指定参数，则减少未生成的参数数量
 
@@ -756,7 +761,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                                          _source: &ParseContext,
                                          function: &Function,
                                          specific_function_name: String,
-                                         specific_arg_names: Vec<String>,
+                                         specific_arg_names: Vec<(String, String)>,
                                          specific_return_type_name: Option<String>,
                                          level: isize,
                                          source_content: &mut Vec<u8>) -> Result<()> {
@@ -776,8 +781,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                             source_content.put_slice((create_tab(level) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
                         }
 
-                        for specific_arg_name in specific_arg_names {
-                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
                         }
 
                         if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -815,8 +825,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                             source_content.put_slice((create_tab(level + 1) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
                         }
 
-                        for specific_arg_name in specific_arg_names {
-                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
                         }
 
                         if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -858,8 +873,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -903,8 +923,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         }
 
                         //生成其它入参
-                        for specific_arg_name in specific_arg_names {
-                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
                         }
 
                         if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -931,8 +956,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         }
 
                         //生成其它入参
-                        for specific_arg_name in specific_arg_names {
-                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
                         }
 
                         if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -962,8 +992,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -993,8 +1028,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -1021,8 +1061,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -1052,8 +1097,13 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                 }
 
                 //生成其它入参
-                for specific_arg_name in specific_arg_names {
-                    source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                    if specific_arg_type == "object" {
+                        //如果参数是对象类型
+                        source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                    } else {
+                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    }
                 }
 
                 if let Some(specific_return_type_name) = &specific_return_type_name {
