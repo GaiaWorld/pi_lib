@@ -11,7 +11,7 @@
 extern crate lazy_static;
 extern crate core;
 
-use std::fs;
+use std::fs::{self, remove_dir_all};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use std::future::Future;
@@ -32,7 +32,7 @@ mod ts_backend;
 mod utils;
 
 use frontend::parse_source;
-use backend::{create_bind_crate, generate_crates_proxy_source};
+use backend::{create_bind_crate_source, create_bind_crate, generate_crates_proxy_source};
 use utils::{RUST_SOURCE_FILE_EXTENSION,
             NATIVE_OBJECT_PROXY_FILE_DIR_NAME,
             check_crate,
@@ -139,12 +139,12 @@ pub async fn parse_crate(path: PathBuf,
                 Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
             },
             Ok((crate_info, src_path)) => {
-                let macro_expander = if let Some(ignores) = requrie_extand_macro_filenames {
+                let macro_expander = if let Some(requires) = requrie_extand_macro_filenames {
                     //需要宏展开指定库下的所有源文件，则构建一个宏展开器
                     Some(MacroExpander::new(&path,
                                             &src_path,
                                             DEAFULT_MACRO_EXPAND_FILE_SUFFIX,
-                                            ignores))
+                                            requires))
                 } else {
                     None
                 };
@@ -375,6 +375,81 @@ pub async fn generate_proxy_crate(path: PathBuf,
 }
 
 ///
+/// 分析声明了导出的库列表，不创建指定路径的代理库，并生成相应的代理文件和代理代码，可以指定是否并发生成
+///
+pub async fn generate_proxy_source(path: PathBuf,
+                                   ts_proxy_root: PathBuf,
+                                   version: &str,
+                                   edition: &str,
+                                   is_concurrent: bool,
+                                   is_remove_proxy_ts_path: bool,
+                                   crates: Vec<Crate>) -> Result<()> {
+    match abs_path(path.as_path()) {
+        Err(e) => {
+            Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, crate path: {:?}, reason: {:?}", path, e)))
+        },
+        Ok(proxy_crate_path) => {
+            match abs_path(ts_proxy_root.as_path()) {
+                Err(e) => {
+                    Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", ts_proxy_root, e)))
+                },
+                Ok(mut proxy_ts_path) => {
+                    proxy_ts_path = proxy_ts_path.join(NATIVE_OBJECT_PROXY_FILE_DIR_NAME); //实际的ts代理文件根路径
+
+                    if is_remove_proxy_ts_path {
+                        //移除ts代理文件目录
+                        if let Err(e) = remove_dir_all(&proxy_ts_path) {
+                            //移除ts代理文件目录失败，则立即返回错误
+                            return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_ts_path, e)));
+                        }
+                    } else {
+                        //不移除ts代理文件目录
+                        match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                            Err(e) => {
+                                //获取当前系统时间失败，则立即返回错误
+                                return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, ts path: {:?}, reason: {:?}", proxy_crate_path, e)));
+                            },
+                            Ok(now) => {
+                                //获取当前系统时间成功，则重命名已存在的ts代理文件根目录
+                                let proxy_ts_path_rename = PathBuf::from(proxy_ts_path.to_str().unwrap().to_string() + "_" + now.as_millis().to_string().as_str());
+
+                                if let Err(e) = rename(WORKER_RUNTIME.clone(), proxy_ts_path.clone(), proxy_ts_path_rename.clone()).await {
+                                    if e.kind() != ErrorKind::NotFound {
+                                        //重命名错误不是没找到ts代理文件根目录的错误，则立即返回错误
+                                        return Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, old ts path: {:?}, ts path: {:?}, reason: {:?}", proxy_ts_path_rename, proxy_ts_path, e)));
+                                    }
+                                }
+                            },
+                        }
+                    }
+
+                    match create_bind_crate_source(proxy_crate_path,
+                                                   version,
+                                                   edition,
+                                                   crates.as_slice()).await {
+                        Err(e) => {
+                            Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                        },
+                        Ok(src_path) => {
+                            let generater = ProxySourceGenerater::new();
+                            if let Err(e) = generate_crates_proxy_source(&generater,
+                                                                         crates,
+                                                                         src_path.clone(),
+                                                                         proxy_ts_path.clone(),
+                                                                         is_concurrent).await {
+                                Err(Error::new(ErrorKind::Other, format!("Generate proxy crate failed, path: {:?}, reason: {:?}", path, e)))
+                            } else {
+                                Ok(())
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+}
+
+///
 /// 派发异步任务到代理生成器的异步运行时中运行
 ///
 pub fn spawn(task: impl Future<Output = ()> + Send + 'static) {
@@ -400,6 +475,40 @@ fn test_front_end() {
 
         println!("{:#?}", context);
     }
+}
+
+#[test]
+fn test_create_bind_crate_source() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    WORKER_RUNTIME.spawn(WORKER_RUNTIME.alloc(), async move {
+        let cwd = env::current_dir().unwrap();
+        let filename = PathBuf::from(r#".\tests\pi_test\"#);
+        let path = cwd.join(filename.strip_prefix("./").unwrap());
+        let crates = parse_crates(vec![PathBuf::from(r#".\tests\export_crate"#)],
+                                  None,
+                                  true).await.unwrap();
+        let ts_proxy_root = PathBuf::from(r#".\tests\pi_test\ts"#);
+
+        match create_bind_crate_source(path,
+                                       "0.1.0",
+                                       "2018",
+                                       crates.as_slice()).await {
+            Err(e) => {
+                panic!("Test create bind crate failed, {:?}", e);
+            },
+            Ok(src_path) => {
+                let generater = ProxySourceGenerater::new();
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone(), false).await {
+                    panic!("Test generate proxy file failed, {:?}", e);
+                }
+            },
+        }
+    }).unwrap();
+
+    std::thread::sleep(Duration::from_millis(1000000000));
 }
 
 #[test]
@@ -459,6 +568,44 @@ fn test_parse_crate_by_marco_expand() {
                                   Some(vec!["style.rs".to_string()]),
                                   true).await.unwrap();
         let ts_proxy_root = PathBuf::from(r#".\tests\pi_ui_ext\ts"#);
+
+        match create_bind_crate(path, vm_builtin_path, "0.1.0", "2018", crates.as_slice()).await {
+            Err(e) => {
+                panic!("Test create bind crate failed, {:?}", e);
+            },
+            Ok(src_path) => {
+                let generater = ProxySourceGenerater::new();
+                if let Err(e) = generate_crates_proxy_source(&generater, crates, src_path.clone(), ts_proxy_root.clone(), false).await {
+                    panic!("Test generate proxy file failed, {:?}", e);
+                }
+            },
+        }
+    }).unwrap();
+
+    std::thread::sleep(Duration::from_millis(1000000000));
+}
+
+//测试在导出库中使用宏来生成导出函数
+#[test]
+fn test_simple_parse_crate_by_marco_expand() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use env_logger;
+
+    //启动日志系统
+    env_logger::builder().format_timestamp_millis().init();
+
+    let rt = MultiTaskRuntimeBuilder::default().build();
+
+    rt.spawn(rt.alloc(), async move {
+        let path = PathBuf::from(r#"E:\wsl_tmp\tmp\test_simple_ext"#);
+        let vm_builtin_path = PathBuf::from(r#"..\..\pi_v8\vm_builtin"#);
+        let crates = parse_crates(vec![PathBuf::from(r#"E:\wsl_tmp\tmp\test_simple"#)],
+                                  None,
+                                  true).await.unwrap();
+        let ts_proxy_root = PathBuf::from(r#"E:\wsl_tmp\tmp\test_simple_ext\ts"#);
 
         match create_bind_crate(path, vm_builtin_path, "0.1.0", "2018", crates.as_slice()).await {
             Err(e) => {

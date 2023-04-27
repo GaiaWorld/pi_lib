@@ -22,3 +22,11 @@ mod test {
         vec:    Vec<B>,
     }
 }
+
+#[pi_js_export]
+pub fn test_callback(x: bool,
+                     y: usize,
+                     z: String,
+                     func: Arc<dyn Fn(bool, u32, f64, String, &[u8], Option<Box<dyn FnOnce(Result<Vec<u8>, String>) + Send + 'static>>) + Send + 'static>) {
+
+}

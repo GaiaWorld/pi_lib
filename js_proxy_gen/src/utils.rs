@@ -403,11 +403,18 @@ impl MacroExpander {
                 },
                 Some(filename_str) => {
                     //检查当前文件名是否需要忽略宏展开
+                    let mut is_expand = false;
                     for require in &self.0.requires {
-                        if filename_str != require.as_str() {
-                            //忽略宏展开，并立即返回
-                            return Ok(None);
+                        if filename_str == require.as_str() {
+                            //需要宏展开，则立即退出过滤
+                            is_expand = true;
+                            break;
                         }
+                    }
+
+                    if !is_expand {
+                        //忽略宏展开，并立即返回
+                        return Ok(None);
                     }
                 },
                 _ => (),
@@ -1751,7 +1758,7 @@ impl Generic {
 * 类型，包括：类型名和类型的参数列表
 */
 #[derive(Debug, Clone)]
-pub struct Type(TypeName, Option<Vec<Type>>);
+pub struct Type(TypeName, Option<Vec<Type>>, bool);
 
 unsafe impl Send for Type {}
 
@@ -1760,14 +1767,26 @@ impl ToString for Type {
         let mut string = self.0.get_name().clone();
 
         if let Some(type_args) = &self.1 {
-            string += "<";
+            if self.2 {
+                //是函数类型
+                string += "(";
+            } else {
+                //非函数类型
+                string += "<";
+            }
             let mut iterator = type_args.iter();
             string += iterator.next().unwrap().to_string().as_str();
             while let Some(type_arg) = iterator.next() {
                 string += ", ";
                 string += type_arg.to_string().as_str();
             }
-            string += ">";
+            if self.2 {
+                //是函数类型
+                string += ")";
+            } else {
+                //非函数类型
+                string += ">";
+            }
         }
 
         string
@@ -1777,7 +1796,12 @@ impl ToString for Type {
 impl Type {
     //构建类型
     pub fn new(type_name: String) -> Self {
-        Type(TypeName::new(type_name), None)
+        Type(TypeName::new(type_name), None, false)
+    }
+
+    //构建指定参数的类型
+    pub fn with(type_name: String, is_function: bool) -> Self {
+        Type(TypeName::new(type_name), None, is_function)
     }
 
     //获取完整类型名
@@ -2414,6 +2438,16 @@ pub fn get_specific_ts_class_name(class_name: &String) -> String {
         .replace(", ", "_")
         .replace(",", "_")
         .replace(">", "_")
+}
+
+//闭包类型
+pub enum ClosureType {
+    Raw,        //原始闭包
+    Move,       //可移动闭包
+    BoxRaw,     //Box原始闭包
+    BoxMove,    //Box可移动闭包
+    ArcRaw,     //Arc原始闭包
+    ArcMove,    //Arc可移动闭包
 }
 
 #[test]

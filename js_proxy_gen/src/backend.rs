@@ -26,6 +26,56 @@ use crate::{WORKER_RUNTIME,
 * 生成后的外部绑定库的版本号、
 * 生成后的外部绑定库的版本、
 * 和需要导出的本地外部库列表
+* 的pi_v8外部绑定库的源码路径，初始化并返回库的源码路径
+*/
+pub(crate) async fn create_bind_crate_source(path: PathBuf,
+                                             version: &str,
+                                             edition: &str,
+                                             export_crates: &[Crate]) -> Result<PathBuf> {
+    let src_path = path.join(SRC_DIR_NAME);
+    if let Err(e) = create_dir(WORKER_RUNTIME.clone(), src_path.clone()).await {
+        //创建目录失败，则立即返回错误
+        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+    }
+
+    //移除源文件目录中的所有文件
+    match fs::read_dir(src_path.clone()) {
+        Err(e) => {
+            //获取源文件目录中的成员失败，则立即返回错误
+            return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+        },
+        Ok(mut dir) => {
+            while let Some(entry) = dir.next() {
+                match entry {
+                    Err(e) => {
+                        //获取源文件目录中的成员失败，则立即返回错误
+                        return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", path, e)));
+                    },
+                    Ok(e) => {
+                        let p = e.path();
+                        if p.is_file() {
+                            if let Err(e) = remove_file(WORKER_RUNTIME.clone(), p.clone()).await {
+                                //移除源文件目录中的文件失败，则立即返回错误
+                                return Err(Error::new(ErrorKind::Other, format!("Create bind crate failed, path: {:?}, reason: {:?}", p, e)));
+                            }
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    Ok(src_path)
+}
+
+/*
+* 异步创建指定了
+* 生成后的外部绑定库所在路径、
+* 本地vm_builtin库所在路径、
+* 生成后的外部绑定库的名称、
+* 生成后的外部绑定库的版本号、
+* 生成后的外部绑定库的版本、
+* 和需要导出的本地外部库列表
 * 的pi_v8外部绑定库，初始化并返回库的源码路径
 */
 pub(crate) async fn create_bind_crate(path: PathBuf,
@@ -112,12 +162,15 @@ fn parse_crate_depends(export_crates: &[Crate],
                        vm_builtin_path: &Path,
                        configure: &mut CrateInfo) -> Result<()> {
     //写入默认依赖
-    let mut table = toml::value::Table::new();
-    table.insert("path".to_string(),
-                 toml::Value::String(vm_builtin_path.to_path_buf().into_os_string().into_string().unwrap()));
     configure.append_depend("futures", toml::Value::String("0.3".to_string())); //异步库
     configure.append_depend("num-bigint", toml::Value::String("0.4".to_string())); //大整数库
     configure.append_depend("num-traits", toml::Value::String("0.2".to_string())); //数字接口库
+    let mut table = toml::value::Table::new();
+    #[cfg(feature = "pid_statistics")]
+    table.insert("features".to_string(),
+                 toml::Value::Array(vec![toml::Value::String("pid_statistics".to_string())]));
+    table.insert("path".to_string(),
+                 toml::Value::String(vm_builtin_path.to_path_buf().into_os_string().into_string().unwrap()));
     configure.append_depend("vm_builtin", toml::Value::Table(table)); //js虚拟机内置库
 
     for export_crate in export_crates {

@@ -22,11 +22,29 @@ const DEFAULT_NATIVE_ENV_FILE_NAME: &str = "native_env.d.ts";
 */
 const DEFAULT_NATIVE_ENV_FILE_CONTENT: &str = r#"//本地对象
 declare var NativeObject: NativeObjectClass;
+//进程对象
+declare var ESProcess: ESProcessClass;
+//获取当前上下文唯一id
+declare var _$cid: Cid;
+//是否获取执行栈开关
+declare var stackOnOff: boolean;
+//获取当前执行栈
+declare var currentStackTrace: (depth: undefined|number) => undefined|string;
+//宏任务追踪开始
+declare var start_micro_tracing: (pid: Pid, init: string, stack: undefined|string) => undefined;
+//宏任务追踪结束
+declare var end_micro_tracing: (pid: Pid) => undefined;
 
+//虚拟机唯一id
+type Vid = number;
+//上下文唯一id
+type Cid = number;
+//进程唯一id
+type Pid = number;
 //本地对象同步返回值类型
-type NativeObjectRetType = undefined|boolean|number|string|ArrayBuffer|ArrayBufferView|Error|object;
+type NativeObjectRetType = undefined|boolean|number|string|ArrayBuffer|bigint|object|NativeObjectRetType[];
 //本地对象异步返回值类型
-type AsyncNativeObjectRetType = Promise<undefined|boolean|number|string|ArrayBuffer|ArrayBufferView|object>;
+type AsyncNativeObjectRetType = Promise<undefined|boolean|number|string|ArrayBuffer|bigint|Error|object|NativeObjectRetType[]>;
 
 declare class NativeObjectClass {
     registry: NativeObjectRegistry; //本地对象回收器注册器
@@ -38,17 +56,24 @@ declare class NativeObjectClass {
 }
 
 declare class NativeObjectRegistry {
-    //注册指定本地对象的回收器
-    register(obj: object, args: [object]): void;
+    register(obj: object, args: [object]): void; //注册指定本地对象的回收器
+}
+
+declare class ESProcessClass {
+    pid: object; //当前进程唯一id
+    spawn: (script: string) => Pid|((vid: Vid, script: string) => Pid); //同步非阻塞的创建一个进程
+    async_spawn: (script: string) => Promise<Pid>|((vid: Vid, script: string) => Promise<Pid>); //异步阻塞的创建一个进程
+    receive: (msg: AsyncNativeObjectRetType, pid: Pid) => undefined; //接收进程发送的消息
+    send: (pid: Pid, msg: AsyncNativeObjectRetType) => undefined; //向进程发送消息
 }"#;
 
 /*
-* 默认代理ts文件导入的类型
+* 默认的获取Raw NativeObject的方法名
 */
-const DEFAULT_PROXY_TS_FILE_USED: &[u8] = b"";
+const DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME: &'static str = "get_self";
 
 /*
-* 在指定的ts文件根目录中创建本地环境文件
+* 在指定的ts文件根目录中创建本地环境文件和基础文件
 */
 pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<()> {
     match AsyncFile::open(WORKER_RUNTIME.clone(), generate_ts_path.join(DEFAULT_NATIVE_ENV_FILE_NAME), AsyncFileOptions::TruncateWrite).await {
@@ -133,8 +158,7 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
 
 //生成ts文件的导入
 pub(crate) fn generate_ts_import(mut _path_buf: PathBuf) -> Vec<u8> {
-    let source_content = Vec::from(DEFAULT_PROXY_TS_FILE_USED);
-    source_content
+    vec![]
 }
 
 //生成ts文件的所有代理类、代理函数和代理常量的实现
@@ -546,7 +570,7 @@ async fn generate_ts_specific_class_method(generater: &ProxySourceGenerater,
 fn generate_ts_function_args(generic: Option<&Generic>,
                              _source: &ParseContext,
                              function: &Function,
-                             source_content: &mut Vec<u8>) -> Result<Vec<String>> {
+                             source_content: &mut Vec<u8>) -> Result<Vec<(String, String)>> {
     let mut specific_arg_names = Vec::new(); //具体参数名称列表
 
     if let Some(input) = function.get_input() {
@@ -573,7 +597,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
                     if arg_type.get_type_name().get_name() == generic_name {
                         //泛型参数名相同，则使用具体类型替换泛型类型
                         let specific_arg_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-                        specific_arg_names.push(specific_arg_name.clone());
+                        specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
                         source_content.put_slice((specific_arg_name.clone() + ": " + specific_arg_type_name.as_str()).as_bytes());
                         args_len -= 1; //已生成指定参数，则减少未生成的参数数量
                         break;
@@ -597,7 +621,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
                     if arg_type.get_type_name().get_name() == generic_name {
                         //泛型参数名相同，则使用具体类型替换泛型类型
                         let specific_arg_type_name = get_ts_type_name(specific_types[0].get_name().as_str());
-                        specific_arg_names.push(specific_arg_name.clone());
+                        specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
                         source_content.put_slice((specific_arg_name.clone() + ": " + specific_arg_type_name.as_str()).as_bytes());
                         args_len -= 1; //已生成指定参数，则减少未生成的参数数量
                         break;
@@ -617,7 +641,7 @@ fn generate_ts_function_args(generic: Option<&Generic>,
 
             //没有任何泛型参数
             let specific_arg_type_name = get_ts_type_name(arg_type.get_type_name().get_name().as_str());
-            specific_arg_names.push(specific_arg_name.clone());
+            specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
             source_content.put_slice((specific_arg_name + ": " + specific_arg_type_name.as_str()).as_bytes());
             args_len -= 1; //已生成指定参数，则减少未生成的参数数量
 
@@ -737,7 +761,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                                          _source: &ParseContext,
                                          function: &Function,
                                          specific_function_name: String,
-                                         specific_arg_names: Vec<String>,
+                                         specific_arg_names: Vec<(String, String)>,
                                          specific_return_type_name: Option<String>,
                                          level: isize,
                                          source_content: &mut Vec<u8>) -> Result<()> {
@@ -746,54 +770,116 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
         if function.is_static() {
             if function.is_async() {
                 //异步静态方法
-                if let Some(method_index) = generater.get_async_static_method_index(target_name.clone(), specific_function_name).await {
-                    if specific_return_type_name.is_some() {
-                        //异步静态方法有返回值
-                        source_content.put_slice((create_tab(level) + "let result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
-                    } else {
-                        //异步静态方法没有有返回值
-                        source_content.put_slice((create_tab(level) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
-                    }
-
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
-                    }
-
-                    if let Some(specific_return_type_name) = &specific_return_type_name {
-                        //异步静态方法有返回值
-                        if specific_return_type_name == &get_specific_ts_class_name(target_name) {
-                            //当前异步静态方法的返回值类型与目标对象的具体类型相同，则当前异步静态方法是当前目标对象的构造方法
-                            source_content.put_slice(b") as Promise<object>;\n");
-                            source_content.put_slice((create_tab(level) + "let r: object = await result;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "if(r instanceof Error) {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "throw r;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(r);\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+                #[cfg(not(feature = "pid_statistics"))]
+                {
+                    if let Some(method_index) = generater.get_async_static_method_index(target_name.clone(), specific_function_name).await {
+                        if specific_return_type_name.is_some() {
+                            //异步静态方法有返回值
+                            source_content.put_slice((create_tab(level) + "let __result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
                         } else {
-                            //当前异步静态方法，不是当前目标对象的构造方法
-                            source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
+                            //异步静态方法没有有返回值
+                            source_content.put_slice((create_tab(level) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
                         }
-                    } else {
-                        //异步静态函数没有有返回值
-                        source_content.put_slice(b");\n")
+
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
+                        }
+
+                        if let Some(specific_return_type_name) = &specific_return_type_name {
+                            //异步静态方法有返回值
+                            if specific_return_type_name == &get_specific_ts_class_name(target_name) {
+                                //当前异步静态方法的返回值类型与目标对象的具体类型相同，则当前异步静态方法是当前目标对象的构造方法
+                                source_content.put_slice(b") as Promise<object>;\n");
+                                source_content.put_slice((create_tab(level) + "let r: object = await __result;\n").as_bytes());
+                                source_content.put_slice((create_tab(level) + "if(r instanceof Error) {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "throw r;\n").as_bytes());
+                                source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(r);\n").as_bytes());
+                                source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+                            } else {
+                                //当前异步静态方法，不是当前目标对象的构造方法
+                                source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                                source_content.put_slice((create_tab(level) + "return await __result;\n").as_bytes());
+                            }
+                        } else {
+                            //异步静态函数没有有返回值
+                            source_content.put_slice(b");\n")
+                        }
                     }
+                }
+                #[cfg(feature = "pid_statistics")]
+                {
+                    source_content.put_slice((create_tab(level) + "const __inner_func = async () => {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 1) + "start_micro_tracing(ESProcess.pid, \"" + function.get_name().unwrap_or(&"".to_string()) + "\", stackOnOff?currentStackTrace():\"\");\n").as_bytes());
+                    if let Some(method_index) = generater.get_async_static_method_index(target_name.clone(), specific_function_name).await {
+                        if specific_return_type_name.is_some() {
+                            //异步静态方法有返回值
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                        } else {
+                            //异步静态方法没有有返回值
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                        }
+
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
+                        }
+
+                        if let Some(specific_return_type_name) = &specific_return_type_name {
+                            //异步静态方法有返回值
+                            if specific_return_type_name == &get_specific_ts_class_name(target_name) {
+                                //当前异步静态方法的返回值类型与目标对象的具体类型相同，则当前异步静态方法是当前目标对象的构造方法
+                                source_content.put_slice(b") as Promise<object>;\n");
+                                source_content.put_slice((create_tab(level + 1) + "let r: object = await __result;\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "if(r instanceof Error) {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 2) + "throw r;\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "} else {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 2) + "return new " + specific_return_type_name + "(r);\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "}\n").as_bytes());
+                            } else {
+                                //当前异步静态方法，不是当前目标对象的构造方法
+                                source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "let r: any = await __result;\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 1) + "return r;\n").as_bytes());
+                            }
+                        } else {
+                            //异步静态函数没有有返回值
+                            source_content.put_slice(b");\n")
+                        }
+                    }
+                    source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+                    source_content.put_slice((create_tab(level) + "return await __inner_func();\n").as_bytes());
                 }
             } else {
                 //同步静态方法
                 if let Some(method_index) = generater.get_static_method_index(target_name.clone(), specific_function_name).await {
                     if specific_return_type_name.is_some() {
                         //同步静态方法有返回值
-                        source_content.put_slice((create_tab(level) + "let result = NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
+                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
                     } else {
                         //同步静态方法没有有返回值
                         source_content.put_slice((create_tab(level) + "NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
@@ -801,15 +887,15 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         if specific_return_type_name == &get_specific_ts_class_name(target_name) {
                             //当前同步静态方法的返回值类型与目标对象的具体类型相同，则当前同步静态方法是当前目标对象的构造方法
                             source_content.put_slice(b") as object;\n");
-                            source_content.put_slice((create_tab(level) + "if(result instanceof Error) {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "throw result;\n").as_bytes());
+                            source_content.put_slice((create_tab(level) + "if(__result instanceof Error) {\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "throw __result;\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "} else {\n").as_bytes());
-                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(result);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return new " + specific_return_type_name + "(__result);\n").as_bytes());
                             source_content.put_slice((create_tab(level) + "}\n").as_bytes());
                         } else {
                             //当前同步静态方法，不是当前目标对象的构造方法
                             source_content.put_slice((") as ".to_string() + specific_return_type_name + ";\n").as_bytes());
-                            source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                            source_content.put_slice((create_tab(level) + "return __result;\n").as_bytes());
                         }
                     } else {
                         //同步静态方法没有有返回值
@@ -825,49 +911,100 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
             if function.is_async() {
                 //异步方法
-                if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
-                    if specific_return_type_name.is_some() {
-                        //异步方法有返回值
-                        source_content.put_slice((create_tab(level) + "let result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
-                    } else {
-                        //异步方法没有有返回值
-                        source_content.put_slice((create_tab(level) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
-                    }
+                #[cfg(not(feature = "pid_statistics"))]
+                {
+                    if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
+                        if specific_return_type_name.is_some() {
+                            //异步方法有返回值
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        } else {
+                            //异步方法没有有返回值
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        }
 
-                    //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
-                    }
+                        //生成其它入参
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
+                        }
 
-                    if let Some(specific_return_type_name) = &specific_return_type_name {
-                        //异步方法有返回值
-                        source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                        source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
-                    } else {
-                        //异步方法没有有返回值
-                        source_content.put_slice(b");\n")
+                        if let Some(specific_return_type_name) = &specific_return_type_name {
+                            //异步方法有返回值
+                            source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return r;\n").as_bytes());
+                        } else {
+                            //异步方法没有有返回值
+                            source_content.put_slice(b");\n")
+                        }
                     }
+                }
+                #[cfg(feature = "pid_statistics")]
+                {
+                    source_content.put_slice((create_tab(level) + "const __inner_func = async () => {\n").as_bytes());
+                    source_content.put_slice((create_tab(level + 1) + "start_micro_tracing(ESProcess.pid, \"" + function.get_name().unwrap_or(&"".to_string()) + "\", stackOnOff?currentStackTrace():\"\");\n").as_bytes());
+                    if let Some(method_index) = generater.get_async_method_index(target_name.clone(), specific_function_name).await {
+                        if specific_return_type_name.is_some() {
+                            //异步方法有返回值
+                            source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        } else {
+                            //异步方法没有有返回值
+                            source_content.put_slice((create_tab(level + 1) + "NativeObject.async_call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        }
+
+                        //生成其它入参
+                        for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                            if specific_arg_type == "object" {
+                                //如果参数是对象类型
+                                source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                            } else {
+                                source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                            }
+                        }
+
+                        if let Some(specific_return_type_name) = &specific_return_type_name {
+                            //异步方法有返回值
+                            source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "let r: any = await __result;\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                            source_content.put_slice((create_tab(level + 1) + "return r;\n").as_bytes());
+                        } else {
+                            //异步方法没有有返回值
+                            source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                            source_content.put_slice(b");\n")
+                        }
+                    }
+                    source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+                    source_content.put_slice((create_tab(level) + "return await __inner_func();\n").as_bytes());
                 }
             } else {
                 //同步方法
                 if let Some(method_index) = generater.get_method_index(target_name.clone(), specific_function_name).await {
                     if specific_return_type_name.is_some() {
                         //同步方法有返回值
-                        source_content.put_slice((create_tab(level) + "let result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
+                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                     } else {
                         //同步方法没有有返回值
                         source_content.put_slice((create_tab(level) + "NativeObject.call(" + method_index.to_string().as_str() + ", this.self").as_bytes());
                     }
 
                     //生成其它入参
-                    for specific_arg_name in specific_arg_names {
-                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
                     }
 
                     if let Some(specific_return_type_name) = &specific_return_type_name {
                         //同步方法有返回值
                         source_content.put_slice((") as ".to_string() + specific_return_type_name + ";\n").as_bytes());
-                        source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                        source_content.put_slice((create_tab(level) + "return __result;\n").as_bytes());
                     } else {
                         //同步方法没有有返回值
                         source_content.put_slice(b");\n")
@@ -879,49 +1016,100 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
         //没有目标对象
         if function.is_async() {
             //异步静态函数
-            if let Some(method_index) = generater.get_async_static_method_index("".to_string(), specific_function_name).await {
-                if specific_return_type_name.is_some() {
-                    //异步静态函数有返回值
-                    source_content.put_slice((create_tab(level) + "let result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
-                } else {
-                    //异步静态函数没有有返回值
-                    source_content.put_slice((create_tab(level) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
-                }
+            #[cfg(not(feature = "pid_statistics"))]
+            {
+                if let Some(method_index) = generater.get_async_static_method_index("".to_string(), specific_function_name).await {
+                    if specific_return_type_name.is_some() {
+                        //异步静态函数有返回值
+                        source_content.put_slice((create_tab(level) + "let __result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                    } else {
+                        //异步静态函数没有有返回值
+                        source_content.put_slice((create_tab(level) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                    }
 
-                //生成其它入参
-                for specific_arg_name in specific_arg_names {
-                    source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
-                }
+                    //生成其它入参
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
+                    }
 
-                if let Some(specific_return_type_name) = &specific_return_type_name {
-                    //异步静态函数有返回值
-                    source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
-                    source_content.put_slice((create_tab(level) + "return await result;\n").as_bytes());
-                } else {
-                    //异步静态函数没有有返回值
-                    source_content.put_slice(b");\n")
+                    if let Some(specific_return_type_name) = &specific_return_type_name {
+                        //异步静态函数有返回值
+                        source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                        source_content.put_slice((create_tab(level) + "return await __result;\n").as_bytes());
+                    } else {
+                        //异步静态函数没有有返回值
+                        source_content.put_slice(b");\n")
+                    }
                 }
+            }
+            #[cfg(feature = "pid_statistics")]
+            {
+                source_content.put_slice((create_tab(level) + "const __inner_func = async () => {\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "start_micro_tracing(ESProcess.pid, \"" + function.get_name().unwrap_or(&"".to_string()) + "\", stackOnOff?currentStackTrace():\"\");\n").as_bytes());
+                if let Some(method_index) = generater.get_async_static_method_index("".to_string(), specific_function_name).await {
+                    if specific_return_type_name.is_some() {
+                        //异步静态函数有返回值
+                        source_content.put_slice((create_tab(level + 1) + "let __result = NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                    } else {
+                        //异步静态函数没有有返回值
+                        source_content.put_slice((create_tab(level + 1) + "NativeObject.async_static_call(" + method_index.to_string().as_str()).as_bytes());
+                    }
+
+                    //生成其它入参
+                    for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                        if specific_arg_type == "object" {
+                            //如果参数是对象类型
+                            source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                        } else {
+                            source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                        }
+                    }
+
+                    if let Some(specific_return_type_name) = &specific_return_type_name {
+                        //异步静态函数有返回值
+                        source_content.put_slice((") as Promise<".to_string() + specific_return_type_name + ">;\n").as_bytes());
+                        source_content.put_slice((create_tab(level + 1) + "let r: any = await __result;\n").as_bytes());
+                        source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                        source_content.put_slice((create_tab(level + 1) + "return r;\n").as_bytes());
+                    } else {
+                        //异步静态函数没有有返回值
+                        source_content.put_slice((create_tab(level + 1) + "end_micro_tracing(ESProcess.pid);\n").as_bytes());
+                        source_content.put_slice(b");\n")
+                    }
+                }
+                source_content.put_slice((create_tab(level) + "}\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "return await __inner_func();\n").as_bytes());
             }
         } else {
             //同步静态函数
             if let Some(method_index) = generater.get_static_method_index("".to_string(), specific_function_name).await {
                 if specific_return_type_name.is_some() {
                     //同步静态函数有返回值
-                    source_content.put_slice((create_tab(level) + "let result = NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
+                    source_content.put_slice((create_tab(level) + "let __result = NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
                 } else {
                     //同步静态函数没有有返回值
                     source_content.put_slice((create_tab(level) + "NativeObject.static_call(" + method_index.to_string().as_str()).as_bytes());
                 }
 
                 //生成其它入参
-                for specific_arg_name in specific_arg_names {
-                    source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                for (specific_arg_name, specific_arg_type) in specific_arg_names {
+                    if specific_arg_type == "object" {
+                        //如果参数是对象类型
+                        source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
+                    } else {
+                        source_content.put_slice((", ".to_string() + specific_arg_name.as_str()).as_bytes());
+                    }
                 }
 
                 if let Some(specific_return_type_name) = &specific_return_type_name {
                     //同步静态函数有返回值
                     source_content.put_slice((") as ".to_string() + specific_return_type_name + ";\n").as_bytes());
-                    source_content.put_slice((create_tab(level) + "return result;\n").as_bytes());
+                    source_content.put_slice((create_tab(level) + "return __result;\n").as_bytes());
                 } else {
                     //同步静态函数没有有返回值
                     source_content.put_slice(b");\n")
@@ -947,15 +1135,16 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
     match specific_arg_type_name {
         "bool" => "boolean".to_string(),
         "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" => "number".to_string(),
-        "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "bigint".to_string(),
+        "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "number|bigint".to_string(),
         "str" | "String" => "string".to_string(),
         "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
         "Vec<bool>" => "boolean[]".to_string(),
         "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<u16>" | "Vec<u32>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
-        "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "bigint[]".to_string(),
+        "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "number[]|bigint[]".to_string(),
         "Vec<String>" => "string[]".to_string(),
         "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
         "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),
+        closure_type if closure_type.starts_with("Arc<Fn(") => "Function".to_string(),
         _ => "object".to_string(),
     }
 }
