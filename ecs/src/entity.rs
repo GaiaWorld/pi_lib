@@ -156,6 +156,7 @@ impl<T> EntityImpl<T> {
         //         self.components[i].delete(id)
         //     }
 		// }
+		
 		for ci in self.components.iter() {
 			ci.delete(id);
 		}

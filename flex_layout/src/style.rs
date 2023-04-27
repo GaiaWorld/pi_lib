@@ -263,15 +263,13 @@ pub struct OtherStyle {
     pub flex_shrink: f32,
     pub align_self: AlignSelf,
 
-    pub overflow: Overflow,
+    // pub overflow: Overflow,
     pub position: Rect<Dimension>,
     pub padding: Rect<Dimension>,
     pub border: Rect<Dimension>,
     pub min_size: Size<Dimension>,
     pub max_size: Size<Dimension>,
     pub aspect_ratio: Number,
-
-
 }
 
 impl Default for OtherStyle {
@@ -282,7 +280,7 @@ impl Default for OtherStyle {
             direction: Default::default(),
             flex_direction: Default::default(),
             flex_wrap: Default::default(),
-            overflow: Default::default(),
+            // overflow: Default::default(),
             align_items: Default::default(), // dom默认为stretch， 性能考虑，这里默认flex_start
             align_self: Default::default(),
             align_content: Default::default(),
