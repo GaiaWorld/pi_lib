@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::env;
 use std::fs::File;
@@ -791,10 +792,11 @@ unsafe impl Send for LibPathNext {}
 */
 #[derive(Debug)]
 pub enum ExportItem {
-    StructItem(Struct),     //导出的结构体
-    EnumItem(Enum),         //导出的枚举
-    FunctionItem(Function), //导出的函数
-    ConstItem(Const),       //导出的常量
+    StructItem(Struct),         //导出的结构体
+    EnumItem(Enum),             //导出的一般枚举
+    CLikeEnumItem(CLikeEnum),   //导出的类C枚举
+    FunctionItem(Function),     //导出的函数
+    ConstItem(Const),           //导出的常量
 }
 
 unsafe impl Send for ExportItem {}
@@ -805,6 +807,7 @@ impl ExportItem {
         match self {
             ExportItem::StructItem(s) => s.get_name().cloned(),
             ExportItem::EnumItem(e) => e.get_name().cloned(),
+            ExportItem::CLikeEnumItem(e) => e.get_name().cloned(),
             ExportItem::FunctionItem(f) => f.get_name().cloned(),
             ExportItem::ConstItem(c) => c.get_name().cloned(),
         }
@@ -819,6 +822,7 @@ impl ExportItem {
             if let Some(item_generic) = match self {
                 ExportItem::StructItem(s) => s.get_generic(),
                 ExportItem::EnumItem(e) => e.get_generic(),
+                ExportItem::CLikeEnumItem(_) => None,
                 ExportItem::FunctionItem(f) => f.get_generic(),
                 ExportItem::ConstItem(_c) => None,
             } {
@@ -850,7 +854,15 @@ impl ExportItem {
                 if let Some(document) = &mut e.doc {
                     document.append(doc);
                 } else {
-                    //导出枚举没有文档，则创建
+                    //导出一般枚举没有文档，则创建
+                    e.doc = Some(Document::new(doc));
+                }
+            },
+            ExportItem::CLikeEnumItem(e) => {
+                if let Some(document) = &mut e.doc {
+                    document.append(doc);
+                } else {
+                    //导出类C枚举没有文档，则创建
                     e.doc = Some(Document::new(doc));
                 }
             },
@@ -1026,6 +1038,18 @@ impl ExportItem {
             _ => {
                 //忽略不支持的条目追加常量的方法
                 ()
+            },
+        }
+    }
+
+    //设置导出条目的类C枚举映射
+    pub fn set_c_like_enum_map(&mut self, map: Vec<(String, i32)>) {
+        match self {
+            ExportItem::CLikeEnumItem(e) => {
+                e.set_map(map);
+            },
+            _ => {
+                //忽略不支持的条目设置映射的方法
             },
         }
     }
@@ -1215,7 +1239,7 @@ impl Struct {
 }
 
 /*
-* 枚举
+* 一般枚举
 */
 #[derive(Debug, Clone)]
 pub struct Enum {
@@ -1394,6 +1418,59 @@ impl Enum {
             //无名称
             None
         }
+    }
+}
+
+/*
+* 类C枚举
+*/
+#[derive(Debug, Clone)]
+pub struct CLikeEnum {
+    name:   Option<String>,             //枚举的名称
+    doc:    Option<Document>,           //枚举文档
+    map:    Option<Vec<(String, i32)>>, //映射
+}
+
+unsafe impl Send for CLikeEnum {}
+
+impl CLikeEnum {
+    //构建枚举
+    pub fn new() -> Self {
+        CLikeEnum {
+            name: None,
+            doc: None,
+            map: None,
+        }
+    }
+
+    //获取枚举名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置枚举名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取枚举文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置枚举文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取枚举映射
+    pub fn get_map(&self) -> Option<&Vec<(String, i32)>> {
+        self.map.as_ref()
+    }
+
+    //设置枚举映射
+    pub fn set_map(&mut self, map: Vec<(String, i32)>) {
+        self.map = Some(map);
     }
 }
 

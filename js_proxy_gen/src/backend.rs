@@ -4,15 +4,15 @@ use std::io::{Error, Result, ErrorKind};
 use std::path::{Path, PathBuf, Component};
 
 use futures::future::FutureExt;
+use normpath::PathExt;
+use bytes::BufMut;
 use toml;
 
 use pi_async::rt::AsyncRuntime;
 use pi_async_file::file::{create_dir, remove_file, AsyncFileOptions, WriteOptions, AsyncFile};
-use bytes::BufMut;
-use normpath::PathExt;
 
 use crate::{WORKER_RUNTIME,
-            rust_backend::{DEFAULT_DEPEND_CRATE_NAME, DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME, DEFAULT_PROXY_FUNCTION_BLOCK_END, DEFAULT_PROXY_LIB_FILE_USED, create_proxy_rust_file, generate_rust_import, generate_rust_functions},
+            rust_backend::{DEFAULT_DEPEND_CRATE_NAME, DEFAULT_PROXY_LIB_REGISTER_FUNCTION_NAME, DEFAULT_PROXY_FUNCTION_BLOCK_END, DEFAULT_PROXY_LIB_FILE_GLOBAL_FEATURES, DEFAULT_PROXY_LIB_FILE_USED, create_proxy_rust_file, generate_rust_import, generate_rust_functions},
             ts_backend::{generate_public_exports, create_proxy_ts_file, generate_ts_import, generate_ts_impls},
             utils::{SRC_DIR_NAME, LIB_FILE_NAME, BUILD_FILE_NAME,
                     Crate, CrateInfo, ParseContext, ProxySourceGenerater,
@@ -277,6 +277,9 @@ async fn generate_crate_proxy_lib(generater: &ProxySourceGenerater,
         Ok(file) => {
             //创建代理库入口文件成功
             let mut lib_content: Vec<u8> = Vec::new();
+
+            //生成入口文件的全局特性
+            lib_content.put_slice(DEFAULT_PROXY_LIB_FILE_GLOBAL_FEATURES);
 
             //生成入口文件的导入和导出
             lib_content.put_slice(DEFAULT_PROXY_LIB_FILE_USED);

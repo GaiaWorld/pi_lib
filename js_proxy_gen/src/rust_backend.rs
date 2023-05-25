@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf, Component};
 use std::io::{Error, Result, ErrorKind};
 
+use dashmap::DashMap;
 use bytes::BufMut;
 
 use pi_async_file::file::{AsyncFileOptions, AsyncFile};
@@ -9,12 +10,35 @@ use crate::{WORKER_RUNTIME,
             utils::{ParseContext, ExportItem, Function, Generic, Type, TypeName, ProxySourceGenerater, ClosureType, create_tab, create_tmp_var_name, get_target_type_name, get_specific_ts_function_name}};
 
 /*
+* 全局类C枚举注册表
+*/
+lazy_static! {
+    static ref GLOBAL_C_LIKE_ENUM_TABLE: DashMap<String, ()> = DashMap::new();
+}
+
+/*
+* 判断指定名称的类型是否是已注册的全局类C枚举
+*/
+pub(crate) fn is_c_like_enum(name: &String) -> bool {
+    GLOBAL_C_LIKE_ENUM_TABLE.contains_key(name)
+}
+
+/*
+* 注册指定名称的类型为全局类C枚举
+*/
+pub(crate) fn register_c_like_enum(name: String) {
+    GLOBAL_C_LIKE_ENUM_TABLE.insert(name, ());
+}
+
+/*
 * 默认的依赖库名
 */
 #[cfg(target_os = "windows")]
 pub(crate) const DEFAULT_DEPEND_CRATE_NAME: &str = r#"pi_v8\vm_builtin"#;
 #[cfg(target_os = "linux")]
 pub(crate) const DEFAULT_DEPEND_CRATE_NAME: &str = "pi_v8/vm_builtin";
+
+pub(crate) const DEFAULT_PROXY_LIB_FILE_GLOBAL_FEATURES: &[u8] = b"#![allow(warnings)]\n\n";
 
 /*
 * 默认代理入口文件导入的类型
@@ -93,6 +117,15 @@ pub(crate) async fn create_proxy_rust_file(generater: &ProxySourceGenerater,
                                            generate_rust_path: &Path) -> Option<Result<AsyncFile<()>>> {
     //生成文件名
     let mut b = false;
+
+    //优先注册所有导出的类C枚举
+    for export_item in source.get_exports() {
+        if let ExportItem::CLikeEnumItem(e) = export_item {
+            //注册全局类C枚举
+            register_c_like_enum(e.get_name().unwrap().clone());
+        }
+    }
+
     for export_item in source.get_exports() {
         match export_item {
             ExportItem::StructItem(s) => {
@@ -896,25 +929,38 @@ fn generate_function_call_args(target: Option<&String>,
             }
         },
         other_type => {
-            //生成将参数转换为其它类型的只读引用和指定所有权的代码，例: &NativeObject
-            if arg_type_name.is_moveable() {
-                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of {} type", func_name, origin_arg_name, other_type)));
-            } else if arg_type_name.is_only_read() {
-                let real_other_type = if arg_type.get_type_args().is_some() {
-                    arg_type.to_string()
-                } else {
-                    other_type.to_string()
-                };
+            //其它类型
+            let other_type_name = &other_type.to_string();
+            if is_c_like_enum(other_type_name) {
+                //是已注册的全局类C枚举，则生成将参数转换为符号整数类型和指定所有权的代码
+                if arg_type_name.is_moveable() {
+                    source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
+                } else if arg_type_name.is_only_read() {
+                    source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &" + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
+                } else if arg_type_name.is_writable() {
+                    source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
+                }
+            } else {
+                //生成将参数转换为其它类型的只读引用和指定所有权的代码，例: &NativeObject
+                if arg_type_name.is_moveable() {
+                    return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of {} type", func_name, origin_arg_name, other_type)));
+                } else if arg_type_name.is_only_read() {
+                    let real_other_type = if arg_type.get_type_args().is_some() {
+                        arg_type.to_string()
+                    } else {
+                        other_type.to_string()
+                    };
 
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_ref::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
-            } else if arg_type_name.is_writable() {
-                let real_other_type = if arg_type.get_type_args().is_some() {
-                    arg_type.to_string()
-                } else {
-                    other_type.to_string()
-                };
+                    source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_ref::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
+                } else if arg_type_name.is_writable() {
+                    let real_other_type = if arg_type.get_type_args().is_some() {
+                        arg_type.to_string()
+                    } else {
+                        other_type.to_string()
+                    };
 
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_mut::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
+                    source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".get_mut::<" + real_other_type.as_str() + ">().unwrap();\n\n").as_bytes());
+                }
             }
         },
     }
@@ -2494,7 +2540,13 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                                 source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Array(vec));\n").as_bytes());
                             },
                             other_type => {
-                                source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::NatObj(NativeObject::new_owned(" + arg_name.as_str() + ")));\n").as_bytes());
+                                let other_type = &other_type.to_string();
+                                if is_c_like_enum(other_type) {
+                                    //是已注册的全局类C枚举
+                                    source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::Int(" + arg_name.as_str() + ".into()));\n").as_bytes());
+                                } else {
+                                    source_content.put_slice((create_tab(level + 3) + "args.push(NativeObjectValue::NatObj(NativeObject::new_owned(" + arg_name.as_str() + ")));\n").as_bytes());
+                                }
                             },
                         }
                         index += 1;
@@ -2638,7 +2690,17 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
                             source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
                         },
                         other_type => {
-                            return Err(Error::new(ErrorKind::Other, format!("Parse callback result failed with js function, type: {:?}, reason: not support this type", other_type)));
+                            let other_type_name = &other_type.to_string();
+                            if is_c_like_enum(other_type_name) {
+                                //是已注册的全局类C枚举
+                                source_content.put_slice((create_tab(level + 7) + "if let NativeObjectValue::Float(n) = val {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 8) + "(result_callback)(Ok(" + other_type + "::from(n as i32)));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 7) + "} else {\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 8) + "(result_callback)(Err(\"Parse callback result failed with js function\".to_string()));\n").as_bytes());
+                                source_content.put_slice((create_tab(level + 7) + "}\n").as_bytes());
+                            } else {
+                                return Err(Error::new(ErrorKind::Other, format!("Parse callback result failed with js function, type: {:?}, reason: not support this type", other_type)));
+                            }
                         },
                     }
                     source_content.put_slice((create_tab(level + 6) + "},\n").as_bytes());
@@ -2657,10 +2719,28 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
         other_type => {
-            //生成匹配其它类型的只读引用的代码，例: &NativeObject
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::NatObj(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+            let other_type_name = &other_type.to_string();
+            if is_c_like_enum(other_type_name) {
+                //是已注册的全局类C枚举，则生成匹配有符号整数类型的代码
+                source_content.put_slice((create_tab(level) + "NativeObjectValue::Int(val) => {\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + other_type + "::from((*val) as i32)\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+                //生成匹配有符号整数类型的代码，当有符号整数被强制转为无符号整数时进行匹配
+                source_content.put_slice((create_tab(level) + "NativeObjectValue::Uint(val) => {\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + other_type + "::from((*val) as i32)\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+
+                //生成匹配有符号整数类型的代码，当有符号整数被强制转为浮点数时进行匹配
+                source_content.put_slice((create_tab(level) + "NativeObjectValue::Float(val) => {\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + other_type + "::from((*val) as i32)\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+            } else {
+                //生成匹配其它类型的只读引用的代码，例: &NativeObject
+                source_content.put_slice((create_tab(level) + "NativeObjectValue::NatObj(val) => {\n").as_bytes());
+                source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "},\n").as_bytes());
+            }
         },
     }
 
@@ -4603,29 +4683,65 @@ fn generate_function_call_result_match_cause(target: Option<&String>,
         },
         other_type => {
             //生成匹配其它类型的只读引用的代码，例: &NativeObject
-            if let Some(generic_type) = generic_type {
-                //泛型的具体类型
-                if let Err(e) = generate_function_call_result_match_cause(target, generic, function, level + 1, source_content, func_name, generic_type, Some(generic_type)) {
-                    return Err(e);
+            let other_type_name = &other_type.to_string();
+            if is_c_like_enum(other_type_name) {
+                //是已注册的全局类C枚举，生成匹配有符号整数类型的代码
+                let mut current_level = level;
+                if let Some(_generic_type) = generic_type {
+                    //泛型的具体类型，则生成匹配项开始
+                    source_content.put_slice((create_tab(level) + "r if r.is::<" + other_type + ">() => {\n").as_bytes());
+                    current_level += 1;
                 }
-            } else {
+
                 if function.is_async() {
                     //生成异步返回代码
                     if return_type.is_moveable() {
-                        source_content.put_slice((create_tab(level) + "reply(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));\n").as_bytes());
+                        source_content.put_slice((create_tab(current_level) + "reply(Ok(NativeObjectValue::Int(r.into())));\n").as_bytes());
                     } else if return_type.is_only_read() {
-                        return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take only read borrow of {} type", func_name, other_type)));
+                        return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of {} type", func_name, other_type)));
                     } else if return_type.is_writable() {
                         return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of {} type", func_name, other_type)));
                     }
                 } else {
                     //生成同步返回代码
                     if return_type.is_moveable() {
-                        source_content.put_slice((create_tab(level) + "return Some(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));\n").as_bytes());
+                        source_content.put_slice((create_tab(current_level) + "return Some(Ok(NativeObjectValue::Int(r.into())));\n").as_bytes());
                     } else if return_type.is_only_read() {
-                        return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take only read borrow of {} type", func_name, other_type)));
+                        return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take onlyread borrow of {} type", func_name, other_type)));
                     } else if return_type.is_writable() {
                         return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of {} type", func_name, other_type)));
+                    }
+                }
+
+                if generic_type.is_some() {
+                    //泛型的具体类型，则生成匹配项结束
+                    source_content.put_slice((create_tab(current_level - 1) + "},\n").as_bytes());
+                }
+            } else {
+                if let Some(generic_type) = generic_type {
+                    //泛型的具体类型
+                    if let Err(e) = generate_function_call_result_match_cause(target, generic, function, level + 1, source_content, func_name, generic_type, Some(generic_type)) {
+                        return Err(e);
+                    }
+                } else {
+                    if function.is_async() {
+                        //生成异步返回代码
+                        if return_type.is_moveable() {
+                            source_content.put_slice((create_tab(level) + "reply(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));\n").as_bytes());
+                        } else if return_type.is_only_read() {
+                            return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take only read borrow of {} type", func_name, other_type)));
+                        } else if return_type.is_writable() {
+                            return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of {} type", func_name, other_type)));
+                        }
+                    } else {
+                        //生成同步返回代码
+                        if return_type.is_moveable() {
+                            source_content.put_slice((create_tab(level) + "return Some(Ok(NativeObjectValue::NatObj(NativeObject::new_owned(r))));\n").as_bytes());
+                        } else if return_type.is_only_read() {
+                            return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take only read borrow of {} type", func_name, other_type)));
+                        } else if return_type.is_writable() {
+                            return Err(Error::new(ErrorKind::Other, format!("Generate function call result failed, function: {}, reason: not allowed take writable borrow of {} type", func_name, other_type)));
+                        }
                     }
                 }
             }

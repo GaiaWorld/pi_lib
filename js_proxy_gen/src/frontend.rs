@@ -1,23 +1,13 @@
+use std::collections::VecDeque;
 use std::io::{Error, Result, ErrorKind};
 
-use proc_macro2::{TokenTree, TokenStream};
+use proc_macro2::{TokenTree, TokenStream, Delimiter};
 use syn::{self};
 
 use pi_hash::XHashMap;
+use quote::ToTokens;
 
-use crate::utils::{ParseContext,
-                   ImportItem,
-                   LibPath,
-                   ExportItem,
-                   Struct,
-                   Enum,
-                   Function,
-                   Const,
-                   ConstValue,
-                   Type,
-                   AttributeTokensFilter,
-                   WithParseSpecificTypeStackFrame,
-                   LibPathNext};
+use crate::utils::{ParseContext, ImportItem, LibPath, ExportItem, Struct, Enum, Function, Const, ConstValue, Type, AttributeTokensFilter, WithParseSpecificTypeStackFrame, LibPathNext, CLikeEnum};
 
 /*
 * 导出标识符
@@ -185,31 +175,26 @@ fn parse_items(context: &mut ParseContext,
 
 //分析属性
 fn parse_attribute(context: &mut ParseContext, attribute: &syn::Attribute) {
-    match attribute.parse_meta() {
-        Ok(syn::Meta::Path(path)) => {
+    match &attribute.meta {
+        syn::Meta::Path(path) => {
             //简单属性
             if let Some(ident) = path.get_ident() {
                 //有标识符
                 parse_attribute_path_tokens(context, attribute, ident);
             }
         },
-        Ok(syn::Meta::List(list)) => {
+        syn::Meta::List(list) => {
             //属性列表
             if let Some(ident) = list.path.get_ident() {
                 //有标识符
                 parse_attribute_path_tokens(context, attribute, ident);
             }
         },
-        Ok(syn::Meta::NameValue(kv)) => {
+        syn::Meta::NameValue(kv) => {
             //键值对属性
             if let Some(ident) = kv.path.get_ident() {
                 //有标识符
                 parse_attribute_path_tokens(context, attribute, ident);
-            }
-        },
-        _ => {
-            for segment in attribute.path.segments.iter() {
-                parse_attribute_path_tokens(context, attribute, &segment.ident);
             }
         },
     }
@@ -226,33 +211,33 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
 
             //分析是否有需要导出的泛型的具体类型定义
             if let Some(export_item) = context.get_last_export_mut() {
-                for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Group as u8) {
+                for token in &get_attribute_tokens(attribute.to_token_stream(), AttributeTokensFilter::Group as u8) {
                     //在导出属性中定义了泛型的具体类型，则继续分析
                     if let TokenTree::Group(group) = token {
                         for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Ident | AttributeTokensFilter::Group) {
                             match token {
-                                TokenTree::Ident(ident) => {
-                                    //分析泛型名称
-                                    let id = ident.to_string();
-                                    if id.as_str() == TYPE_DEFINED_IDENT {
-                                        //忽略泛型的具体类型定义标识符
-                                        continue;
-                                    }
-
-                                    export_item.append_generic(id); //记录泛型名称
-                                },
                                 TokenTree::Group(group) => {
-                                    let mut stack = Vec::new();
-
                                     for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Punct as u8 | AttributeTokensFilter::Ident as u8 | AttributeTokensFilter::Group as u8) {
-                                        //分析泛型参数的具体类型名称
-                                        parse_specific_type(token, &mut stack);
-                                    }
+                                        if let TokenTree::Ident(ident) = token {
+                                            //分析泛型参数的参数名
+                                            let id = ident.to_string();
+                                            if id.as_str() == TYPE_DEFINED_IDENT {
+                                                //忽略泛型的具体类型定义标识符
+                                                continue;
+                                            }
 
-                                    for stack_frame in stack {
-                                        if let WithParseSpecificTypeStackFrame::Type(specific_type) = stack_frame {
-                                            //记录泛型参数的具体类型名称
-                                            export_item.append_generic_type(specific_type.to_string());
+                                            export_item.append_generic(id); //记录泛型名称
+                                        } else {
+                                            //分析泛型参数的具体类型名称
+                                            let mut stack = Vec::new();
+                                            parse_specific_type(token, &mut stack);
+
+                                            for stack_frame in stack {
+                                                if let WithParseSpecificTypeStackFrame::Type(specific_type) = stack_frame {
+                                                    //记录泛型参数的具体类型名称
+                                                    export_item.append_generic_type(specific_type.to_string());
+                                                }
+                                            }
                                         }
                                     }
                                 },
@@ -266,14 +251,18 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
         DOCUMENT_ATTR_PATH_IDENT => {
             //使用了文档属性，则记录文档属性的有效词条
             if let Some(export_item) = context.get_last_export_mut() {
-                for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Literal as u8) {
-                    if let TokenTree::Literal(lit) = token {
-                        if lit.to_string().trim().len() < 5 {
-                            //忽略无效文档，忽略"\\\r"
-                            return;
-                        }
+                for token in &get_attribute_tokens(attribute.to_token_stream(), AttributeTokensFilter::Group as u8) {
+                    if let TokenTree::Group(group) = token {
+                        for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Literal as u8) {
+                            if let TokenTree::Literal(lit) = token {
+                                if lit.to_string().trim().len() < 5 {
+                                    //忽略无效文档，忽略"\\\r"
+                                    return;
+                                }
 
-                        export_item.append_doc(lit.to_string()); //记录有效文档
+                                export_item.append_doc(lit.to_string()); //记录有效文档
+                            }
+                        }
                     }
                 }
             }
@@ -282,30 +271,34 @@ fn parse_attribute_path_tokens(context: &mut ParseContext,
             //使用了条件编译属性，则检查是否有名为pi_js_export的feature
             //此分析主要是为了可以导出宏里的待导出条目
             let mut require_export = 0; //是否满足所有导出的条件
-            for token in &get_attribute_tokens(attribute.tokens.clone(), AttributeTokensFilter::Group as u8) {
+            for token in &get_attribute_tokens(attribute.to_token_stream(), AttributeTokensFilter::Group as u8) {
                 if let TokenTree::Group(group) = token {
-                    for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Ident | AttributeTokensFilter::Literal) {
-                        match token {
-                            TokenTree::Ident(ident) => {
-                                //分析特性名称
-                                let id = ident.to_string();
-                                if id.as_str() != FEATURE_IDENT {
-                                    //忽略非特性的名称
-                                    continue;
-                                }
+                    for token in &get_attribute_tokens(group.stream(), AttributeTokensFilter::Group as u8) {
+                        if let TokenTree::Group(group_) = token {
+                            for token in &get_attribute_tokens(group_.stream(), AttributeTokensFilter::Ident | AttributeTokensFilter::Literal) {
+                                match token {
+                                    TokenTree::Ident(ident) => {
+                                        //分析特性名称
+                                        let id = ident.to_string();
+                                        if id.as_str() != FEATURE_IDENT {
+                                            //忽略非特性的名称
+                                            continue;
+                                        }
 
-                                require_export += 1;
-                            },
-                            TokenTree::Literal(lit) => {
-                                if lit.to_string()
-                                    .trim_matches(|c| c == ' ' || c == '\"') != EXPORT_ATTR_PATH_IDENT {
-                                    //忽略非导出特性值
-                                    continue;
-                                }
+                                        require_export += 1;
+                                    },
+                                    TokenTree::Literal(lit) => {
+                                        if lit.to_string()
+                                            .trim_matches(|c| c == ' ' || c == '\"') != EXPORT_ATTR_PATH_IDENT {
+                                            //忽略非导出特性值
+                                            continue;
+                                        }
 
-                                require_export += 1;
-                            },
-                            _ => (),
+                                        require_export += 1;
+                                    },
+                                    _ => (),
+                                }
+                            }
                         }
                     }
                 }
@@ -365,59 +358,70 @@ fn get_attribute_tokens(tokens: TokenStream,
 //分析泛型的具体类型
 fn parse_specific_type(token: &TokenTree, stack: &mut Vec<WithParseSpecificTypeStackFrame>) {
     match token {
-        TokenTree::Punct(punct) => {
-            //标点符号
-            match punct.as_char() {
-                p@'<' => {
-                    //记录'<'标识符号
-                    stack.push(WithParseSpecificTypeStackFrame::Punct(p));
-                },
-                '>' => {
-                    //具体类型的所有泛型参数，已经分析完成，则从堆栈中弹出对应的类型参数
-                    let mut type_args = Vec::new();
-                    while let Some(stack_frame) = stack.pop() {
-                        match stack_frame {
-                            WithParseSpecificTypeStackFrame::Punct('<') => break,
-                            WithParseSpecificTypeStackFrame::Type(type_arg) => {
-                                type_args.push(type_arg);
-                            },
-                            _ => continue,
-                        }
-                    }
-
-                    if let Some(WithParseSpecificTypeStackFrame::Type(specific_type)) = stack.last_mut() {
-                        //将类型参数追加到具体类型中
-                        while let Some(type_arg) = type_args.pop() {
-                            specific_type.append_type_argument(type_arg);
-                        }
-                    }
-                },
-                _ => (), //忽略其它标识符号
-            }
-        },
-        TokenTree::Ident(ident) => {
-            //标识符
-            let r#type = ident.to_string();
-            if r#type.trim().len() == 0 {
-                //忽略无效类型名称
-                return;
-            }
-
-            //加入一个具体类型到堆栈
-            stack.push(WithParseSpecificTypeStackFrame::Type(Type::new(r#type)));
-        },
         TokenTree::Group(group) => {
-            //词条数组，仅匹配[T]这种类型，T不允许为有泛型参数的类型
             for token in group.stream() {
-                if let TokenTree::Ident(ident) = token {
-                    let r#type = ident.to_string();
-                    if r#type.trim().len() == 0 {
-                        //忽略无效类型名称
-                        return;
-                    }
+                match token {
+                    TokenTree::Punct(punct) => {
+                        //标点符号
+                        match punct.as_char() {
+                            p@'<' => {
+                                //记录'<'标识符号
+                                stack.push(WithParseSpecificTypeStackFrame::Punct(p));
+                            },
+                            '>' => {
+                                //具体类型的所有泛型参数，已经分析完成，则从堆栈中弹出对应的类型参数
+                                let mut type_args = Vec::new();
+                                while let Some(stack_frame) = stack.pop() {
+                                    match stack_frame {
+                                        WithParseSpecificTypeStackFrame::Punct('<') => break,
+                                        WithParseSpecificTypeStackFrame::Type(type_arg) => {
+                                            type_args.push(type_arg);
+                                        },
+                                        _ => continue,
+                                    }
+                                }
 
-                    //加入一个具体类型的分片到堆栈
-                    stack.push(WithParseSpecificTypeStackFrame::Type(Type::new("[".to_string() + r#type.as_str() + "]")));
+                                if let Some(WithParseSpecificTypeStackFrame::Type(specific_type)) = stack.last_mut() {
+                                    //将类型参数追加到具体类型中
+                                    while let Some(type_arg) = type_args.pop() {
+                                        specific_type.append_type_argument(type_arg);
+                                    }
+                                }
+                            },
+                            _ => (), //忽略其它标识符号
+                        }
+                    },
+                    TokenTree::Ident(ident) => {
+                        let r#type = ident.to_string();
+                        if r#type.trim().len() == 0 {
+                            //忽略无效类型名称
+                            return;
+                        }
+
+                        //记录类型标识符号
+                        stack.push(WithParseSpecificTypeStackFrame::Type(Type::new(r#type)));
+                    },
+                    TokenTree::Group(group) => {
+                        if let Delimiter::Bracket = group.delimiter() {
+                            //词条数组类型，仅匹配[T]这种类型，T不允许为有泛型参数的类型
+                            for token in group.stream() {
+                                match token {
+                                    TokenTree::Ident(ident) => {
+                                        let r#type = ident.to_string();
+                                        if r#type.trim().len() == 0 {
+                                            //忽略无效类型名称
+                                            return;
+                                        }
+
+                                        //加入一个具体类型的分片到堆栈
+                                        stack.push(WithParseSpecificTypeStackFrame::Type(Type::new("[".to_string() + r#type.as_str() + "]")));
+                                    },
+                                    _ => (),
+                                }
+                            }
+                        }
+                    },
+                    _ => (),
                 }
             }
         },
@@ -493,7 +497,7 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                                  impl_item: &syn::ItemImpl) -> Result<()> {
     for item in &impl_item.items {
         match item {
-            syn::ImplItem::Method(method_item) => {
+            syn::ImplItem::Fn(fn_item) => {
                 //有方法，则初始化一个导出函数
                 context.set_is_export(false); //将当前导出条目的导出设置为未导出
                 let f = Function::new();
@@ -501,7 +505,7 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                 context.push_export(new_export_item);
 
                 //遍历方法的所有属性定义，记录文档属性定义和导出定义
-                for attr in &method_item.attrs {
+                for attr in &fn_item.attrs {
                     parse_attribute(context, attr);
                 }
 
@@ -512,10 +516,10 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                 }
 
                 let mut export_item = context.pop_export().unwrap();
-                let method_name = method_item.sig.ident.to_string();
+                let method_name = fn_item.sig.ident.to_string();
                 if trait_name.is_none() {
                     //非Trait方法，需要检查导出方法的可视性
-                    if let syn::Visibility::Public(_) = &method_item.vis {
+                    if let syn::Visibility::Public(_) = &fn_item.vis {
                         //导出的方法为公共可视性，则继续分析
                         ()
                     } else {
@@ -535,7 +539,7 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                             generic_names.insert(name, ());
                         }
 
-                        for param in &method_item.sig.generics.params {
+                        for param in &fn_item.sig.generics.params {
                             if let syn::GenericParam::Type(tp) = param {
                                 let gt = tp.ident.to_string();
                                 if let None = generic_names.remove(&gt) {
@@ -556,7 +560,7 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                     }
 
                     //继续分析方法签名
-                    if let Err(e) = parse_impl_method_sign(target_name, trait_name, &method_name, f, &method_item.sig) {
+                    if let Err(e) = parse_impl_method_sign(target_name, trait_name, &method_name, f, &fn_item.sig) {
                         return Err(e);
                     }
                 }
@@ -571,7 +575,7 @@ fn parse_impl_methods_and_consts(context: &mut ParseContext,
                         }
                     }
                 }
-            },
+            }
             syn::ImplItem::Const(const_item) => {
                 //有常量，则初始化一个导出常量
                 context.set_is_export(false); //将当前导出条目的导出设置为未导出
@@ -1133,6 +1137,21 @@ fn parse_struct(context: &mut ParseContext,
 //分析枚举
 fn parse_enum(context: &mut ParseContext,
               enum_item: &syn::ItemEnum) -> Result<bool> {
+    match parse_c_like_enum(context, enum_item) {
+        Err(e) => {
+            //分析类C枚举失败，则立即返回错误
+            return Err(e);
+        },
+        Ok(true) => {
+            //分析类C枚举成功，则忽略一般枚举的分析
+            return Ok(true);
+        },
+        Ok(false) => {
+            //不是类C枚举，则继续一般枚举的分析
+            ()
+        },
+    }
+
     //初始化一个导出枚举
     context.set_is_export(false); //将当前导出条目的导出设置为未导出
     let e = Enum::new();
@@ -1151,7 +1170,6 @@ fn parse_enum(context: &mut ParseContext,
     }
 
     let name = enum_item.ident.to_string();
-
     if let syn::Visibility::Public(_) = &enum_item.vis {
         //导出的枚举为公共可视性，则继续分析
         if let Some(export_item) = context.get_last_export_mut() {
@@ -1170,7 +1188,11 @@ fn parse_enum(context: &mut ParseContext,
                             let gt = tp.ident.to_string();
                             if let None = generic_names.remove(&gt) {
                                 //导出枚举声明的泛型参数在导出属性中没有定义，则立即返回错误
-                                return Err(Error::new(ErrorKind::Other, format!("Parse enum failed, name: {}, type: {}, reason: undefined generic type in {})", name, gt, EXPORT_ATTR_PATH_IDENT)));
+                                return Err(Error::new(ErrorKind::Other,
+                                                      format!("Parse enum failed, name: {}, type: {}, reason: undefined generic type in {})",
+                                                              name,
+                                                              gt,
+                                                              EXPORT_ATTR_PATH_IDENT)));
                             }
                         }
                     }
@@ -1181,7 +1203,11 @@ fn parse_enum(context: &mut ParseContext,
                             name
                         }).collect();
 
-                        return Err(Error::new(ErrorKind::Other, format!("Parse enum failed, name: {}, types: {:?}, reason: undeclaration generic type in {}", name, types, EXPORT_ATTR_PATH_IDENT)));
+                        return Err(Error::new(ErrorKind::Other,
+                                              format!("Parse enum failed, name: {}, types: {:?}, reason: undeclaration generic type in {}",
+                                                      name,
+                                                      types,
+                                                      EXPORT_ATTR_PATH_IDENT)));
                     }
                 }
             }
@@ -1190,8 +1216,133 @@ fn parse_enum(context: &mut ParseContext,
         Ok(true)
     } else {
         //无效的导出枚举可视性，则立即返回错误
-        Err(Error::new(ErrorKind::Other, format!("Parse enum failed, name: {}, reason: invalid visibility", name)))
+        Err(Error::new(ErrorKind::Other,
+                       format!("Parse enum failed, name: {}, reason: invalid visibility",
+                               name)))
     }
+}
+
+//分析类C枚举
+fn parse_c_like_enum(context: &mut ParseContext,
+                     item: &syn::ItemEnum) -> Result<bool> {
+    //初始化一个导出枚举
+    context.set_is_export(false); //将当前导出条目的导出设置为未导出
+    let e = CLikeEnum::new();
+    let export_item = ExportItem::CLikeEnumItem(e);
+    context.push_export(export_item);
+
+    //遍历枚举的所有属性定义，记录文档属性定义和导出定义
+    for attr in &item.attrs {
+        parse_attribute(context, attr);
+    }
+
+    if !context.is_export() {
+        //没有导出定义，则弹出当前正在分析的类C枚举，并立即退出当前类C枚举的分析
+        let _ = context.pop_export();
+        return Ok(false);
+    }
+
+    let name = item.ident.to_string();
+    if let syn::Visibility::Public(_) = &item.vis {
+        //导出的枚举为公共可视性，则继续分析
+        if let Some(export_item) = context.get_last_export_mut() {
+            if let ExportItem::CLikeEnumItem(e) = export_item {
+                e.set_name(name.clone()); //记录类C枚举名称
+            }
+
+            let mut stack = Vec::with_capacity(2);
+            let mut buf = VecDeque::new();
+
+            let mut is_c_like_enum = false;
+            for token in item.variants.to_token_stream() {
+                match token {
+                    TokenTree::Ident(ident) => {
+                        stack.push(ident.to_string());
+                    },
+                    TokenTree::Literal(lit) => {
+                        stack.push(lit.to_string());
+                        is_c_like_enum = true;
+                    },
+                    TokenTree::Punct(punct) => {
+                        if punct.as_char() != ',' {
+                            continue;
+                        }
+
+                        let (key, value) = match stack.len() {
+                            1 => {
+                                //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
+                                let (_key, last_value): &(String, i32) = buf.back().unwrap();
+                                match (*last_value).checked_add(1) {
+                                    None => {
+                                        //越界，则立即返回错误原因
+                                        return Err(Error::new(ErrorKind::Other,
+                                                              format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
+                                                                      last_value)));
+                                    },
+                                    Some(current_value) => {
+                                        (stack.pop().unwrap(), current_value)
+                                    },
+                                }
+                            },
+                            2 => {
+                                //有字面值，则赋值
+                                let val = stack
+                                    .pop()
+                                    .unwrap()
+                                    .replace("_", "");
+                                let value = match val.parse::<i32>() {
+                                    Err(_) => {
+                                        match val.strip_prefix("0b") {
+                                            None => {
+                                                match val.strip_prefix("0o") {
+                                                    None => {
+                                                        match val.strip_prefix("0x") {
+                                                            None => {
+                                                                //错误的字面量类型
+                                                                return Err(Error::new(ErrorKind::Other,
+                                                                                      format!("Parse c-like enum failed, val: {}, reason: require integer literal",
+                                                                                              val)));
+                                                            },
+                                                            Some(part) => i32::from_str_radix(part, 16).unwrap(),
+                                                        }
+                                                    },
+                                                    Some(part) => i32::from_str_radix(part, 8).unwrap(),
+                                                }
+                                            },
+                                            Some(part) => i32::from_str_radix(part, 2).unwrap(),
+                                        }
+                                    },
+                                    Ok(v) => {
+                                        v
+                                    },
+                                };
+                                let key = stack.pop();
+                                (key.unwrap(), value)
+                            },
+                            any => {
+                                //错误的堆栈长度
+                                return Err(Error::new(ErrorKind::Other,
+                                                      format!("Parse c-like enum failed, len: {:?}, reason: invalid stack length",
+                                                              any)));
+                            },
+                        };
+                        buf.push_back((key, value)); //加入枚举缓冲
+                    },
+                    _ => (),
+                }
+            }
+
+            if !is_c_like_enum {
+                //不是类C枚举，则则弹出当前正在分析的类C枚举，并立即返回
+                let _ = context.pop_export();
+                return Ok(false);
+            }
+
+            export_item.set_c_like_enum_map(buf.into());
+        }
+    }
+
+    Ok(true)
 }
 
 //分析静态函数
