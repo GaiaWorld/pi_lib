@@ -156,6 +156,9 @@ impl<T> VecMap<T> {
 
     /// 在指定位置插入一个值，并返回旧值，如果不存在旧值，返回None
     pub fn insert(&mut self, index:usize, val: T) -> Option<T>{
+		// if index == 0 {
+		// 	panic!("xxxxxxxxxxx!!!!!!!!!!!!!!!!!!!!!!");
+		// }
         let index = index - 1;
 		let len = self.entries.len();
 		if len == index {
@@ -163,6 +166,9 @@ impl<T> VecMap<T> {
 			self.len += 1;
             None
 		} else if index >= len {
+			if index >= self.entries.capacity() {
+				self.entries.reserve(index - len + 1); // 先扩容
+			}
 			self.entries.extend((0..index - len + 1).map(|_| None));
             self.len += 1;
             replace(&mut self.entries[index], Some(val))

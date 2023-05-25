@@ -1,6 +1,6 @@
 #![feature(rustc_private)]
 #![feature(integer_atomics)]
-#![feature(asm,box_syntax,box_patterns)]
+#![feature(asm,box_patterns)]
 #![feature(core_intrinsics)]
 #![feature(generators, generator_trait)]
 #![feature(associated_type_defaults)]
