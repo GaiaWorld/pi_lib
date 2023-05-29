@@ -731,14 +731,84 @@ fn generate_function_call_args(target: Option<&String>,
                 source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = &mut " + create_tmp_var_name(index).as_str() + ";\n\n").as_bytes());
             }
         },
+        "[i8]" => {
+            //生成将参数转换为i8缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [i8] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i8_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i8_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
         "[u8]" => {
-            //生成将参数转换为二进制缓冲区类型和指定所有权的代码
+            //生成将参数转换为u8或二进制缓冲区类型和指定引用的代码
             if arg_type_name.is_moveable() {
                 return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [u8] type", func_name, origin_arg_name)));
             } else if arg_type_name.is_only_read() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".bytes();\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u8_slice().unwrap();\n\n").as_bytes());
             } else if arg_type_name.is_writable() {
-                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = unsafe { " + create_tmp_var_name(index).as_str() + ".unsafe_bytes_mut() };\n\n").as_bytes());
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u8_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[i16]" => {
+            //生成将参数转换为i16缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [i16] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i16_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i16_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[u16]" => {
+            //生成将参数转换为u16缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [u16] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u16_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u16_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[i32]" => {
+            //生成将参数转换为i32缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [i32] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i32_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_i32_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[u32]" => {
+            //生成将参数转换为u32缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [u32] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u32_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_u32_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[f32]" => {
+            //生成将参数转换为f32缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [f32] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_f32_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_f32_slice_mut().unwrap();\n\n").as_bytes());
+            }
+        },
+        "[f64]" => {
+            //生成将参数转换为f32缓冲区类型和指定引用的代码
+            if arg_type_name.is_moveable() {
+                return Err(Error::new(ErrorKind::Other, format!("Generate function call args failed, function: {}, arg: {}, reason: not allowed take owner of [f64] type", func_name, origin_arg_name)));
+            } else if arg_type_name.is_only_read() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_f64_slice().unwrap();\n\n").as_bytes());
+            } else if arg_type_name.is_writable() {
+                source_content.put_slice((create_tab(level) + "let " + arg_name.as_str() + " = " + create_tmp_var_name(index).as_str() + ".to_f64_slice_mut().unwrap();\n\n").as_bytes());
             }
         },
         "Arc<[u8]>" => {
@@ -2082,37 +2152,7 @@ fn generate_function_call_args_match_cause(target: Option<&String>,
             source_content.put_slice((create_tab(level + 1) + "val.clone()\n").as_bytes());
             source_content.put_slice((create_tab(level) + "},\n").as_bytes());
         },
-        "[u8]" => {
-            //生成匹配二进制缓冲区类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "Arc<[u8]>" => {
-            //生成匹配二进制缓冲区类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "Box<[u8]>" => {
-            //生成匹配二进制缓冲区类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "Arc<Vec<u8>>" => {
-            //生成匹配二进制缓冲区类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "Box<Vec<u8>>" => {
-            //生成匹配二进制缓冲区类型的代码
-            source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
-            source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
-            source_content.put_slice((create_tab(level) + "},\n").as_bytes());
-        },
-        "Vec<u8>" => {
+        "[i8]" | "[u8]" | "[i16]" | "[u16]" | "[i32]" | "[u32]" | "[f32]" | "[f64]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => {
             //生成匹配二进制缓冲区类型的代码
             source_content.put_slice((create_tab(level) + "NativeObjectValue::Bin(val) => {\n").as_bytes());
             source_content.put_slice((create_tab(level + 1) + "val\n").as_bytes());
