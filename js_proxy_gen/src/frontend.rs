@@ -1271,8 +1271,12 @@ fn parse_c_like_enum(context: &mut ParseContext,
                         let (key, value) = match stack.len() {
                             1 => {
                                 //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
-                                let (_key, last_value): &(String, i32) = buf.back().unwrap();
-                                match (*last_value).checked_add(1) {
+                                let last_value: i32 = if let Some((_key, val)) = buf.back() {
+                                    *val
+                                } else {
+                                    0
+                                };
+                                match (last_value).checked_add(1) {
                                     None => {
                                         //越界，则立即返回错误原因
                                         return Err(Error::new(ErrorKind::Other,
