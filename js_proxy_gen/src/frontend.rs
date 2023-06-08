@@ -1251,9 +1251,9 @@ fn parse_c_like_enum(context: &mut ParseContext,
             }
 
             let mut stack = Vec::with_capacity(2);
-            let mut buf = VecDeque::new();
+            let mut buf: VecDeque<(String, i32)> = VecDeque::new();
 
-            let mut is_c_like_enum = false;
+            let mut is_c_like_enum = true;
             for token in item.variants.to_token_stream() {
                 match token {
                     TokenTree::Ident(ident) => {
@@ -1261,7 +1261,6 @@ fn parse_c_like_enum(context: &mut ParseContext,
                     },
                     TokenTree::Literal(lit) => {
                         stack.push(lit.to_string());
-                        is_c_like_enum = true;
                     },
                     TokenTree::Punct(punct) => {
                         if punct.as_char() != ',' {
@@ -1271,21 +1270,22 @@ fn parse_c_like_enum(context: &mut ParseContext,
                         let (key, value) = match stack.len() {
                             1 => {
                                 //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
-                                let last_value: i32 = if let Some((_key, val)) = buf.back() {
-                                    *val
+                                if let Some((_key, last_value)) = buf.back() {
+                                    //有上一个枚举成员的值
+                                    match (*last_value).checked_add(1) {
+                                        None => {
+                                            //越界，则立即返回错误原因
+                                            return Err(Error::new(ErrorKind::Other,
+                                                                  format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
+                                                                          *last_value)));
+                                        },
+                                        Some(current_value) => {
+                                            (stack.pop().unwrap(), current_value)
+                                        },
+                                    }
                                 } else {
-                                    0
-                                };
-                                match (last_value).checked_add(1) {
-                                    None => {
-                                        //越界，则立即返回错误原因
-                                        return Err(Error::new(ErrorKind::Other,
-                                                              format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
-                                                                      last_value)));
-                                    },
-                                    Some(current_value) => {
-                                        (stack.pop().unwrap(), current_value)
-                                    },
+                                    //没有上一个枚举成员的值
+                                    (stack.pop().unwrap(), 0)
                                 }
                             },
                             2 => {
@@ -1332,7 +1332,12 @@ fn parse_c_like_enum(context: &mut ParseContext,
                         };
                         buf.push_back((key, value)); //加入枚举缓冲
                     },
-                    _ => (),
+                    TokenTree::Group(group) => {
+                        if let Delimiter::Parenthesis = group.delimiter() {
+                            //不是类C枚举
+                            is_c_like_enum = false;
+                        }
+                    },
                 }
             }
 
