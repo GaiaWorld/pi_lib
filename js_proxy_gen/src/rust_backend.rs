@@ -142,12 +142,21 @@ pub(crate) async fn create_proxy_rust_file(generater: &ProxySourceGenerater,
                     break;
                 }
             },
+            ExportItem::CLikeEnumItem(_) => {
+                //有导出任意类C枚举，则继续创建代理的Rust文件
+                b = true;
+                break;
+            },
             ExportItem::FunctionItem(_) => {
                 //有导出任意静态函数，则继续创建代理的Rust文件
                 b = true;
                 break;
             },
-            _ => (),
+            ExportItem::ConstItem(_) => {
+                //有导出任意常量，则继续创建代理的Rust文件
+                b = true;
+                break;
+            },
         }
     }
     if !b {
