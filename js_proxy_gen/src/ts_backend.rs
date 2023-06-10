@@ -727,7 +727,14 @@ fn generate_ts_function_args(generic: Option<&Generic>,
             }
 
             //没有任何泛型参数
-            let specific_arg_type_name = get_ts_type_name(arg_type.get_type_name().get_name().as_str());
+            let specific_arg_type_name = if arg_type.is_option_like() {
+                //是类Option<T>的参数
+                let inner_type_name = arg_type.get_type_name().unwrap_option();
+                get_ts_type_name(inner_type_name.get_name().as_str()) + "|null|undefined"
+            } else {
+                //非类Option<T>的参数
+                get_ts_type_name(arg_type.get_type_name().get_name().as_str())
+            };
             specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
             source_content.put_slice((specific_arg_name + ": " + specific_arg_type_name.as_str()).as_bytes());
             args_len -= 1; //已生成指定参数，则减少未生成的参数数量

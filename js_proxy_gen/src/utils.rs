@@ -1565,7 +1565,9 @@ impl Function {
     }
 
     //追加函数的入参
-    pub fn append_input(&mut self, name: String, r#type: Type) {
+    pub fn append_input(&mut self,
+                        name: String,
+                        r#type: Type) {
         if let Some(input) = &mut self.input {
             input.append(name, r#type);
         } else {
@@ -1886,7 +1888,7 @@ impl Type {
         if self.0.is_moveable() {
             TypeName::new(self.to_string())
         } else if self.0.is_only_read() {
-            TypeName::new("&".to_string() +self.to_string().as_str())
+            TypeName::new("&".to_string() + self.to_string().as_str())
         } else {
             TypeName::new("&mut ".to_string() + self.to_string().as_str())
         }
@@ -1895,6 +1897,14 @@ impl Type {
     //获取部分类型名
     pub fn get_part_type_name(&self) -> &TypeName {
         &self.0
+    }
+
+    //判断部分类型名是否类似Option<T>
+    pub fn is_option_like(&self) -> bool {
+        self
+            .0
+            .get_name()
+            .starts_with("Option")
     }
 
     //获取类型的参数列表类型名
@@ -1995,6 +2005,26 @@ impl TypeName {
             TypeName::Writable(str) => &str,
         }
     }
+
+    //展开类Option<T>类型
+    pub fn unwrap_option(&self) -> Self {
+        let type_name = self.clone();
+        if let TypeName::Moveable(str) = &self {
+            let part = str.strip_prefix("Option<").unwrap();
+            let part = part.strip_suffix(">").unwrap();
+
+            if part.starts_with("&mut") {
+                TypeName::new("&mut ".to_string() + part)
+            } else if part.starts_with("&") {
+                TypeName::new("&".to_string() + part)
+            } else {
+                TypeName::new(part.to_string())
+            }
+        } else {
+            panic!("Unwrap option like type failed, type: {:?}, reason: require owner",
+                   type_name);
+        }
+    }
 }
 
 /*
@@ -2007,7 +2037,8 @@ unsafe impl Send for FunArgs {}
 
 impl FunArgs {
     //构建函数参数
-    pub fn new(arg_name: String, arg_type: Type) -> Self {
+    pub fn new(arg_name: String,
+               arg_type: Type) -> Self {
         FunArgs(vec![(arg_name, arg_type)])
     }
 
@@ -2022,7 +2053,9 @@ impl FunArgs {
     }
 
     //追加指定的函数参数
-    pub fn append(&mut self, arg_name: String, arg_type: Type) {
+    pub fn append(&mut self,
+                  arg_name: String,
+                  arg_type: Type) {
         self.0.push((arg_name, arg_type));
     }
 }

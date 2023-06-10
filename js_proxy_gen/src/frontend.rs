@@ -667,19 +667,23 @@ fn parse_impl_method_sign(target_name: &String,
                     //是接收器引用
                     if method_recv.mutability.is_some() {
                         //是可写引用
-                        f.append_input("&mut self".to_string(), Type::new(self_to_type(target_name, "Self".to_string())));
+                        f.append_input("&mut self".to_string(),
+                                       Type::new(self_to_type(target_name, "Self".to_string())));
                     } else {
                         //是只读引用
-                        f.append_input("&self".to_string(), Type::new(self_to_type(target_name, "Self".to_string())));
+                        f.append_input("&self".to_string(),
+                                       Type::new(self_to_type(target_name, "Self".to_string())));
                     }
                 } else {
                     //是接收器所有权
                     if method_recv.mutability.is_some() {
                         //是可写所有权
-                        f.append_input("mut self".to_string(), Type::new(self_to_type(target_name, "Self".to_string())));
+                        f.append_input("mut self".to_string(),
+                                       Type::new(self_to_type(target_name, "Self".to_string())));
                     } else {
                         //是只读所有权
-                        f.append_input("self".to_string(), Type::new(self_to_type(target_name, "Self".to_string())));
+                        f.append_input("self".to_string(),
+                                       Type::new(self_to_type(target_name, "Self".to_string())));
                     }
                 }
             },
