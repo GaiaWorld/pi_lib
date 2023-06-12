@@ -288,7 +288,7 @@ macro_rules! impl_system {
         $crate::monitor::Notify::remove_modify(&*$setup_target, &r);
         $crate::monitor::Notify::remove_create(&*$setup_target, &r);
     };
-    
+
 
     (@remove_monitor $setup_target:ident, $f:expr, $e:ty, $c:ty, (CreateEvent, ModifyEvent)) => {
         let r: Box<Fn(&Event)> = unsafe {std::mem::transmute($f.clone())};
@@ -549,7 +549,10 @@ macro_rules! impl_system {
                 }
 
                 fn borrow_mut1(&self) -> &mut $system<$($sg),*>{
-                    unsafe {&mut * (&mut * self.owner.borrow_mut() as *mut $system<$($sg),*>)}
+                    // log::warn!("start borrow_mut1====== {:?}", std::any::type_name::<Self>());
+                    let r = unsafe {&mut * (&mut * self.owner.borrow_mut() as *mut $system<$($sg),*>)};
+                    // log::warn!("end borrow_mut1====== {:?}", std::any::type_name::<Self>());
+                    r
                 }
             }
 
@@ -646,10 +649,29 @@ impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, 
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6, Z7);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6, Z7, Z8);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4, Z5, Z6, Z7, Z8, Z9);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4,
+    Z5
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4,
+    Z5, Z6
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4,
+    Z5, Z6, Z7
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4,
+    Z5, Z6, Z7, Z8
+);
+impl_data!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, Z1, Z2, Z3, Z4,
+    Z5, Z6, Z7, Z8, Z9
+);

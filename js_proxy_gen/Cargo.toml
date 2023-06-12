@@ -11,12 +11,13 @@ pid_statistics = []
 
 [dependencies]
 proc-macro2 = "1.0"
-syn = { version = "1.0", features = ["full", "extra-traits"] }
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+quote = { version = "1.0" }
 futures = "0.3"
 serde = "1.0"
 serde_derive = "1.0"
-toml = "0.5"
-bytes = "0.5"
+toml = "0.7"
+bytes = "1.4"
 num_cpus = "1.13"
 lazy_static = '1.4'
 heck = { verson = "0.4", optional = true }
@@ -25,7 +26,7 @@ log = "0.4"
 pi_async = "0.5"
 pi_async_file = "0.4"
 pi_hash = "0.1"
-normpath = "0.3"
+normpath = "1.1.1"
 
 [dev-dependencies]
-env_logger = "0.9"
+env_logger = "0.10"

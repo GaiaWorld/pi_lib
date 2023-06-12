@@ -48,24 +48,19 @@ fn test_parse_attribute() {
                             for item in sub_items {
                                 if let syn::Item::Struct(item) = item {
                                     for attr in &item.attrs {
-                                        match attr.parse_meta() {
-                                            Ok(syn::Meta::Path(path)) => {
+                                        match &attr.meta {
+                                            syn::Meta::Path(path) => {
                                                 println!("!!!!!!path ident: {:?}", path.get_ident());
                                             },
-                                            Ok(syn::Meta::List(list)) => {
+                                            syn::Meta::List(list) => {
                                                 println!("!!!!!!list path ident: {:?}", list.path.get_ident());
                                             },
-                                            Ok(syn::Meta::NameValue(kv)) => {
+                                            syn::Meta::NameValue(kv) => {
                                                 println!("!!!!!!kv path ident: {:?}", kv.path.get_ident());
-                                            },
-                                            _ => {
-                                                for seg in attr.path.segments.iter() {
-                                                    println!("!!!!!!path segments ident: {:?}", seg.ident)
-                                                }
                                             }
                                         }
 
-                                        for token in attr.tokens.clone() {
+                                        for token in attr.to_token_stream() {
                                             match token {
                                                 _TokenTree::Punct(punct) => {
                                                     println!("!!!!!!punct: {:?}", punct);
@@ -88,24 +83,19 @@ fn test_parse_attribute() {
                     },
                     syn::Item::Struct(item) => {
                         for attr in &item.attrs {
-                            match attr.parse_meta() {
-                                Ok(syn::Meta::Path(path)) => {
+                            match &attr.meta {
+                                syn::Meta::Path(path) => {
                                     println!("!!!!!!path ident: {:?}", path.get_ident());
                                 },
-                                Ok(syn::Meta::List(list)) => {
+                                syn::Meta::List(list) => {
                                     println!("!!!!!!list path ident: {:?}", list.path.get_ident());
                                 },
-                                Ok(syn::Meta::NameValue(kv)) => {
+                                syn::Meta::NameValue(kv) => {
                                     println!("!!!!!!kv path ident: {:?}", kv.path.get_ident());
-                                },
-                                _ => {
-                                    for seg in attr.path.segments.iter() {
-                                        println!("!!!!!!path segments ident: {:?}", seg.ident)
-                                    }
                                 }
                             }
 
-                            for token in attr.tokens.clone() {
+                            for token in attr.to_token_stream() {
                                 match token {
                                     _TokenTree::Punct(punct) => {
                                         println!("!!!!!!punct: {:?}", punct);
@@ -141,24 +131,19 @@ fn test_parse_function() {
                             for item in sub_items {
                                 if let syn::Item::Fn(item) = item {
                                     for attr in &item.attrs {
-                                        match attr.parse_meta() {
-                                            Ok(syn::Meta::Path(path)) => {
+                                        match &attr.meta {
+                                            syn::Meta::Path(path) => {
                                                 println!("!!!!!!path ident: {:?}", path.get_ident());
                                             },
-                                            Ok(syn::Meta::List(list)) => {
+                                            syn::Meta::List(list) => {
                                                 println!("!!!!!!list path ident: {:?}", list.path.get_ident());
                                             },
-                                            Ok(syn::Meta::NameValue(kv)) => {
+                                            syn::Meta::NameValue(kv) => {
                                                 println!("!!!!!!kv path ident: {:?}", kv.path.get_ident());
-                                            },
-                                            _ => {
-                                                for seg in attr.path.segments.iter() {
-                                                    println!("!!!!!!path segments ident: {:?}", seg.ident)
-                                                }
                                             }
                                         }
 
-                                        for token in attr.tokens.clone() {
+                                        for token in attr.to_token_stream() {
                                             match token {
                                                 _TokenTree::Punct(punct) => {
                                                     println!("!!!!!!punct: {:?}", punct);
@@ -182,24 +167,19 @@ fn test_parse_function() {
                     syn::Item::Fn(item) => {
                         println!("function: {:#?}\n\n", item);
                         for attr in &item.attrs {
-                            match attr.parse_meta() {
-                                Ok(syn::Meta::Path(path)) => {
+                            match &attr.meta {
+                                syn::Meta::Path(path) => {
                                     println!("!!!!!!path ident: {:?}", path.get_ident());
                                 },
-                                Ok(syn::Meta::List(list)) => {
+                                syn::Meta::List(list) => {
                                     println!("!!!!!!list path ident: {:?}", list.path.get_ident());
                                 },
-                                Ok(syn::Meta::NameValue(kv)) => {
+                                syn::Meta::NameValue(kv) => {
                                     println!("!!!!!!kv path ident: {:?}", kv.path.get_ident());
-                                },
-                                _ => {
-                                    for seg in attr.path.segments.iter() {
-                                        println!("!!!!!!path segments ident: {:?}", seg.ident)
-                                    }
                                 }
                             }
 
-                            for token in attr.tokens.clone() {
+                            for token in attr.to_token_stream() {
                                 match token {
                                     _TokenTree::Punct(punct) => {
                                         println!("!!!!!!punct: {:?}", punct);

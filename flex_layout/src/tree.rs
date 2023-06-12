@@ -215,6 +215,7 @@ pub fn set_rect(
     is_size: bool,
 ) {
     if other_style.display == Display::None {
+		
         // 如果是隐藏
         return;
     }

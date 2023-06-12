@@ -1042,7 +1042,7 @@ impl Cache {
     }
     // 添加到数组中，计算当前行的grow shrink 是否折行及折几行
     fn add_vec(&mut self, line: &mut LineInfo, _order: isize, info: RelNodeInfo, temp: TempType) {
-        // debug_println!("add info:{:?}", info);
+        // log::info!("add info:{:?}", info);
         line.add(self.main_line, &info);
         self.temp.rel_vec.push((info, temp));
     }

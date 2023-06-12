@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::env;
 use std::fs::File;
@@ -791,10 +792,11 @@ unsafe impl Send for LibPathNext {}
 */
 #[derive(Debug)]
 pub enum ExportItem {
-    StructItem(Struct),     //导出的结构体
-    EnumItem(Enum),         //导出的枚举
-    FunctionItem(Function), //导出的函数
-    ConstItem(Const),       //导出的常量
+    StructItem(Struct),         //导出的结构体
+    EnumItem(Enum),             //导出的一般枚举
+    CLikeEnumItem(CLikeEnum),   //导出的类C枚举
+    FunctionItem(Function),     //导出的函数
+    ConstItem(Const),           //导出的常量
 }
 
 unsafe impl Send for ExportItem {}
@@ -805,6 +807,7 @@ impl ExportItem {
         match self {
             ExportItem::StructItem(s) => s.get_name().cloned(),
             ExportItem::EnumItem(e) => e.get_name().cloned(),
+            ExportItem::CLikeEnumItem(e) => e.get_name().cloned(),
             ExportItem::FunctionItem(f) => f.get_name().cloned(),
             ExportItem::ConstItem(c) => c.get_name().cloned(),
         }
@@ -819,6 +822,7 @@ impl ExportItem {
             if let Some(item_generic) = match self {
                 ExportItem::StructItem(s) => s.get_generic(),
                 ExportItem::EnumItem(e) => e.get_generic(),
+                ExportItem::CLikeEnumItem(_) => None,
                 ExportItem::FunctionItem(f) => f.get_generic(),
                 ExportItem::ConstItem(_c) => None,
             } {
@@ -850,7 +854,15 @@ impl ExportItem {
                 if let Some(document) = &mut e.doc {
                     document.append(doc);
                 } else {
-                    //导出枚举没有文档，则创建
+                    //导出一般枚举没有文档，则创建
+                    e.doc = Some(Document::new(doc));
+                }
+            },
+            ExportItem::CLikeEnumItem(e) => {
+                if let Some(document) = &mut e.doc {
+                    document.append(doc);
+                } else {
+                    //导出类C枚举没有文档，则创建
                     e.doc = Some(Document::new(doc));
                 }
             },
@@ -1026,6 +1038,18 @@ impl ExportItem {
             _ => {
                 //忽略不支持的条目追加常量的方法
                 ()
+            },
+        }
+    }
+
+    //设置导出条目的类C枚举映射
+    pub fn set_c_like_enum_map(&mut self, map: Vec<(String, i32)>) {
+        match self {
+            ExportItem::CLikeEnumItem(e) => {
+                e.set_map(map);
+            },
+            _ => {
+                //忽略不支持的条目设置映射的方法
             },
         }
     }
@@ -1215,7 +1239,7 @@ impl Struct {
 }
 
 /*
-* 枚举
+* 一般枚举
 */
 #[derive(Debug, Clone)]
 pub struct Enum {
@@ -1398,6 +1422,59 @@ impl Enum {
 }
 
 /*
+* 类C枚举
+*/
+#[derive(Debug, Clone)]
+pub struct CLikeEnum {
+    name:   Option<String>,             //枚举的名称
+    doc:    Option<Document>,           //枚举文档
+    map:    Option<Vec<(String, i32)>>, //映射
+}
+
+unsafe impl Send for CLikeEnum {}
+
+impl CLikeEnum {
+    //构建枚举
+    pub fn new() -> Self {
+        CLikeEnum {
+            name: None,
+            doc: None,
+            map: None,
+        }
+    }
+
+    //获取枚举名称
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    //设置枚举名称
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    //获取枚举文档
+    pub fn get_doc(&self) -> Option<&Document> {
+        self.doc.as_ref()
+    }
+
+    //设置枚举文档
+    pub fn set_doc(&mut self, doc: Document) {
+        self.doc = Some(doc);
+    }
+
+    //获取枚举映射
+    pub fn get_map(&self) -> Option<&Vec<(String, i32)>> {
+        self.map.as_ref()
+    }
+
+    //设置枚举映射
+    pub fn set_map(&mut self, map: Vec<(String, i32)>) {
+        self.map = Some(map);
+    }
+}
+
+/*
 * 函数
 */
 #[derive(Debug, Clone)]
@@ -1488,7 +1565,9 @@ impl Function {
     }
 
     //追加函数的入参
-    pub fn append_input(&mut self, name: String, r#type: Type) {
+    pub fn append_input(&mut self,
+                        name: String,
+                        r#type: Type) {
         if let Some(input) = &mut self.input {
             input.append(name, r#type);
         } else {
@@ -1809,7 +1888,7 @@ impl Type {
         if self.0.is_moveable() {
             TypeName::new(self.to_string())
         } else if self.0.is_only_read() {
-            TypeName::new("&".to_string() +self.to_string().as_str())
+            TypeName::new("&".to_string() + self.to_string().as_str())
         } else {
             TypeName::new("&mut ".to_string() + self.to_string().as_str())
         }
@@ -1818,6 +1897,14 @@ impl Type {
     //获取部分类型名
     pub fn get_part_type_name(&self) -> &TypeName {
         &self.0
+    }
+
+    //判断部分类型名是否类似Option<T>
+    pub fn is_option_like(&self) -> bool {
+        self
+            .0
+            .get_name()
+            .starts_with("Option")
     }
 
     //获取类型的参数列表类型名
@@ -1918,6 +2005,26 @@ impl TypeName {
             TypeName::Writable(str) => &str,
         }
     }
+
+    //展开类Option<T>类型
+    pub fn unwrap_option(&self) -> Self {
+        let type_name = self.clone();
+        if let TypeName::Moveable(str) = &self {
+            let part = str.strip_prefix("Option<").unwrap();
+            let part = part.strip_suffix(">").unwrap();
+
+            if part.starts_with("&mut") {
+                TypeName::new("&mut ".to_string() + part)
+            } else if part.starts_with("&") {
+                TypeName::new("&".to_string() + part)
+            } else {
+                TypeName::new(part.to_string())
+            }
+        } else {
+            panic!("Unwrap option like type failed, type: {:?}, reason: require owner",
+                   type_name);
+        }
+    }
 }
 
 /*
@@ -1930,7 +2037,8 @@ unsafe impl Send for FunArgs {}
 
 impl FunArgs {
     //构建函数参数
-    pub fn new(arg_name: String, arg_type: Type) -> Self {
+    pub fn new(arg_name: String,
+               arg_type: Type) -> Self {
         FunArgs(vec![(arg_name, arg_type)])
     }
 
@@ -1945,7 +2053,9 @@ impl FunArgs {
     }
 
     //追加指定的函数参数
-    pub fn append(&mut self, arg_name: String, arg_type: Type) {
+    pub fn append(&mut self,
+                  arg_name: String,
+                  arg_type: Type) {
         self.0.push((arg_name, arg_type));
     }
 }

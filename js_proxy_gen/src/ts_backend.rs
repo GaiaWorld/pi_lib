@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::io::{Error, Result, ErrorKind};
 use std::path::{Path, PathBuf, Component};
 
+use dashmap::DashMap;
 use bytes::BufMut;
 
 #[cfg(feature = "ts_lower_camel_case")]
@@ -71,6 +72,27 @@ declare class ESProcessClass {
 * 默认的获取Raw NativeObject的方法名
 */
 const DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME: &'static str = "get_self";
+
+/*
+* 全局枚举注册表
+*/
+lazy_static! {
+    static ref GLOBAL_ENUM_TABLE: DashMap<String, ()> = DashMap::new();
+}
+
+/*
+* 判断指定名称的类型是否是已注册的全局枚举
+*/
+pub(crate) fn is_enum(name: &String) -> bool {
+    GLOBAL_ENUM_TABLE.contains_key(name)
+}
+
+/*
+* 注册指定名称的类型为全局枚举
+*/
+pub(crate) fn register_enum(name: String) {
+    GLOBAL_ENUM_TABLE.insert(name, ());
+}
 
 /*
 * 在指定的ts文件根目录中创建本地环境文件和基础文件
@@ -177,13 +199,19 @@ pub(crate) async fn generate_ts_impls(generater: &ProxySourceGenerater,
             ExportItem::FunctionItem(func_item) => {
                 function_items.push(func_item);
             },
-            item@ExportItem::StructItem(_) | item@ExportItem::EnumItem(_) => {
+            item@ExportItem::StructItem(_)
+            | item@ExportItem::EnumItem(_)
+            | item@ExportItem::CLikeEnumItem(_) => {
                 class_items.push(item);
             }
         }
     }
 
     if let Err(e) = generate_ts_consts(generater, source, const_items, source_content) {
+        return Err(e);
+    }
+
+    if let Err(e) = generate_ts_enums(generater, source, class_items.clone(), source_content).await {
         return Err(e);
     }
 
@@ -224,6 +252,29 @@ fn generate_ts_consts(_generater: &ProxySourceGenerater,
                     //生成常量值
                     source_content.put_slice((const_value.to_string().replace(r#"\"#, r#"\\"#) + ";\n\n").as_bytes());
                 }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+//生成ts文件的所有枚举
+async fn generate_ts_enums(generater: &ProxySourceGenerater,
+                           source: &ParseContext,
+                           class_items: Vec<&ExportItem>,
+                           source_content: &mut Vec<u8>) -> Result<()> {
+    for class_item in class_items {
+        if let ExportItem::CLikeEnumItem(enum_item) = class_item {
+            //目标对象是类C枚举
+            register_enum(enum_item.get_name().unwrap().clone()); //注册全局枚举
+            if let Err(e) = generate_specific_ts_enum(generater,
+                                                      source,
+                                                      enum_item.get_doc(),
+                                                      enum_item.get_name(),
+                                                      enum_item.get_map(),
+                                                      source_content).await {
+                return Err(e);
             }
         }
     }
@@ -352,12 +403,48 @@ async fn generate_ts_classes(generater: &ProxySourceGenerater,
                     }
                 }
             },
+            ExportItem::CLikeEnumItem(enum_item) => {
+                //目标对象是类C枚举，则忽略
+                ()
+            },
             _ => {
                 //不应该执行此分支
                 unimplemented!();
             }
         }
     }
+
+    Ok(())
+}
+
+//生成ts文件的具体枚举
+async fn generate_specific_ts_enum(generater: &ProxySourceGenerater,
+                                   source: &ParseContext,
+                                   doc: Option<&Document>,
+                                   enum_name: Option<&String>,
+                                   enum_map: Option<&Vec<(String, i32)>>,
+                                   source_content: &mut Vec<u8>) -> Result<()> {
+    if let Some(doc) = doc {
+        //生成具体枚举的文档
+        source_content.put_slice(b"/**\n");
+        for doc_string in doc.get_ref() {
+            source_content.put_slice((" *".to_string() + doc_string.replace("\"", "").as_str() + "\n").as_bytes());
+        }
+        source_content.put_slice(" */\n".as_bytes());
+    }
+
+    //生成具体枚举的名称
+    let specific_enum_name = get_specific_ts_class_name(enum_name.unwrap());
+    source_content.put_slice(("export enum ".to_string() + specific_enum_name.as_str() + " {\n").as_bytes());
+
+    let level = 1; //默认的生成具体类实现的代码层数
+
+    //生成具体枚举的成员
+    for (key, value) in enum_map.unwrap() {
+        source_content.put_slice((create_tab(level) + key + " = " + value.to_string().as_str() + ",\n").as_bytes());
+    }
+
+    source_content.put_slice(b"}\n\n");
 
     Ok(())
 }
@@ -640,7 +727,14 @@ fn generate_ts_function_args(generic: Option<&Generic>,
             }
 
             //没有任何泛型参数
-            let specific_arg_type_name = get_ts_type_name(arg_type.get_type_name().get_name().as_str());
+            let specific_arg_type_name = if arg_type.is_option_like() {
+                //是类Option<T>的参数
+                let inner_type_name = arg_type.get_type_name().unwrap_option();
+                get_ts_type_name(inner_type_name.get_name().as_str()) + "|null|undefined"
+            } else {
+                //非类Option<T>的参数
+                get_ts_type_name(arg_type.get_type_name().get_name().as_str())
+            };
             specific_arg_names.push((specific_arg_name.clone(), specific_arg_type_name.clone()));
             source_content.put_slice((specific_arg_name + ": " + specific_arg_type_name.as_str()).as_bytes());
             args_len -= 1; //已生成指定参数，则减少未生成的参数数量
@@ -1137,7 +1231,14 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "i8" | "i16" | "i32" | "u8" | "u16" | "u32" | "f32" | "f64" => "number".to_string(),
         "i64" | "i128" | "isize" | "u64" | "u128" | "usize" | "BigInt" | "num_bigint::BigInt" => "number|bigint".to_string(),
         "str" | "String" => "string".to_string(),
-        "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer".to_string(),
+        "[u8]" | "Arc<[u8]>" | "Box<[u8]>" | "Arc<Vec<u8>>" | "Box<Vec<u8>>" | "Vec<u8>" => "ArrayBuffer|SharedArrayBuffer|Uint8Array|ArrayBufferView".to_string(),
+        "[i8]" => "Int8Array".to_string(),
+        "[i16]" => "Int16Array".to_string(),
+        "[u16]" => "Uint16Array".to_string(),
+        "[i32]" => "Int32Array".to_string(),
+        "[u32]" => "Uint8Array".to_string(),
+        "[f32]" => "Float32Array".to_string(),
+        "[f64]" => "Float64Array".to_string(),
         "Vec<bool>" => "boolean[]".to_string(),
         "Vec<i8>" | "Vec<i16>" | "Vec<i32>" | "Vec<u16>" | "Vec<u32>" | "Vec<f32>" | "Vec<f64>" => "number[]".to_string(),
         "Vec<i64>" | "Vec<i128>" | "Vec<isize>" | "Vec<u64>" | "Vec<u128>" | "Vec<usize>" | "Vec<BigInt>" | "Vec<num_bigint::BigInt>" => "number[]|bigint[]".to_string(),
@@ -1145,7 +1246,15 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
         "Vec<Arc<[u8]>>" | "Vec<Box<[u8]>>" | "Vec<Arc<Vec<u8>>>" | "Vec<Box<Vec<u8>>>" | "Vec<Vec<u8>>" => "ArrayBuffer[]".to_string(),
         "Vec<Vec<Arc<[u8]>>>" | "Vec<Vec<Box<[u8]>>>" | "Vec<Vec<Arc<Vec<u8>>>>" | "Vec<Vec<Box<Vec<u8>>>>" | "Vec<Vec<Vec<u8>>>" => "ArrayBuffer[][]".to_string(),
         closure_type if closure_type.starts_with("Arc<Fn(") => "Function".to_string(),
-        _ => "object".to_string(),
+        other_type => {
+            let other_type_name = &other_type.to_string();
+            if is_enum(other_type_name) {
+                //是已注册的全局枚举
+                other_type.to_string()
+            } else {
+                "object".to_string()
+            }
+        },
     }
 }
 
