@@ -9,9 +9,9 @@ sysinfo = "0.27"
 netstat2 = "0.9"
 backtrace = "0.3"
 lazy_static = "1.4"
-parking_lot = "0.11"
+parking_lot = "0.12"
 crossbeam-queue = "0.1"
-atom = { path = "../../pi_lib/atom" }
+atom = "0.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
