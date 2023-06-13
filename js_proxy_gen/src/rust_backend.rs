@@ -113,6 +113,7 @@ pub(crate) const DEFAULT_ARGUMENT_NAME_PREFIX: &str = "arg_";
 //在指定路径下创建代理的Rust文件，并返回异步文件句柄
 pub(crate) async fn create_proxy_rust_file(generater: &ProxySourceGenerater,
                                            crate_name: String,
+                                           crate_alias: Option<String>,
                                            source: &ParseContext,
                                            generate_rust_path: &Path) -> Option<Result<AsyncFile<()>>> {
     //生成文件名
@@ -168,7 +169,12 @@ pub(crate) async fn create_proxy_rust_file(generater: &ProxySourceGenerater,
     let mut components = source_path.components();
 
     let mut b = false;
-    let mut path_buf = PathBuf::from(crate_name);
+    let mut path_buf = if let Some(alias) = crate_alias {
+        //库存在别名
+        PathBuf::from(alias)
+    } else {
+        PathBuf::from(crate_name)
+    };
     while let Some(c) = components.next() {
         match c {
             Component::Normal(str) => {

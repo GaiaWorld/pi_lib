@@ -106,6 +106,7 @@ pub fn check_crate(path: &Path) -> Result<(CrateInfo, PathBuf)> {
 #[derive(Debug)]
 pub struct Crate {
     path:   PathBuf,            //库的本地绝对路径
+    alias:  Option<String>,     //库的别名
     info:   CrateInfo,          //库信息
     source: Vec<ParseContext>,  //源码信息
 }
@@ -120,6 +121,21 @@ impl Crate {
         let path = path.as_ref().to_path_buf();
         Crate {
             path,
+            alias: None,
+            info,
+            source,
+        }
+    }
+
+    //用别名构建导出的库
+    pub fn with_alias<P: AsRef<Path>>(path: P,
+                                      alias: String,
+                                      info: CrateInfo,
+                                      source: Vec<ParseContext>) -> Self {
+        let path = path.as_ref().to_path_buf();
+        Crate {
+            path,
+            alias: Some(alias),
             info,
             source,
         }
@@ -128,6 +144,15 @@ impl Crate {
     //获取导出库的本地绝对路径
     pub fn get_path(&self) -> &Path {
         self.path.as_path()
+    }
+
+    //获取导出库的别名
+    pub fn get_alias(&self) -> Option<String> {
+        if let Some(alias) = &self.alias {
+            Some(alias.clone())
+        } else {
+            None
+        }
     }
 
     //获取导出库的库信息

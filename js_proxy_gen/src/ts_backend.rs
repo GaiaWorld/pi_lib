@@ -47,6 +47,10 @@ type NativeObjectRetType = undefined|boolean|number|string|ArrayBuffer|bigint|ob
 //本地对象异步返回值类型
 type AsyncNativeObjectRetType = Promise<undefined|boolean|number|string|ArrayBuffer|bigint|Error|object|NativeObjectRetType[]>;
 
+declare interface NativeObjectWrapper {
+    get_self?: () => object
+}
+
 declare class NativeObjectClass {
     registry: NativeObjectRegistry; //本地对象回收器注册器
     static_call(index: number, ...anyArgs: any[]): NativeObjectRetType; //本地对象静态同步调用
@@ -119,6 +123,7 @@ pub(crate) async fn generate_public_exports(generate_ts_path: &Path) -> Result<(
 * 在指定路径下创建代理的ts文件，并返回异步文件句柄
 */
 pub(crate) async fn create_proxy_ts_file(crate_name: String,
+                                         crate_alias: Option<String>,
                                          source: &ParseContext,
                                          generate_ts_path: &Path) -> Option<Result<(PathBuf, AsyncFile<()>)>> {
     //生成文件路径名
@@ -131,7 +136,12 @@ pub(crate) async fn create_proxy_ts_file(crate_name: String,
     let mut components = source_path.components();
 
     let mut b = false;
-    let dir_path = generate_ts_path.join(crate_name);
+    let dir_path = if let Some(alias) = crate_alias {
+        //库存在别名
+        generate_ts_path.join(alias)
+    } else {
+        generate_ts_path.join(crate_name)
+    };
     let mut file_path = PathBuf::new();
     while let Some(c) = components.next() {
         match c {
@@ -876,7 +886,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         }
 
                         for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                            if specific_arg_type == "object" {
+                            if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                                 //如果参数是对象类型
                                 source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                             } else {
@@ -920,7 +930,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
                         }
 
                         for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                            if specific_arg_type == "object" {
+                            if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                                 //如果参数是对象类型
                                 source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                             } else {
@@ -968,7 +978,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                     //生成其它入参
                     for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                        if specific_arg_type == "object" {
+                        if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                             //如果参数是对象类型
                             source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                         } else {
@@ -1018,7 +1028,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                         //生成其它入参
                         for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                            if specific_arg_type == "object" {
+                            if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                                 //如果参数是对象类型
                                 source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                             } else {
@@ -1051,7 +1061,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                         //生成其它入参
                         for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                            if specific_arg_type == "object" {
+                            if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                                 //如果参数是对象类型
                                 source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                             } else {
@@ -1087,7 +1097,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                     //生成其它入参
                     for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                        if specific_arg_type == "object" {
+                        if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                             //如果参数是对象类型
                             source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                         } else {
@@ -1123,7 +1133,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                     //生成其它入参
                     for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                        if specific_arg_type == "object" {
+                        if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                             //如果参数是对象类型
                             source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                         } else {
@@ -1156,7 +1166,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                     //生成其它入参
                     for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                        if specific_arg_type == "object" {
+                        if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                             //如果参数是对象类型
                             source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                         } else {
@@ -1192,7 +1202,7 @@ async fn generate_specific_function_body(generater: &ProxySourceGenerater,
 
                 //生成其它入参
                 for (specific_arg_name, specific_arg_type) in specific_arg_names {
-                    if specific_arg_type == "object" {
+                    if specific_arg_type == "object" || specific_arg_type == "NativeObjectWrapper" {
                         //如果参数是对象类型
                         source_content.put_slice((", (".to_string() + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "?" + specific_arg_name.as_str() + "." + DEFAULT_GET_RAW_NATIVE_OBJECT_METHOD_NAME + "():" + specific_arg_name.as_str() + ")").as_bytes());
                     } else {
@@ -1252,6 +1262,11 @@ fn get_ts_type_name(specific_arg_type_name: &str) -> String {
                 //是已注册的全局枚举
                 other_type.to_string()
             } else {
+                #[cfg(feature = "nobj_wrapper")]
+                {
+                    "NativeObjectWrapper".to_string()
+                }
+                #[cfg(not(feature = "nobj_wrapper"))]
                 "object".to_string()
             }
         },

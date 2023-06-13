@@ -347,6 +347,7 @@ async fn generate_crate_proxy_source(generater: ProxySourceGenerater,
                                      generate_rust_path: &Path,
                                      generate_ts_path: &Path) -> Result<()> {
     let crate_name = import_crate.get_info().get_package().get_name();
+    let crate_alias = import_crate.get_alias();
 
     //创建指定导入库的所有代理文件，并生成定导入库的所有代理文件的代码
     for source in import_crate.get_source() {
@@ -356,13 +357,20 @@ async fn generate_crate_proxy_source(generater: ProxySourceGenerater,
         }
 
         //有导出条目
-        match create_proxy_rust_file(&generater, crate_name.clone(), source, generate_rust_path).await {
+        match create_proxy_rust_file(&generater,
+                                     crate_name.clone(),
+                                     crate_alias.clone(),
+                                     source,
+                                     generate_rust_path).await {
             Some(Err(e)) => {
                 //创建代理Rust文件失败，则立即返回错误
                 return Err(Error::new(ErrorKind::Other, format!("Create proxy rust file failed, crate: {}, source path: {:?}, reason: {:?}", crate_name, source.get_origin(), e)));
             },
             Some(Ok(rust_file)) => {
-                match create_proxy_ts_file(crate_name.clone(), source, generate_ts_path).await {
+                match create_proxy_ts_file(crate_name.clone(),
+                                           crate_alias.clone(),
+                                           source,
+                                           generate_ts_path).await {
                     Some(Err(e)) => {
                         return Err(e);
                     },

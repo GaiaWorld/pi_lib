@@ -139,6 +139,7 @@ pub async fn parse_crate(path: PathBuf,
                 Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
             },
             Ok((crate_info, src_path)) => {
+                println!("!!!!!!src_path: {:?}", src_path);
                 let macro_expander = if let Some(requires) = requrie_extand_macro_filenames {
                     //需要宏展开指定库下的所有源文件，则构建一个宏展开器
                     Some(MacroExpander::new(&path,
@@ -305,6 +306,119 @@ pub fn parse_source_dir(path: PathBuf,
             },
         }
     }.boxed()
+}
+
+///
+/// 递归分析指定库别名列表下的所有源文件，可以指定是否展开宏或并发分析，返回指定库列表中声明了导出的库列表
+///
+pub async fn parse_crates_with_alias(dirs: Vec<(PathBuf, String)>,
+                                     requrie_extand_macro_filenames: Option<Vec<String>>,
+                                     is_concurrent: bool) -> Result<Vec<Crate>> {
+    let mut crates = Vec::new();
+
+    if is_concurrent {
+        //并发递归分析，导出函数的序号不保证一致
+        let mut map = WORKER_RUNTIME.map_reduce(dirs.len());
+        for (path, alias) in dirs {
+            let ignores_copy = requrie_extand_macro_filenames.clone();
+            let future = async move {
+                match parse_crate_with_alias(path, alias, ignores_copy).await {
+                    Err(e) => {
+                        Err(e)
+                    },
+                    Ok(c) => {
+                        Ok(c)
+                    }
+                }
+            }.boxed();
+
+            map.map(WORKER_RUNTIME.clone(), future);
+        }
+
+        match map.reduce(true).await {
+            Err(e) => Err(e),
+            Ok(vec) => {
+                for r in vec {
+                    match r {
+                        Err(e) => {
+                            return Err(e);
+                        },
+                        Ok(c) => {
+                            crates.push(c);
+                        },
+                    }
+                }
+
+                Ok(crates)
+            },
+        }
+    } else {
+        //顺序递归分析，导出函数的序号保证一致
+        for (path, alias) in dirs {
+            match parse_crate_with_alias(path, alias, requrie_extand_macro_filenames.clone()).await {
+                Err(e) => {
+                    return Err(e);
+                },
+                Ok(c) => {
+                    crates.push(c);
+                }
+            }
+        }
+
+        Ok(crates)
+    }
+}
+
+///
+/// 递归分析指定库别名下的所有源文件，可以指定是否展开宏
+/// 递归调用异步函数，需要使用boxed的Future
+///
+pub async fn parse_crate_with_alias(path: PathBuf,
+                                    alias: String,
+                                    requrie_extand_macro_filenames: Option<Vec<String>>) -> Result<Crate> {
+    if path.is_dir() {
+        //是目录，则继续分析
+        match check_crate(path.as_path()) {
+            Err(e) => {
+                Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
+            },
+            Ok((crate_info, src_path)) => {
+                let macro_expander = if let Some(requires) = requrie_extand_macro_filenames {
+                    //需要宏展开指定库下的所有源文件，则构建一个宏展开器
+                    Some(MacroExpander::new(&path,
+                                            &src_path,
+                                            DEAFULT_MACRO_EXPAND_FILE_SUFFIX,
+                                            requires))
+                } else {
+                    None
+                };
+
+                match parse_source_dir(src_path, macro_expander).await {
+                    Err(e) => {
+                        Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
+                    },
+                    Ok(source) => {
+                        match path.normalize() {
+                            Err(e) => {
+                                //获取指定库的本地绝对路径失败
+                                Err(Error::new(ErrorKind::Other, format!("Parse crate path failed, path: {:?}, reason: {:?}", path, e)))
+                            },
+                            Ok(p) => {
+                                //获取指定库的本地绝对路径成功
+                                let crate_path = p.as_path().to_path_buf();
+                                Ok(Crate::with_alias(crate_path,
+                                                     alias,
+                                                     crate_info,
+                                                     source))
+                            },
+                        }
+                    },
+                }
+            },
+        }
+    } else {
+        Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: invalid dir", path)))
+    }
 }
 
 ///
