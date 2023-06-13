@@ -12,7 +12,7 @@ crossbeam-channel = "0.5"
 crossbeam-deque = "0.8"
 crossbeam-queue = "0.3"
 flume = "0.10"
-parking_lot = "0.11"
+parking_lot = "0.12"
 num_cpus = "1.13"
 log = "0.4"
 minstant = { git = "https://github.com/tikv/minstant.git", rev="dcd3e1e6" }

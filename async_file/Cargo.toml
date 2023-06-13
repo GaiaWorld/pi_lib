@@ -5,5 +5,5 @@ authors = ["vmos <vmos@fairblock.io>"]
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.11"
+parking_lot = "0.12"
 async = { path = "../async" }
