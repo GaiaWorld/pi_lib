@@ -516,7 +516,7 @@ async fn generate_ts_specific_class(generater: &ProxySourceGenerater,
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());
     source_content.put_slice((create_tab(level) + " * 本地对象\n").as_bytes());
     source_content.put_slice((create_tab(level) + " */\n").as_bytes());
-    source_content.put_slice((create_tab(level) + "private self: object;\n\n").as_bytes());
+    source_content.put_slice((create_tab(level) + "private self: object|undefined;\n\n").as_bytes());
 
     //生成类的私有构造方法
     source_content.put_slice((create_tab(level) + "/**\n").as_bytes());

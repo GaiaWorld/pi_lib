@@ -139,7 +139,6 @@ pub async fn parse_crate(path: PathBuf,
                 Err(Error::new(ErrorKind::Other, format!("Parse crate failed, path: {:?}, reason: {:?}", path, e)))
             },
             Ok((crate_info, src_path)) => {
-                println!("!!!!!!src_path: {:?}", src_path);
                 let macro_expander = if let Some(requires) = requrie_extand_macro_filenames {
                     //需要宏展开指定库下的所有源文件，则构建一个宏展开器
                     Some(MacroExpander::new(&path,
