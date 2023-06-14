@@ -4,7 +4,7 @@ use std::collections::{VecDeque, BTreeMap};
 
 use proc_macro::TokenStream;
 use std::any::Any;
-use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree, Delimiter};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{DeriveInput, ItemEnum, Visibility, Ident,
           parse::{Parse, ParseStream, Parser}};
@@ -47,9 +47,9 @@ pub fn pi_js_export(attrs: TokenStream,
 fn parse_c_like_enum_macro(item: ItemEnum,
                            args: AttributeArgs) -> TokenStream2 {
     let mut stack = Vec::with_capacity(2);
-    let mut buf = VecDeque::new();
+    let mut buf: VecDeque<(String, i32)> = VecDeque::new();
 
-    let mut is_c_like_enum = false;
+    let mut is_c_like_enum = true;
     for token in item.variants.to_token_stream() {
         match token {
             TokenTree::Ident(ident) => {
@@ -57,7 +57,6 @@ fn parse_c_like_enum_macro(item: ItemEnum,
             },
             TokenTree::Literal(lit) => {
                 stack.push(lit.to_string());
-                is_c_like_enum = true;
             },
             TokenTree::Punct(punct) => {
                 if punct.as_char() != ',' {
@@ -66,19 +65,23 @@ fn parse_c_like_enum_macro(item: ItemEnum,
 
                 let (key, value) = match stack.len() {
                     1 => {
-                        //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
-                        let (_key, last_value): &(String, i32) = buf.back().unwrap();
-                        match (*last_value).checked_add(1) {
-                            None => {
-                                //越界，则立即返回错误原因
-                                return token_stream_with_error(item.to_token_stream(),
-                                                               syn::Error::new_spanned(&item.ident,
-                                                                                       format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
-                                                                                               last_value)));
-                            },
-                            Some(current_value) => {
-                                (stack.pop().unwrap(), current_value)
-                            },
+                        if let Some((_key, last_value)) = buf.back() {
+                            //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
+                            match (*last_value).checked_add(1) {
+                                None => {
+                                    //越界，则立即返回错误原因
+                                    return token_stream_with_error(item.to_token_stream(),
+                                                                   syn::Error::new_spanned(&item.ident,
+                                                                                           format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
+                                                                                                   last_value)));
+                                },
+                                Some(current_value) => {
+                                    (stack.pop().unwrap(), current_value)
+                                },
+                            }
+                        } else {
+                            //无字面值，且没有上一个枚举成员的值
+                            (stack.pop().unwrap(), 0)
                         }
                     },
                     2 => {
@@ -127,7 +130,12 @@ fn parse_c_like_enum_macro(item: ItemEnum,
                 };
                 buf.push_back((key, value)); //加入枚举缓冲
             },
-            _ => (),
+            TokenTree::Group(group) => {
+                if let Delimiter::Parenthesis = group.delimiter() {
+                    //不是类C枚举
+                    is_c_like_enum = false;
+                }
+            },
         }
     }
 
