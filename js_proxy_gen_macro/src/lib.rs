@@ -50,6 +50,8 @@ fn parse_c_like_enum_macro(item: ItemEnum,
     let mut buf: VecDeque<(String, i32)> = VecDeque::new();
 
     let mut is_c_like_enum = true;
+    let mut variants_punct_len = 0;
+    let variants_len = item.variants.len();
     for token in item.variants.to_token_stream() {
         match token {
             TokenTree::Ident(ident) => {
@@ -62,6 +64,7 @@ fn parse_c_like_enum_macro(item: ItemEnum,
                 if punct.as_char() != ',' {
                     continue;
                 }
+                variants_punct_len += 1;
 
                 let (key, value) = match stack.len() {
                     1 => {
@@ -137,6 +140,76 @@ fn parse_c_like_enum_macro(item: ItemEnum,
                 }
             },
         }
+    }
+
+    if (variants_len == variants_punct_len + 1) && (stack.len() > 0) {
+        //处理枚举最后一个成员未以","结束的情况
+        let (key, value) = match stack.len() {
+            1 => {
+                if let Some((_key, last_value)) = buf.back() {
+                    //无字面值，则获取上一个枚举成员的值加1，并设置为当前成员的值
+                    match (*last_value).checked_add(1) {
+                        None => {
+                            //越界，则立即返回错误原因
+                            return token_stream_with_error(item.to_token_stream(),
+                                                           syn::Error::new_spanned(&item.ident,
+                                                                                   format!("Parse c-like enum failed, last_value: {:?}, reason: integer overflow",
+                                                                                           last_value)));
+                        },
+                        Some(current_value) => {
+                            (stack.pop().unwrap(), current_value)
+                        },
+                    }
+                } else {
+                    //无字面值，且没有上一个枚举成员的值
+                    (stack.pop().unwrap(), 0)
+                }
+            },
+            2 => {
+                //有字面值，则赋值
+                let val = stack
+                    .pop()
+                    .unwrap()
+                    .replace("_", "");
+                let value = match val.parse::<i32>() {
+                    Err(_) => {
+                        match val.strip_prefix("0b") {
+                            None => {
+                                match val.strip_prefix("0o") {
+                                    None => {
+                                        match val.strip_prefix("0x") {
+                                            None => {
+                                                //错误的字面量类型
+                                                return token_stream_with_error(item.to_token_stream(),
+                                                                               syn::Error::new_spanned(&item.ident,
+                                                                                                       format!("Parse c-like enum failed, val: {}, reason: require integer literal",
+                                                                                                               val)));
+                                            },
+                                            Some(part) => i32::from_str_radix(part, 16).unwrap(),
+                                        }
+                                    },
+                                    Some(part) => i32::from_str_radix(part, 8).unwrap(),
+                                }
+                            },
+                            Some(part) => i32::from_str_radix(part, 2).unwrap(),
+                        }
+                    },
+                    Ok(v) => {
+                        v
+                    },
+                };
+                let key = stack.pop();
+                (key.unwrap(), value)
+            },
+            any => {
+                //错误的堆栈长度
+                return token_stream_with_error(item.to_token_stream(),
+                                               syn::Error::new_spanned(&item.ident,
+                                                                       format!("Parse c-like enum failed, len: {:?}, reason: invalid stack length",
+                                                                               any)));
+            },
+        };
+        buf.push_back((key, value)); //加入枚举缓冲
     }
 
     if !is_c_like_enum {
