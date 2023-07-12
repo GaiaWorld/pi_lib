@@ -32,7 +32,12 @@ pub fn pi_js_export(attrs: TokenStream,
                     .parse2(attrs.into()) {
                     Err(_) => items,
                     Ok(args) => {
-                        parse_c_like_enum_macro(input.clone(), args).into()
+                        let output = parse_c_like_enum_macro(input.clone(), args);
+                        if output.is_empty() {
+                            items
+                        } else {
+                            output.into()
+                        }
                     }
                 }
             } else {
@@ -213,10 +218,8 @@ fn parse_c_like_enum_macro(item: ItemEnum,
     }
 
     if !is_c_like_enum {
-        //不是类C枚举，则立即返回错误原因
-        return token_stream_with_error(item.to_token_stream(),
-                                       syn::Error::new_spanned(&item.ident,
-                                                               format!("Parse c-like enum failed, reason: require c-like enum")));
+        //不是类C枚举，则立即返回空
+        return TokenStream2::new();
     }
 
     let (keys, values) = Vec::from(buf).into_iter().unzip();
