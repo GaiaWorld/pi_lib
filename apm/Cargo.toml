@@ -1,6 +1,6 @@
 [package]
 name = "apm"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["vmos <vmos@fairblock.io>"]
 
 [dependencies]
@@ -11,7 +11,7 @@ backtrace = "0.3"
 lazy_static = "1.4"
 parking_lot = "0.12"
 crossbeam-queue = "0.1"
-atom = "0.2"
+pi_atom = "0.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

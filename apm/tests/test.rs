@@ -6,7 +6,7 @@ use std::time;
 use std::thread;
 use std::sync::atomic::Ordering;
 
-use atom::Atom;
+use pi_atom::Atom;
 
 use apm::common::{NetIPType, NetProtocolType, SysStat};
 #[cfg(any(unix))]

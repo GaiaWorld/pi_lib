@@ -24,7 +24,7 @@ extern crate psutil;
 #[cfg(all(unix, not(target_os="android")))]
 extern crate walkdir;
 
-extern crate atom;
+extern crate pi_atom;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
