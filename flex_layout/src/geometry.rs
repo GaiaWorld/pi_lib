@@ -1,16 +1,25 @@
 // use core::ops::Add;
 
-use crate::number::Number;
+// use crate::number::Number;
 // use crate::style;
 
-/// 矩形， 采用start end top bottom定义矩形
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Rect<T> {
-    pub start: T,
-    pub end: T,
-    pub top: T,
-    pub bottom: T,
-}
+pub use pi_flex_layout::prelude::{Rect, Size, Point};
+
+// #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize, Hash)]
+// pub struct Rect<T> {
+//     pub left: T,
+//     pub right: T,
+//     pub top: T,
+//     pub bottom: T,
+// }
+
+// #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+// pub struct Rect<T> {
+//     pub start: T,
+//     pub end: T,
+//     pub top: T,
+//     pub bottom: T,
+// }
 
 // impl<T> Rect<T> {
 //     pub(crate) fn map<R, F>(self, f: F) -> Rect<R>
@@ -90,21 +99,21 @@ pub struct Rect<T> {
 //     }
 // }
 
-/// 大小
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Size<T> {
-    pub width: T,
-    pub height: T,
-}
+// /// 大小
+// #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+// pub struct Size<T> {
+//     pub width: T,
+//     pub height: T,
+// }
 
-impl Size<()> {
-    pub fn undefined() -> Size<Number> {
-        Size {
-            width: Number::Undefined,
-            height: Number::Undefined,
-        }
-    }
-}
+// impl Size<()> {
+//     pub fn undefined() -> Size<Number> {
+//         Size {
+//             width: Number::Undefined,
+//             height: Number::Undefined,
+//         }
+//     }
+// }
 
 // impl<T> Size<T> {
 //     pub(crate) fn map<R, F>(self, f: F) -> Size<R>
@@ -150,9 +159,9 @@ impl Size<()> {
 //     }
 // }
 
-/// 点
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Point<T> {
-    pub x: T,
-    pub y: T,
-}
+// /// 点
+// #[derive(Debug, Copy, Clone, PartialEq)]
+// pub struct Point<T> {
+//     pub x: T,
+//     pub y: T,
+// }

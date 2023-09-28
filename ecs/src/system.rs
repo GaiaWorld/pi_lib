@@ -1,4 +1,4 @@
-use atom::Atom;
+use pi_atom::Atom;
 pub use listener::FnListener;
 use std::{any::TypeId, sync::Arc};
 
@@ -570,7 +570,7 @@ macro_rules! impl_system {
                     (read_ids, write_ids)
                 }
 
-                fn setup(&mut self, me: std::sync::Arc<$crate::system::System>, world: &$crate::world::World, name: &atom::Atom){
+                fn setup(&mut self, me: std::sync::Arc<$crate::system::System>, world: &$crate::world::World, name: &pi_atom::Atom){
                     let me: std::sync::Arc<Self> = match $crate::system::System::downcast(me) {
                         Ok(r) => r,
                         Err(_) => {

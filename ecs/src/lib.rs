@@ -1,7 +1,7 @@
 #![feature(core_intrinsics)]
 #![feature(proc_macro_hygiene)]
 
-extern crate atom;
+extern crate pi_atom;
 extern crate listener;
 extern crate map;
 extern crate pointer;
@@ -121,7 +121,7 @@ pub trait TypeIds {
 
 #[derive(Debug)]
 pub struct RunTime {
-    pub sys_name: atom::Atom,
+    pub sys_name: pi_atom::Atom,
     pub cost_time: std::time::Duration, // 单位ms
 }
 

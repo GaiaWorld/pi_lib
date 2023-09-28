@@ -6,8 +6,9 @@ edition = "2018"
 
 [dependencies]
 slab = {path="../slab"}
-atom = {path="../atom"}
+pi_atom = "0.2"
 map = {path="../map"}
+densevec = {path="../densevec"}
 any = {path="../any"}
 pointer = {path="../pointer"}
 listener = {path="../listener"}

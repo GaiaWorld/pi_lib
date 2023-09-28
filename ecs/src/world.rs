@@ -1,9 +1,9 @@
-use std::{any::TypeId, intrinsics::type_name, mem, sync::Arc};
+use std::{any::TypeId, intrinsics::type_name, sync::Arc};
 
 use hash::XHashMap;
 // use im::hashmap::HashMap;
 
-use atom::Atom;
+use pi_atom::Atom;
 use share::Share;
 // use pointer::cell::{TrustCell};
 

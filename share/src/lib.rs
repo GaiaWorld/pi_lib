@@ -25,7 +25,6 @@
 //! * `SharePtr`等同于`RefCell<T>`
 #![feature(const_trait_impl)]
 
-
 pub mod cell;
 pub mod lock;
 pub mod atomic;

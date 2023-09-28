@@ -4,7 +4,7 @@ use core::mem::replace;
 
 // use map::vecmap::VecMap;
 use std::ops::{Index, IndexMut};
-use std::cmp::{Ordering};
+use std::cmp::Ordering;
 use core::cmp::Ord;
 use crate::geometry::*;
 use crate::number::*;
@@ -338,20 +338,20 @@ impl Default for LayoutR {
     fn default() -> LayoutR {
         LayoutR {
             rect: Rect {
-                start: 0.0,
-                end: 0.0,
+                left: 0.0,
+                right: 0.0,
                 top: 0.0,
                 bottom: 0.0,
             },
             border: Rect {
-                start: 0.0,
-                end: 0.0,
+                left: 0.0,
+                right: 0.0,
                 top: 0.0,
                 bottom: 0.0,
             },
             padding: Rect {
-                start: 0.0,
-                end: 0.0,
+                left: 0.0,
+                right: 0.0,
                 top: 0.0,
                 bottom: 0.0,
             },
@@ -363,12 +363,12 @@ impl LayoutR {
     // 从LayoutR上获得节点的内容区大小
     pub(crate) fn get_content_size(&self) -> (f32, f32) {
         (
-            self.rect.end
-                - self.rect.start
-                - self.border.start
-                - self.border.end
-                - self.padding.start
-                - self.padding.end,
+            self.rect.right
+                - self.rect.left
+                - self.border.left
+                - self.border.right
+                - self.padding.left
+                - self.padding.right,
             self.rect.bottom
                 - self.rect.top
                 - self.border.top
@@ -578,7 +578,7 @@ impl Cache {
         border: &Rect<Dimension>,
         padding: &Rect<Dimension>,
     ) -> (f32, f32, TempType) {
-        debug_println!(
+        log::debug!(
             "{:?}auto_layout1: id:{:?} head:{:?} tail:{:?} is_notify:{:?}",
             ppp(),
             id,
@@ -602,7 +602,7 @@ impl Cache {
             children_index,
             direction,
         );
-        debug_println!(
+        log::debug!(
             "{:?}auto_layout2: id:{:?}, size:{:?}",
             ppp(),
             id,
@@ -610,7 +610,7 @@ impl Cache {
         );
         let (w, h) = self.temp.main_cross(self.main_value, self.cross_value);
         (
-            calc_size_from_content(w, border.start, border.end, padding.start, padding.end),
+            calc_size_from_content(w, border.left, border.right, padding.left, padding.right),
             calc_size_from_content(h, border.top, border.bottom, padding.top, padding.bottom),
             if is_notify {
                 TempType::Ok
@@ -638,7 +638,7 @@ impl Cache {
         direction: Direction,
     ) {
         let mut line = LineInfo::default();
-        debug_println!(
+        log::debug!(
             "{:?}do layout1, id:{:?} is_notify:{:?}",
             ppp(),
             id,
@@ -669,7 +669,7 @@ impl Cache {
 		}
 		line.cross += line.item.cross;
 
-        debug_println!(
+        log::debug!(
             "{:?}do layout2, id:{:?} line:{:?}, vec:{:?}",
             ppp(),
             id,
@@ -724,7 +724,7 @@ impl Cache {
         line: &mut LineInfo,
         mut char_index: usize,
     ) {
-		debug_println!("text_layout, id:{}", id);
+		log::debug!("text_layout, id:{}", id);
         let len = text.len();
         while char_index < len {
             let r = &text[char_index];
@@ -881,7 +881,7 @@ impl Cache {
             // flex布局时， 如果子节点的宽高未定义，则根据子节点的布局进行计算。如果子节点的宽高为百分比，并且父节点对应宽高未定义，则为0
             let w = calc_number(rect_style.size.width, self.size1.0);
 			let h = calc_number(rect_style.size.height, self.size1.1);
-			debug_println!("id: {}, parent_size:{:?}", id, self.size1);
+			log::debug!("id: {}, parent_size:{:?}", id, self.size1);
             let basis = style.flex_basis;
             let (main_d, cross_d) = self
                 .temp
@@ -900,10 +900,10 @@ impl Cache {
                 .temp
 				.main_cross(min_width, min_height);
             let margin = self.temp.main_cross(
-                (rect_style.margin.start, rect_style.margin.end),
+                (rect_style.margin.left, rect_style.margin.right),
                 (rect_style.margin.top, rect_style.margin.bottom),
 			);
-			debug_println!("main1,id:{}, main1:{:?}, main_d: {:?}, rect_style: {:?}, min_main: {:?}, max_main: {:?}", id, self.main_value, main_d, rect_style, min_main, max_main);
+			log::debug!("main1,id:{}, main1:{:?}, main_d: {:?}, rect_style: {:?}, min_main: {:?}, max_main: {:?}", id, self.main_value, main_d, rect_style, min_main, max_main);
             let mut info = RelNodeInfo {
                 id,
                 grow: style.flex_grow,
@@ -942,7 +942,7 @@ impl Cache {
                     fix = style.align_self != AlignSelf::Stretch
                         && self.temp.flex.align_items != AlignItems::Stretch;
                 }
-                debug_println!(
+                log::debug!(
                     "{:?}calc size: id:{:?} fix:{:?} size:{:?} next:{:?}",
                     ppp(),
                     id,
@@ -954,7 +954,7 @@ impl Cache {
                 let child_tail = n.children().tail;
                 let n_children_index = i_node.state.children_index();
                 let is_text = i_node.text.len() > 0;
-                let w = calc_content_size(w, border.start, border.end, padding.start, padding.end);
+                let w = calc_content_size(w, border.left, border.right, padding.left, padding.right);
                 let h =
                     calc_content_size(h, border.top, border.bottom, padding.top, padding.bottom);
                 let mut cache = Cache::new(
@@ -966,10 +966,10 @@ impl Cache {
                         width: calc_length(w, min_width),
                         height: calc_length(h, min_height),
 					},
-					calc_content_size(max_width, border.start, border.end, padding.start, padding.end),
+					calc_content_size(max_width, border.left, border.right, padding.left, padding.right),
 					calc_content_size(max_height, border.top, border.bottom, padding.top, padding.bottom)
 				);
-					debug_println!("cache, main_line: {:?}, id: {}", cache.main_line, id);
+					log::debug!("cache, main_line: {:?}, id: {}", cache.main_line, id);
 				// cache.main_line = 
 				// max_calc(w, max_width);
 				// max_calc(h, max_height);
@@ -997,7 +997,7 @@ impl Cache {
                 r
             } else {
                 // 确定大小的节点， TempType为None
-                // debug_println!("static size: id:{:?} size:{:?} next:{:?}", id, (w, h), child);
+                // log::debug!("static size: id:{:?} size:{:?} next:{:?}", id, (w, h), child);
                 TempType::None
             };
             let start = info.margin_main_start.or_else(0.0);
@@ -1104,7 +1104,7 @@ impl Temp {
             }
         }
         unsafe { PP += 1 };
-        debug_println!("{:?}reline: line:{:?}", ppp(), &line);
+        log::debug!("{:?}reline: line:{:?}", ppp(), &line);
         line
     }
     // 实际进行子节点布局
@@ -1122,7 +1122,7 @@ impl Temp {
         cross: f32,
         line: &LineInfo,
     ) {
-        debug_println!(
+        log::debug!(
             "{:?}layout: style:{:?} size:{:?} main_cross:{:?}",
             ppp(),
             self.flex,
@@ -1278,7 +1278,7 @@ impl Temp {
             }
         };
         for item in line.items.iter() {
-			debug_println!("single_line!!, item: {:?}, split: {:?}, pos: {:?}", item, split, pos);
+			log::debug!("single_line!!, item: {:?}, split: {:?}, pos: {:?}", item, split, pos);
             let (cross_start, cross_end) = self.multi_calc(item.cross, split, &mut pos);
             self.single_line(
                 tree,
@@ -1298,7 +1298,7 @@ impl Temp {
                 normal,
             );
 		}
-		debug_println!("single_line!!, item: {:?}, split: {:?}, pos: {:?}, cross:{:?}", line.item, split, pos, line.cross);
+		log::debug!("single_line!!, item: {:?}, split: {:?}, pos: {:?}, cross:{:?}", line.item, split, pos, line.cross);
         let (cross_start, cross_end) = self.multi_calc(line.item.cross, split, &mut pos);
         self.single_line(
             tree,
@@ -1351,7 +1351,7 @@ impl Temp {
         cross_end: f32,
         normal: bool,
     ) {
-        debug_println!(
+        log::debug!(
             "{:?}single_line: normal:{:?} content_size:{:?}, cross:{:?} start_end:{:?} main:{:?}",
             ppp(),
             normal,
@@ -1500,7 +1500,7 @@ impl Temp {
                 }
             }
         };
-        debug_println!("{:?}main calc: pos:{:?} split:{:?}", ppp(), pos, split);
+        log::debug!("{:?}main calc: pos:{:?} split:{:?}", ppp(), pos, split);
         item_calc!(
             self,
             tree,
@@ -1527,11 +1527,11 @@ impl Temp {
 impl LineInfo {
     // 添加到数组中，计算当前行的grow shrink 是否折行及折几行
     fn add(&mut self, main: f32, info: &RelNodeInfo) {
-		debug_println!("add, main: {:?}, {:?}, self.item: {:?}", main, info, self.item);
+		log::debug!("add, main: {:?}, {:?}, self.item: {:?}", main, info, self.item);
         // 浮点误差判断是否折行
         if (self.item.count > 0 && self.item.main + info.main + info.margin_main - main > EPSILON) || info.breakline {
 			self.cross += self.item.cross;
-			debug_println!("breakline, self.cross:{:?}, self.item.cross: {:?}", self.cross, self.item.cross);
+			log::debug!("breakline, self.cross:{:?}, self.item.cross: {:?}", self.cross, self.item.cross);
             let t = replace(&mut self.item, LineItem::default());
             self.items.push(t);
             self.item.merge(info, true);
@@ -1597,13 +1597,13 @@ pub(crate) fn abs_layout<T>(
         (a2, a1)
 	};
 
-	debug_println!("abs_layout, id:{} size:{:?} position:{:?}", id, rect_style.size, style.position);
+	log::debug!("abs_layout, id:{} size:{:?} position:{:?}", id, rect_style.size, style.position);
     let mut w = calc_rect(
-        style.position.start,
-        style.position.end,
+        style.position.left,
+        style.position.right,
         rect_style.size.width,
-        rect_style.margin.start,
-        rect_style.margin.end,
+        rect_style.margin.left,
+        rect_style.margin.right,
         parent_size.0,
         state.children_abs(),
         walign,
@@ -1624,7 +1624,7 @@ pub(crate) fn abs_layout<T>(
 		calc_number(style.min_size.height, parent_size.1),
 		calc_number(style.max_size.height, parent_size.1),
 	);
-	debug_println!("abs_layout11, id:{} w:{:?}, h:{:?}", id, w, h);
+	log::debug!("abs_layout11, id:{} w:{:?}, h:{:?}", id, w, h);
     if w.0 == Number::Undefined || h.0 == Number::Undefined {
         // 根据子节点计算大小
         let direction = style.direction;
@@ -1632,7 +1632,7 @@ pub(crate) fn abs_layout<T>(
         let margin = rect_style.margin.clone();
         let border = style.border.clone();
         let padding = style.padding.clone();
-        let ww = calc_content_size(w.0, border.start, border.end, padding.start, padding.end);
+        let ww = calc_content_size(w.0, border.left, border.right, padding.left, padding.right);
 		let hh = calc_content_size(h.0, border.top, border.bottom, padding.top, padding.bottom);
 		let flex = ContainerStyle::new(style);
         let mut cache = Cache::new(
@@ -1644,7 +1644,7 @@ pub(crate) fn abs_layout<T>(
                 width: calc_length(ww, min_width),
                 height: calc_length(hh, min_height),
 			},
-			calc_content_size(max_width, border.start, border.end, padding.start, padding.end),
+			calc_content_size(max_width, border.left, border.right, padding.left, padding.right),
 			calc_content_size(max_height, border.top, border.bottom, padding.top, padding.bottom)
 		);
 
@@ -1666,14 +1666,14 @@ pub(crate) fn abs_layout<T>(
             &border,
             &padding,
 		);
-		debug_println!("calc_rect: id: {}, hh:{:?}", id, hh);
+		log::debug!("calc_rect: id: {}, hh:{:?}", id, hh);
         // 再次计算区域
         w = calc_rect(
-            pos.start,
-            pos.end,
+            pos.left,
+            pos.right,
             Dimension::Points(ww),
-            margin.start,
-            margin.end,
+            margin.left,
+            margin.right,
             parent_size.0,
             false,
             walign,
@@ -1776,8 +1776,8 @@ pub(crate) fn rel_layout<T>(
         border,
         padding,
         state,
-        (rect.start, rect.top),
-        (rect.end - rect.start, rect.bottom - rect.top),
+        (rect.left, rect.top),
+        (rect.right - rect.left, rect.bottom - rect.top),
     );
 }
 
@@ -1802,7 +1802,7 @@ fn set_layout<T>(
     pos: (f32, f32),
     size: (f32, f32),
 ) {
-    debug_println!(
+    log::debug!(
         "{:?}set_layout: pos:{:?} size:{:?} id:{:?} head:{:?} tail:{:?} children_dirty:{} self_dirty:{} children_rect:{} children_abs:{}",
         ppp(),
         pos,
@@ -1818,9 +1818,9 @@ fn set_layout<T>(
     // 设置布局的值
     let layout = &mut layout_map[id];
     let r = if state.self_dirty()
-        || layout.rect.start != pos.0
+        || layout.rect.left != pos.0
         || layout.rect.top != pos.1
-        || layout.rect.end - layout.rect.start != size.0
+        || layout.rect.right - layout.rect.left != size.0
         || layout.rect.bottom - layout.rect.top != size.1
     {
         set_layout_result(layout, notify, notify_arg, id, pos, size, &border, &padding)
@@ -1897,27 +1897,27 @@ fn set_layout_result<T>(
         PP = 0
     };
     let old_rect = layout.rect.clone();
-    let old_w = old_rect.end
-        - layout.border.end
-        - layout.padding.end
-        - (old_rect.start + layout.border.start + layout.padding.start);
+    let old_w = old_rect.right
+        - layout.border.right
+        - layout.padding.right
+        - (old_rect.left + layout.border.left + layout.padding.left);
     let old_h = old_rect.bottom
         - layout.border.bottom
         - layout.padding.bottom
         - (old_rect.top + layout.border.top + layout.padding.top);
-    layout.rect.start = pos.0;
+    layout.rect.left = pos.0;
     layout.rect.top = pos.1;
-    layout.rect.end = pos.0 + size.0;
+    layout.rect.right = pos.0 + size.0;
 	layout.rect.bottom = pos.1 + size.1;
     calc_border_padding(border, size.0, size.1, &mut layout.border);
     calc_border_padding(padding, size.0, size.1, &mut layout.padding);
     notify(notify_arg, id, layout);
     let new_pos1 = (
-        layout.rect.start + layout.border.start + layout.padding.start,
+        layout.rect.left + layout.border.left + layout.padding.left,
         layout.rect.top + layout.border.top + layout.padding.top,
     );
     let new_pos2 = (
-        layout.rect.end - layout.border.end - layout.padding.end,
+        layout.rect.right - layout.border.right - layout.padding.right,
         layout.rect.bottom - layout.border.bottom - layout.padding.bottom,
     );
     let size = (new_pos2.0 - new_pos1.0, new_pos2.1 - new_pos1.1);
@@ -2020,7 +2020,7 @@ fn main_calc_reverse(info: &RelNodeInfo, per: f32, pos: &mut f32) -> (f32, f32) 
 }
 // 返回位置和大小
 fn cross_calc(info: &RelNodeInfo, start: f32, end: f32, align_items: AlignItems) -> (f32, f32) {
-    debug_println!(
+    log::debug!(
         "{:?}cross_calc, start:{:?}, end:{:?}, info:{:?}",
         ppp(),
         start,
@@ -2118,7 +2118,7 @@ fn layout_node<T>(
     ));
     let child_head = n.children().head;
     let child_tail = n.children().tail;
-    let x = calc_pos(s.position.start, s.position.end, parent_size.0, width.0);
+    let x = calc_pos(s.position.left, s.position.right, parent_size.0, width.0);
     let y = calc_pos(s.position.top, s.position.bottom, parent_size.1, height.0);
     // 设置布局的值
     match temp {
@@ -2328,8 +2328,8 @@ fn percent_calc(d: Dimension, points: &mut f32, percent: &mut f32) -> bool {
 
 // 已经确定了布局的区域， 需要计算布局中的border和padding
 fn calc_border_padding(s: &Rect<Dimension>, w: f32, h: f32, r: &mut Rect<f32>) {
-    r.start = s.start.resolve_value(w);
-    r.end = s.end.resolve_value(w);
+    r.left = s.left.resolve_value(w);
+    r.right = s.right.resolve_value(w);
     r.top = s.top.resolve_value(h);
     r.bottom = s.bottom.resolve_value(h);
 }
@@ -2363,7 +2363,7 @@ fn calc_margin(
                     start = end - size;
                 }
                 _ => {
-                    debug_println!(
+                    log::debug!(
                         "calc_margin auto=============end: {}, start:{}, size:{}",
                         end,
                         start,

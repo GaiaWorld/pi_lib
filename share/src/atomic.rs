@@ -20,7 +20,7 @@ impl<T: Default> Default for AtomicCell<T> {
     }
 }
 
-impl<T> const From<T> for AtomicCell<T> {
+impl<T> From<T> for AtomicCell<T> {
     fn from(t: T) -> Self {
         AtomicCell::new(t)
     }

@@ -236,7 +236,7 @@ impl LayoutTree {
                 Some(n) => n,
                 _ => continue,
             };
-            debug_println!("    calc: {:?} dirty:{:?} children_abs:{:?} children_abs_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} abs_rect:{:?} size_defined:{:?}", id, node.data.state.dirty(), node.data.state.children_abs(), node.data.state.children_abs_rect(), node.data.state.children_no_align_self(), node.data.state.children_index(), node.data.state.vnode(), node.data.state.abs(), node.data.state.abs_rect(), node.data.state.size_defined());
+            log::debug!("    calc: {:?} dirty:{:?} children_abs:{:?} children_abs_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} abs_rect:{:?} size_defined:{:?}", id, node.data.state.dirty(), node.data.state.children_abs(), node.data.state.children_abs_rect(), node.data.state.children_no_align_self(), node.data.state.children_index(), node.data.state.vnode(), node.data.state.abs(), node.data.state.abs_rect(), node.data.state.size_defined());
             if !node.data.state.dirty() {
                 continue;
             }
@@ -526,7 +526,7 @@ pub fn test_flex() {
 
 fn print(count: &mut usize, id: usize, layout: &LayoutR) {
     *count += 1;
-    debug_println!("result: {:?} {:?} {:?}", *count, id, layout);
+    log::debug!("result: {:?} {:?} {:?}", *count, id, layout);
 }
 fn flex(w: f32, h: f32) -> Style {
     let mut s = Style::default();

@@ -23,8 +23,8 @@ dirty = {path="../dirty"}
 heap = {path="../../pi_lib/heap"}
 map = {path="../map"}
 serde = { version = "1.0", features = ["derive"] }
-debug_info = {path="../debug_info" }
 slab = {path="../slab"}
+pi_flex_layout = "0.2"
 
 [features]
 default = ["std"]

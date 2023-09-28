@@ -4,176 +4,32 @@ use alloc::boxed::Box;
 use crate::geometry::{Rect, Size};
 use crate::number::Number;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum AlignItems {
-    FlexStart,
-    FlexEnd,
-    Center,
-    Baseline,
-    Stretch,
-}
+// 
+pub use pi_flex_layout::prelude::{Dimension, FlexWrap, PositionType, Overflow, JustifyContent, FlexDirection, Display, Direction, AlignContent, AlignSelf, AlignItems};
 
-impl Default for AlignItems {
-    fn default() -> AlignItems {
-        AlignItems::FlexStart
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum AlignSelf {
-    Auto,
-    FlexStart,
-    FlexEnd,
-    Center,
-    Baseline,
-    Stretch,
-}
-
-impl Default for AlignSelf {
-    fn default() -> AlignSelf {
-        AlignSelf::Auto
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum AlignContent {
-    FlexStart,
-    FlexEnd,
-    Center,
-    Stretch,
-    SpaceBetween,
-    SpaceAround,
-}
-
-impl Default for AlignContent {
-    fn default() -> AlignContent {
-        AlignContent::Stretch
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub enum Direction {
-    Inherit,
-    LTR,
-    RTL,
-}
-
-impl Default for Direction {
-    fn default() -> Direction {
-        Direction::Inherit
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub enum Display {
-    Flex,
-	None,
-}
-
-impl Default for Display {
-    fn default() -> Display {
-        Display::Flex
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum FlexDirection {
-    Row,
-    Column,
-    RowReverse,
-    ColumnReverse,
-}
-
-impl Default for FlexDirection {
-    fn default() -> FlexDirection {
-        FlexDirection::Row
-    }
-}
-
-// impl FlexDirection {
-//     pub(crate) fn is_row(self) -> bool {
-//         self == FlexDirection::Row || self == FlexDirection::RowReverse
-//     }
-
-//     pub(crate) fn is_column(self) -> bool {
-//         self == FlexDirection::Column || self == FlexDirection::ColumnReverse
-//     }
-
-//     pub(crate) fn is_reverse(self) -> bool {
-//         self == FlexDirection::RowReverse || self == FlexDirection::ColumnReverse
-//     }
+// #[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
+// pub enum Dimension {
+//     Undefined,
+//     Auto,
+//     Points(f32),
+//     Percent(f32),
 // }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum JustifyContent {
-    FlexStart,
-    FlexEnd,
-    Center,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-}
-
-impl Default for JustifyContent {
-    fn default() -> JustifyContent {
-        JustifyContent::FlexStart
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub enum Overflow {
-    Visible,
-    Hidden,
-    Scroll,
-}
-
-impl Default for Overflow {
-    fn default() -> Overflow {
-        Overflow::Visible
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub enum PositionType {
-    Relative,
-    Absolute,
-}
-
-impl Default for PositionType {
-    fn default() -> PositionType {
-        PositionType::Relative
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum FlexWrap {
-    NoWrap,
-    Wrap,
-    WrapReverse,
-}
-
-impl Default for FlexWrap {
-    fn default() -> FlexWrap {
-        FlexWrap::NoWrap
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub enum Dimension {
-    Undefined,
-    Auto,
-    Points(f32),
-    Percent(f32),
-}
-
-impl Default for Dimension {
+impl Default1 for Dimension {
     fn default() -> Dimension {
         Dimension::Points(0.0)
     }
 }
 
-impl Dimension {
-    pub(crate) fn resolve_value(self, parent: f32) -> f32 {
+pub(crate) trait MyDimension {
+    fn resolve_value(self, parent: f32) -> f32;
+    fn is_defined(self) -> bool ;
+    fn is_undefined(self) -> bool;
+    fn is_points(self) -> bool;
+}
+
+impl MyDimension for Dimension {
+    fn resolve_value(self, parent: f32) -> f32 {
         match self {
             Dimension::Points(points) => points,
             Dimension::Percent(percent) => parent * percent,
@@ -188,21 +44,21 @@ impl Dimension {
     //     }
     // }
 
-    pub(crate) fn is_defined(self) -> bool {
+    fn is_defined(self) -> bool {
         match self {
             Dimension::Points(_) => true,
             Dimension::Percent(_) => true,
             _ => false,
         }
     }
-    pub(crate) fn is_undefined(self) -> bool {
+    fn is_undefined(self) -> bool {
         match self {
             Dimension::Points(_) => false,
             Dimension::Percent(_) => false,
             _ => true,
         }
     }
-    pub(crate) fn is_points(self) -> bool {
+   fn is_points(self) -> bool {
         match self {
             Dimension::Points(_) => true,
             _ => false,
@@ -210,18 +66,22 @@ impl Dimension {
     }
 }
 
-impl Default for Rect<Dimension> {
+pub trait Default1 {
+    fn default() -> Self;
+}
+
+impl Default1 for Rect<Dimension> {
     fn default() -> Rect<Dimension> {
         Rect {
-            start: Default::default(),
-            end: Default::default(),
+            left: Default::default(),
+            right: Default::default(),
             top: Default::default(),
             bottom: Default::default(),
         }
     }
 }
 
-impl Default for Size<Dimension> {
+impl Default1 for Size<Dimension> {
     fn default() -> Size<Dimension> {
         Size {
             width: Dimension::Undefined,
@@ -239,8 +99,8 @@ pub struct RectStyle {
 impl Default for RectStyle {
     fn default() -> RectStyle {
         RectStyle {
-            margin: Default::default(), // dom默认为undefined， 性能考虑，这里默认0.0
-            size: Default::default(),
+            margin: Default1::default(), // dom默认为undefined， 性能考虑，这里默认0.0
+            size: Default1::default(),
         }
     }
 }
@@ -285,15 +145,15 @@ impl Default for OtherStyle {
             align_self: Default::default(),
             align_content: Default::default(),
             justify_content: Default::default(),
-            position: Default::default(),
-            padding: Default::default(),
-            border: Default::default(),
+            position: Default1::default(),
+            padding: Default1::default(),
+            border: Default1::default(),
             flex_grow: 0.0,
             flex_shrink: 0.0,  // dom默认为1.0， 性能考虑，这里默认0.0
             order: 0,
             flex_basis: Dimension::Auto,
-            min_size: Default::default(),
-            max_size: Default::default(),
+            min_size: Default1::default(),
+            max_size: Default1::default(),
             aspect_ratio: Default::default(),
         }
     }
@@ -495,10 +355,10 @@ impl OtherStyle {
 // 		vec.push(Some(Style::default()));
 // 	}
 // 	let r = None;
-// 	debug_println!("size:{:?}", std::mem::size_of_val(&r));
-// 	debug_println!("size:{:?}", std::mem::size_of::<Option<usize>>());
+// 	log::debug!("size:{:?}", std::mem::size_of_val(&r));
+// 	log::debug!("size:{:?}", std::mem::size_of::<Option<usize>>());
 // 	vec.push(r);
-// 	debug_println!("{:?}", std::time::Instant::now() - time);
+// 	log::debug!("{:?}", std::time::Instant::now() - time);
 
 
 // 	let mut vec = map::vecmap::VecMap::new();
@@ -506,13 +366,13 @@ impl OtherStyle {
 // 	for i in 1..1000001 {
 // 		vec.insert(i, Style::default());
 // 	}
-// 	debug_println!("vecmap1:{:?}", std::time::Instant::now() - time);
+// 	log::debug!("vecmap1:{:?}", std::time::Instant::now() - time);
 	
 
 // 	let mut vec = map::vecmap::VecMap::new();
 // 	let time = std::time::Instant::now();
 // 	vec.insert(1000000, Style::default());
-// 	debug_println!("vecmap2: {:?}", std::time::Instant::now() - time);
+// 	log::debug!("vecmap2: {:?}", std::time::Instant::now() - time);
 
 
 // 	let mut vec = slab::Slab::new();
@@ -520,5 +380,5 @@ impl OtherStyle {
 // 	for i in 1..1000001 {
 // 		vec.insert(Style::default());
 // 	}
-// 	debug_println!("slab1:{:?}", std::time::Instant::now() - time);
+// 	log::debug!("slab1:{:?}", std::time::Instant::now() - time);
 // }

@@ -13,8 +13,7 @@ extern crate idtree;
 extern crate dirty;
 extern crate map;
 
-#[macro_use]
-extern crate debug_info;
+extern crate log;
 
 #[macro_use]
 extern crate serde;

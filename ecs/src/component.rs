@@ -1,19 +1,45 @@
-use std::any::type_name;
+
 use std::{any::TypeId, marker::PhantomData, ops::Deref, ops::Index, ops::IndexMut, sync::Arc};
 
 use any::ArcAny;
 // use pointer::cell::{TrustCell};
-use listener::Listener;
 use map::Map;
+use map::vecmap::VecMap;
+use densevec::DenseVecMap;
 
 use crate::cell::StdCell;
 use crate::entity::CellEntity;
-use crate::monitor::{CreateFn, Event, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
+use crate::monitor::{CreateFn, DeleteFn, ModifyFn, Notify, NotifyImpl, Write};
 use crate::system::{SystemData, SystemMutData};
 use crate::{Fetch, Lend, LendMut, TypeIds, World};
 
 pub trait Component: Sized + 'static {
-    type Storage: Map<Key = usize, Val = Self> + Default + Index<usize, Output=Self> + IndexMut<usize, Output=Self>;
+    type Storage: Map<Key = usize, Val = Self> + Default + Index<usize, Output=Self> + IndexMut<usize, Output=Self> + GetDefault<Self>;
+}
+
+pub trait GetDefault<R> {
+	fn get_default(&self) -> Option<&R>;
+	fn get_default_mut(&mut self) -> Option<&mut R>;
+}
+
+impl<T> GetDefault<T> for VecMap<T> {
+    fn get_default(&self) -> Option<&T> {
+        None
+    }
+
+    fn get_default_mut(&mut self) -> Option<&mut T> {
+       None
+    }
+}
+
+impl<T> GetDefault<T> for DenseVecMap<T> {
+    fn get_default(&self) -> Option<&T> {
+        None
+    }
+
+    fn get_default_mut(&mut self) -> Option<&mut T> {
+       None
+    }
 }
 
 pub trait MultiCase: Notify + ArcAny {
@@ -115,6 +141,15 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
     pub fn get_mut(&mut self, id: usize) -> Option<&mut C> {
         self.map.get_mut(&id)
     }
+
+	pub fn get_default(&self) -> Option<&C> {
+        self.map.get_default()
+    }
+
+	pub fn get_default_mut(&mut self) -> Option<&mut C> {
+        self.map.get_default_mut()
+    }
+
     pub unsafe fn get_unchecked(&self, id: usize) -> &C {
         self.map.get_unchecked(&id)
     }
