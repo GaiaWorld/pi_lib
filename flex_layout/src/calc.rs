@@ -579,7 +579,7 @@ impl Cache {
         padding: &Rect<Dimension>,
     ) -> (f32, f32, TempType) {
         log::debug!(
-            "{:?}auto_layout1: id:{:?} head:{:?} tail:{:?} is_notify:{:?}",
+            "{:?}auto_layout1: id: {:?} head:{:?} tail:{:?} is_notify:{:?}",
             ppp(),
             id,
             child_head,
@@ -603,7 +603,7 @@ impl Cache {
             direction,
         );
         log::debug!(
-            "{:?}auto_layout2: id:{:?}, size:{:?}",
+            "{:?}auto_layout2: id: {:?}, size:{:?}",
             ppp(),
             id,
             (self.main_value, self.cross_value)
@@ -639,10 +639,13 @@ impl Cache {
     ) {
         let mut line = LineInfo::default();
         log::debug!(
-            "{:?}do layout1, id:{:?} is_notify:{:?}",
+            "{:?}do layout1, id: {:?} is_notify:{:?}, is_text: {:?}, text_len: {:?}, is_vnode:{:?}",
             ppp(),
             id,
-            is_notify
+            is_notify,
+            is_text,
+            i_nodes[id].text.len(), 
+            i_nodes[id].state.vnode()
         );
         if is_text {
             let i_node = &mut i_nodes[id];
@@ -670,7 +673,7 @@ impl Cache {
 		line.cross += line.item.cross;
 
         log::debug!(
-            "{:?}do layout2, id:{:?} line:{:?}, vec:{:?}",
+            "{:?}do layout2, id: {:?} line:{:?}, vec:{:?}",
             ppp(),
             id,
             &line,
@@ -724,7 +727,7 @@ impl Cache {
         line: &mut LineInfo,
         mut char_index: usize,
     ) {
-		log::debug!("text_layout, id:{}", id);
+		log::debug!("text_layout, id: {}", id);
         let len = text.len();
         while char_index < len {
             let r = &text[char_index];
@@ -903,7 +906,7 @@ impl Cache {
                 (rect_style.margin.left, rect_style.margin.right),
                 (rect_style.margin.top, rect_style.margin.bottom),
 			);
-			log::debug!("main1,id:{}, main1:{:?}, main_d: {:?}, rect_style: {:?}, min_main: {:?}, max_main: {:?}", id, self.main_value, main_d, rect_style, min_main, max_main);
+			log::debug!("main1,id: {}, main1:{:?}, main_d: {:?}, rect_style: {:?}, min_main: {:?}, max_main: {:?}", id, self.main_value, main_d, rect_style, min_main, max_main);
             let mut info = RelNodeInfo {
                 id,
                 grow: style.flex_grow,
@@ -943,7 +946,7 @@ impl Cache {
                         && self.temp.flex.align_items != AlignItems::Stretch;
                 }
                 log::debug!(
-                    "{:?}calc size: id:{:?} fix:{:?} size:{:?} next:{:?}",
+                    "{:?}calc size: id: {:?} fix:{:?} size:{:?} next:{:?}",
                     ppp(),
                     id,
                     fix,
@@ -997,7 +1000,7 @@ impl Cache {
                 r
             } else {
                 // 确定大小的节点， TempType为None
-                // log::debug!("static size: id:{:?} size:{:?} next:{:?}", id, (w, h), child);
+                // log::debug!("static size: id: {:?} size:{:?} next:{:?}", id, (w, h), child);
                 TempType::None
             };
             let start = info.margin_main_start.or_else(0.0);
@@ -1597,7 +1600,7 @@ pub(crate) fn abs_layout<T>(
         (a2, a1)
 	};
 
-	log::debug!("abs_layout, id:{} size:{:?} position:{:?}", id, rect_style.size, style.position);
+	log::debug!("abs_layout, id: {} size:{:?} position:{:?}", id, rect_style.size, style.position);
     let mut w = calc_rect(
         style.position.left,
         style.position.right,
@@ -1624,7 +1627,7 @@ pub(crate) fn abs_layout<T>(
 		calc_number(style.min_size.height, parent_size.1),
 		calc_number(style.max_size.height, parent_size.1),
 	);
-	log::debug!("abs_layout11, id:{} w:{:?}, h:{:?}", id, w, h);
+	log::debug!("abs_layout11, id: {} w:{:?}, h:{:?}", id, w, h);
     if w.0 == Number::Undefined || h.0 == Number::Undefined {
         // 根据子节点计算大小
         let direction = style.direction;
@@ -1803,7 +1806,7 @@ fn set_layout<T>(
     size: (f32, f32),
 ) {
     log::debug!(
-        "{:?}set_layout: pos:{:?} size:{:?} id:{:?} head:{:?} tail:{:?} children_dirty:{} self_dirty:{} children_rect:{} children_abs:{}",
+        "{:?}set_layout: pos:{:?} size:{:?} id: {:?} head:{:?} tail:{:?} children_dirty:{} self_dirty:{} children_rect:{} children_abs:{}",
         ppp(),
         pos,
         size,

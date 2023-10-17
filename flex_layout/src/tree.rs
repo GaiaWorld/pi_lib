@@ -41,7 +41,7 @@ type IdTree = IdTree1<u32>;
 type Node = Node1<u32>;
 
 pub fn set_display(id: usize, v: Display, dirty: &mut LayerDirty<usize>, tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output = INode>, rect_style: &RectStyle, other_style: &OtherStyle) {
-	log::debug!("set_display=====================, id:{}", id);
+	log::debug!("set_display=====================, id: {}", id);
 	let n = &tree[id];
 	let i_node = &mut i_nodes[id];
 	let parent = n.parent();
@@ -66,7 +66,7 @@ pub fn compute<T>(dirty: &mut LayerDirty<usize>, tree: &IdTree, i_nodes: &mut im
 			Some(n) => (n,  &mut i_nodes[*id]),
 			_ => continue,
 		};
-		log::debug!("    calc: {:?} children_dirty:{:?} self_dirty:{:?} children_abs:{:?} children_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} size_defined:{:?}, layer:{}", id, i_node.state.children_dirty(), i_node.state.self_dirty(), i_node.state.children_abs(), i_node.state.children_rect(), i_node.state.children_no_align_self(), i_node.state.children_index(), i_node.state.vnode(), i_node.state.abs(), i_node.state.size_defined(), _layer);
+		log::debug!("    calc, id: {:?} children_dirty:{:?} self_dirty:{:?} children_abs:{:?} children_rect:{:?} children_no_align_self:{:?} children_index:{:?} vnode:{:?} abs:{:?} size_defined:{:?}, layer:{}", id, i_node.state.children_dirty(), i_node.state.self_dirty(), i_node.state.children_abs(), i_node.state.children_rect(), i_node.state.children_no_align_self(), i_node.state.children_index(), i_node.state.vnode(), i_node.state.abs(), i_node.state.size_defined(), _layer);
 		let state = i_node.state;
 		if !(state.self_dirty() || state.children_dirty()) {
 			continue;
@@ -172,7 +172,7 @@ pub fn set_self_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output =
         // 如果是隐藏
         return;
     }
-	log::debug!("set_self_style=====================, id:{}", id);
+	log::debug!("set_self_style=====================, id: {}", id);
 	let n = &tree[id];
 	let i_node = &mut i_nodes[id];
     let parent = set_self_dirty(dirty, id, n, i_node);
@@ -187,7 +187,7 @@ pub fn set_children_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Outp
         // 如果是隐藏
         return;
     }
-	log::debug!("set_children_style=====================, id:{}", id);
+	log::debug!("set_children_style=====================, id: {}", id);
 	mark_children_dirty(tree, i_nodes, dirty, id)
 }
 // 设置一般样式， 设父节点脏
@@ -200,7 +200,7 @@ pub fn set_normal_style(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output
 	let i_node = &i_nodes[id];
     let parent = n.parent();
     let state = i_node.state;
-	log::debug!("set_normal_style=====================, id:{} state:{:?}", id, i_node.state);
+	log::debug!("set_normal_style=====================, id: {} state:{:?}", id, i_node.state);
     set_parent(i_nodes, tree, dirty, style, state, parent, true)
 }
 // 设置区域 pos margin size
@@ -236,7 +236,7 @@ pub fn set_rect(
     } else {
         true
 	};
-	log::debug!("set rect dirty=====================, id:{} state:{:?}", id, i_node.state);
+	log::debug!("set rect dirty=====================, id: {} state:{:?}", id, i_node.state);
     let parent = n.parent();
     let state = i_node.state;
     set_parent(i_nodes, tree, dirty, other_style, state, parent, mark)
@@ -279,7 +279,7 @@ fn calc_size_defined(style: &RectStyle, n: &mut INode) -> bool {
 }
 // 设置节点自身脏, 如果节点是size=auto并且不是绝对定位, 则返回父节点id，需要继续设置其父节点脏
 fn set_self_dirty(dirty: &mut LayerDirty<usize>, id: usize, n: &Node, i_node: &mut INode) -> usize {
-	log::debug!("set_self_dirty, id: {}, self_dirty:{}, children_dirty:{:?}, layer:{}", id, i_node.state.self_dirty(), i_node.state.children_dirty(), n.layer());
+	log::debug!("set_self_dirty, id: {}, self_dirty:{}, children_dirty:{:?}, layer:{}, vnode: {}", id, i_node.state.self_dirty(), i_node.state.children_dirty(), n.layer(), i_node.state.vnode());
 	if !i_node.state.vnode() && !i_node.state.self_dirty() {
 		i_node.state.self_dirty_true();
 		if n.layer() > 0 {
@@ -313,7 +313,7 @@ pub fn mark_children_dirty(tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Out
     while id > 0 {
 		let i_node = &mut i_nodes[id];
 
-		log::debug!("mark_children_dirty, id:{}, self_dirty:{}, size_defined:{}, abs:{}, vnode:{}, children_dirty: {}, parent:{}", id, i_node.state.self_dirty(),i_node.state.size_defined(), i_node.state.abs(), i_node.state.vnode(), i_node.state.children_dirty(), tree[id].parent());
+		log::debug!("mark_children_dirty, id: {}, self_dirty:{}, size_defined:{}, abs:{}, vnode:{}, children_dirty: {}, parent:{}", id, i_node.state.self_dirty(),i_node.state.size_defined(), i_node.state.abs(), i_node.state.vnode(), i_node.state.children_dirty(), tree[id].parent());
 
         if i_node.state.children_dirty() {
             break;
