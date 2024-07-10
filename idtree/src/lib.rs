@@ -275,6 +275,7 @@ impl<T: Default> IdTree<T> {
 		if id == prev || id == next {
 			return layer;
 		}
+        
         let (count, fix_prev, fix_next) = match self.map.get_mut(id) {
             Some(n) => {
                 if n.parent != parent {

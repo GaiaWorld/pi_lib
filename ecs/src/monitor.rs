@@ -1,6 +1,6 @@
 pub use listener::FnListener;
 use listener::{FnListeners, Listener as LibListener};
-use share::Share;
+use pi_share::Share;
 use std::ops::Deref;
 
 pub struct CreateEvent;
@@ -74,9 +74,14 @@ pub struct NotifyImpl1 {
     pub modify: ModifyListeners,
 }
 impl NotifyImpl1 {
-    pub fn mem_size(&self) -> usize {
-        self.create.mem_size() + self.delete.mem_size() + self.modify.mem_size()
+    pub fn capacity_mem_size(&self) -> usize {
+        self.create.capacity_mem_size() + self.delete.capacity_mem_size() + self.modify.capacity_mem_size()
     }
+
+    pub fn use_mem_size(&self) -> usize {
+        self.create.use_mem_size() + self.delete.use_mem_size() + self.modify.use_mem_size()
+    }
+
     pub fn create_event(&self, id: usize) {
         let e = Event { id: id, field: "", index:0 };
         self.create.listen(&e);

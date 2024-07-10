@@ -23,9 +23,13 @@ impl<K: Hash + Eq, V> Map for HashMap<K, V>{
     }
 
     #[inline]
-    fn mem_size(&self) -> usize{
+    fn capacity_mem_size(&self) -> usize {
         self.0.capacity() * (std::mem::size_of::<K>() + std::mem::size_of::<V>())
-    }
+	}
+    #[inline]
+    fn use_mem_size(&self) -> usize {
+        self.0.len() * (std::mem::size_of::<K>() + std::mem::size_of::<V>())
+	}
 
     #[inline]
     fn contains(&self, key: &Self::Key) -> bool{

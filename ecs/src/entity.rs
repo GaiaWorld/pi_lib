@@ -16,6 +16,12 @@ pub trait Entity: Notify + ArcAny {
     fn create(&mut self) -> usize;
     fn delete(&mut self, id: usize);
     fn clear(&self);
+
+    fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
+    fn capacity_mem_size(&self) -> usize;
+    fn use_mem_size(&self) -> usize;
+    fn type_name(&self) -> &'static str;
 }
 impl_downcast_arc!(Entity);
 
@@ -68,6 +74,22 @@ impl<T: 'static> Entity for CellEntity<T> {
         r.borrow_mut().components.clear();
         r.borrow_mut().slab.clear();
     }
+
+    fn len(&self) -> usize {
+        self.borrow_mut().slab.len()
+    }
+    fn capacity(&self) -> usize {
+        self.borrow_mut().slab.capacity()
+    }
+    fn capacity_mem_size(&self) -> usize {
+        self.borrow_mut().capacity_mem_size()
+    }
+    fn use_mem_size(&self) -> usize {
+        self.borrow_mut().use_mem_size()
+    }
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<T>()
+    }
 }
 
 pub struct EntityImpl<T> {
@@ -95,11 +117,19 @@ impl<T> EntityImpl<T> {
         }
 	}
 
-    pub fn mem_size(&self) -> usize {
+    pub fn capacity_mem_size(&self) -> usize {
         let mut r = 0;
-        r += self.slab.mem_size();
+        r += self.slab.capacity_mem_size();
         r += self.components.capacity() * std::mem::size_of::<Arc<dyn MultiCase>>();
-        r += self.notify.mem_size();
+        r += self.notify.capacity_mem_size();
+        r
+    }
+
+    pub fn use_mem_size(&self) -> usize {
+        let mut r = 0;
+        r += self.slab.use_mem_size();
+        r += self.components.len() * std::mem::size_of::<Arc<dyn MultiCase>>();
+        r += self.notify.use_mem_size();
         r
     }
 
@@ -170,6 +200,10 @@ impl<T> EntityImpl<T> {
 	
 	pub fn len(&self) -> usize {
         self.slab.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.slab.capacity()
     }
 }
 

@@ -185,8 +185,12 @@ impl<T> Map for DenseVecMap<T> {
     }
 
     #[inline]
-    fn mem_size(&self) -> usize {
-        self.data_id.mem_size() + self.data.capacity() * std::mem::size_of::<T>() + self.indexs.capacity() * std::mem::size_of::<usize>()
+    fn capacity_mem_size(&self) -> usize {
+        self.data_id.capacity_mem_size() + self.data.capacity() * std::mem::size_of::<T>() + self.indexs.capacity() * std::mem::size_of::<usize>()
+	}
+    #[inline]
+    fn use_mem_size(&self) -> usize {
+        self.data_id.use_mem_size() + self.data.len() * std::mem::size_of::<T>() + self.indexs.len() * std::mem::size_of::<usize>()
 	}
 	fn with_capacity(_capacity: usize) -> Self {
 		Self::new()

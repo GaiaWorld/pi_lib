@@ -271,9 +271,14 @@ impl<T> Map for VecMap<T> {
     fn capacity(&self) -> usize {
         self.entries.capacity()
     }
+
     #[inline]
-    fn mem_size(&self) -> usize {
+    fn capacity_mem_size(&self) -> usize {
         self.capacity() * std::mem::size_of::<T>()
+	}
+    #[inline]
+    fn use_mem_size(&self) -> usize {
+        self.len() * std::mem::size_of::<T>()
 	}
 	
 	fn with_capacity(capacity: usize) -> Self {

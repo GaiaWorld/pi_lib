@@ -51,7 +51,11 @@ impl<T: Clone> Clone for Listeners<T> {
 
 impl<T: PartialEq> Listeners<T> {
     /// 获取监听器列表的内存大小
-    pub fn mem_size(&self) -> usize {
+    pub fn capacity_mem_size(&self) -> usize {
+        self.0.capacity() * std::mem::size_of::<T>()
+    }
+
+    pub fn use_mem_size(&self) -> usize {
         self.0.len() * std::mem::size_of::<T>()
     }
     /// 移除一个监听器， 要求该监听器实现PartialEq

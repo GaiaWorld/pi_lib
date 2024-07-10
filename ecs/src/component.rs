@@ -44,6 +44,11 @@ impl<T> GetDefault<T> for DenseVecMap<T> {
 
 pub trait MultiCase: Notify + ArcAny {
     fn delete(&self, id: usize);
+    fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
+    fn capacity_mem_size(&self) -> usize;
+    fn use_mem_size(&self) -> usize;
+    fn type_name(&self) -> &'static str;
 }
 impl_downcast_arc!(MultiCase);
 
@@ -56,6 +61,23 @@ impl<E: 'static, C: Component> MultiCase for CellMultiCase<E, C> {
         // notify.listen(&e);
         // 实体删除，组件不再监听删除事件
         self.borrow_mut().map.remove(&id);
+    }
+
+    fn len(&self) -> usize {
+        self.borrow_mut().map.len()
+    }
+    fn capacity(&self) -> usize {
+        self.borrow_mut().map.capacity()
+    }
+    fn capacity_mem_size(&self) -> usize {
+        self.borrow_mut().capacity_mem_size()
+    }
+    fn use_mem_size(&self) -> usize {
+        self.borrow_mut().use_mem_size()
+    }
+
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<C>()
     }
 }
 
@@ -105,6 +127,7 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
     pub fn get_storage_mut(&mut self) -> &mut C::Storage {
         &mut self.map
     }
+
 }
 
 impl<E: 'static, C: Component> Index<usize> for MultiCaseImpl<E, C> {
@@ -132,8 +155,12 @@ impl<E: 'static, C: Component> MultiCaseImpl<E, C> {
         })
 	}
 
-    pub fn mem_size(&self) -> usize {
-        self.map.mem_size() + self.notify.mem_size()
+    pub fn capacity_mem_size(&self) -> usize {
+        self.map.capacity_mem_size() + self.notify.capacity_mem_size()
+    }
+
+    pub fn use_mem_size(&self) -> usize {
+        self.map.use_mem_size() + self.notify.use_mem_size()
     }
     pub fn get(&self, id: usize) -> Option<&C> {
         self.map.get(&id)

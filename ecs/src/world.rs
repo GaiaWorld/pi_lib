@@ -4,7 +4,7 @@ use hash::XHashMap;
 // use im::hashmap::HashMap;
 
 use pi_atom::Atom;
-use share::Share;
+use pi_share::Share;
 // use pointer::cell::{TrustCell};
 
 use crate::cell::StdCell;
@@ -38,6 +38,18 @@ impl Drop for World {
 }
 
 impl World {
+    pub fn components_mem_size<F: FnMut(&'static str/*类型名称*/, usize/*数量*/, usize/*容量 */, usize/*容量内存*/, usize/*使用内存*/)>(&self, mut f: F) {
+        for item in self.multi.values() {
+            f(item.type_name(), item.len(), item.capacity(), item.capacity_mem_size(), item.use_mem_size());
+        }
+    }
+
+    pub fn entity_mem_size<F: FnMut(&'static str/*类型名称*/, usize/*数量*/, usize/*容量*/, usize/*容量内存*/, usize/*使用内存*/)>(&self, mut f: F) {
+        for item in self.entity.values() {
+            f(item.type_name(), item.len(), item.capacity(), item.capacity_mem_size(), item.use_mem_size());
+        }
+    }
+
     pub fn register_entity<E: 'static>(&mut self) {
         let id = TypeId::of::<E>();
         match self
@@ -198,7 +210,7 @@ impl World {
     }
 
     pub fn fetch_sys<S: System>(&self, name: &Atom) -> Option<Arc<S>> {
-        let r = match self.system.get(&name) {
+        let r = match self.system.get(name) {
             Some(v) => v.clone(),
             _ => return None,
         };

@@ -48,8 +48,12 @@ impl<T> Slab<T> {
         Slab::with_capacity(0)
     }
 
-    pub fn mem_size(&self) -> usize {
+    pub fn capacity_mem_size(&self) -> usize {
         self.entries.capacity() * std::mem::size_of::<T>() + self.vacancy_sign.capacity() * std::mem::size_of::<usize>()
+    }
+
+    pub fn use_mem_size(&self) -> usize {
+        self.entries.len() * std::mem::size_of::<T>() + self.vacancy_sign.len() * std::mem::size_of::<usize>()
     }
 
     pub fn with_capacity(capacity: usize) -> Slab<T> {

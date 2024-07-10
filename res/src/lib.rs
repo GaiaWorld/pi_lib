@@ -1,3 +1,4 @@
+#![allow(invalid_reference_casting)]
 
 extern crate deque;
 extern crate hash;

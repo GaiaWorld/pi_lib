@@ -4,10 +4,8 @@
 //! * 定义了数据结构：`HashMap`，并为`HashMap`实现了`Map`
 
 #![feature(rustc_private)]
-#![feature(integer_atomics)]
 #![feature(asm,box_patterns)]
 #![feature(core_intrinsics)]
-#![feature(generators, generator_trait)]
 #![feature(associated_type_defaults)]
 #![feature(exclusive_range_pattern)]
 #![feature(trait_alias)]
@@ -31,7 +29,8 @@ pub trait Map{
 	fn len(&self) -> usize;
 	fn with_capacity(capacity: usize) -> Self;
     fn capacity(&self) -> usize;
-    fn mem_size(&self) -> usize;
+    fn capacity_mem_size(&self) -> usize;
+    fn use_mem_size(&self) -> usize;
     fn contains(&self, key: &Self::Key) -> bool;
     fn get(&self, key: &Self::Key) -> Option<&Self::Val>;
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Val>;

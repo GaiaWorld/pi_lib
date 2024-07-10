@@ -1,5 +1,6 @@
 #![feature(core_intrinsics)]
 #![feature(proc_macro_hygiene)]
+#![allow(invalid_reference_casting)]
 
 extern crate pi_atom;
 extern crate listener;
@@ -9,7 +10,7 @@ extern crate slab;
 #[macro_use]
 extern crate any;
 extern crate hash;
-extern crate share;
+extern crate pi_share;
 // #[cfg(feature = "wasm-bindgen")]
 // extern crate wasm_bindgen_cross_performance;
 // #[cfg(feature = "native")]

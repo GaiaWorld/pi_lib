@@ -26,10 +26,10 @@ impl Dispatcher for SeqDispatcher {
     fn init(&mut self, names: Vec<Atom>, world: &World) {
         // 简单实现
         for k in names.iter() {
-            let sys = match world.get_system(&k) {
+            let sys = match world.get_system(k) {
                 Some(r) => r,
                 None => {
-					log::error!("system is not exist:{}", **k);
+					log::error!("system is not exist:{:?}", k);
 					panic!("");
 				},
             };
