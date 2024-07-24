@@ -74,3 +74,6 @@ members = [
   "slotmap",
   "tree"
 ]
+
+[patch.crates-io]
+pi_flex_layout = {path = "D://0_rust/pi_flex_layout"}

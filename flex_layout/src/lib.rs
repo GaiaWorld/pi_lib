@@ -17,12 +17,15 @@ extern crate log;
 
 #[macro_use]
 extern crate serde;
+#[macro_use]
+extern crate ecs_derive;
 
 mod geometry;
 mod number;
 pub mod style;
 mod tree;
 mod calc;
+pub mod vecmap_default;
 
 
 pub use crate::tree::*;

@@ -4,6 +4,16 @@ version = "0.1.0"
 authors = ["suncy <suncy@gmail.com>"]
 edition = "2018"
 
+[features]
+defualt = ["runtime"]
+runtime = []
+
+[[example]]
+name = "expanded"
+
+[[example]]
+name = "basic"
+
 [dependencies]
 slab = {path="../slab"}
 pi_atom = "0.5"
@@ -19,6 +29,7 @@ debug_info = {path="../debug_info"}
 paste = "0.1"
 lazy_static = "*"
 log = "*"
+pi_flex_layout = "0.2"
 # im = "*"
 
 # [dependencies.web-sys]
@@ -27,15 +38,8 @@ log = "*"
 # 	"console",
 # ]
 
-[features]
-defualt = ["runtime"]
-runtime = []
 
-[[example]]
-name = "expanded"
 
-[[example]]
-name = "basic"
 
 
 

@@ -1,5 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
+use ecs::Component;
+use map::vecmap::VecMap;
+use pi_print_any::out_any;
 use core::mem::replace;
 
 // use map::vecmap::VecMap;
@@ -178,11 +181,36 @@ macro_rules! make_impl {
 }
 
 // 布局计算结果
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Component, Serialize, Deserialize)]
 pub struct LayoutR {
     pub rect: Rect<f32>,
     pub border: Rect<f32>,
     pub padding: Rect<f32>,
+}
+
+impl Default for LayoutR {
+    fn default() -> LayoutR {
+        LayoutR {
+            rect: Rect {
+                left: 0.0,
+                right: 0.0,
+                top: 0.0,
+                bottom: 0.0,
+            },
+            border: Rect {
+                left: 0.0,
+                right: 0.0,
+                top: 0.0,
+                bottom: 0.0,
+            },
+            padding: Rect {
+                left: 0.0,
+                right: 0.0,
+                top: 0.0,
+                bottom: 0.0,
+            },
+        }
+    }
 }
 
 #[derive(Default, Clone, Copy, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
@@ -330,31 +358,6 @@ impl INode {
             self.state.breakline_true();
         } else {
             self.state.breakline_false();
-        }
-    }
-}
-
-impl Default for LayoutR {
-    fn default() -> LayoutR {
-        LayoutR {
-            rect: Rect {
-                left: 0.0,
-                right: 0.0,
-                top: 0.0,
-                bottom: 0.0,
-            },
-            border: Rect {
-                left: 0.0,
-                right: 0.0,
-                top: 0.0,
-                bottom: 0.0,
-            },
-            padding: Rect {
-                left: 0.0,
-                right: 0.0,
-                top: 0.0,
-                bottom: 0.0,
-            },
         }
     }
 }
@@ -609,7 +612,7 @@ impl Cache {
             (self.main_value, self.cross_value)
         );
         let (w, h) = self.temp.main_cross(self.main_value, self.cross_value);
-        (
+        let r = (
             calc_size_from_content(w, border.left, border.right, padding.left, padding.right),
             calc_size_from_content(h, border.top, border.bottom, padding.top, padding.bottom),
             if is_notify {
@@ -618,7 +621,8 @@ impl Cache {
                 // 则将布局的中间数组暂存下来
                 TempType::R(replace(&mut self.temp, Temp::default()))
             },
-        )
+        );
+        r
     }
     fn do_layout<T>(
         &mut self,
@@ -638,15 +642,6 @@ impl Cache {
         direction: Direction,
     ) {
         let mut line = LineInfo::default();
-        log::debug!(
-            "{:?}do layout1, id: {:?} is_notify:{:?}, is_text: {:?}, text_len: {:?}, is_vnode:{:?}",
-            ppp(),
-            id,
-            is_notify,
-            is_text,
-            i_nodes[id].text.len(), 
-            i_nodes[id].state.vnode()
-        );
         if is_text {
             let i_node = &mut i_nodes[id];
             self.text_layout(id, &mut i_node.text, &mut line, 0);
@@ -1577,6 +1572,7 @@ pub(crate) fn abs_layout<T>(
     if style.display == Display::None {
         return;
     }
+    
     let a1 = match flex.justify_content {
         JustifyContent::Center => 0,
         JustifyContent::FlexEnd => 1,
@@ -1627,6 +1623,7 @@ pub(crate) fn abs_layout<T>(
 		calc_number(style.min_size.height, parent_size.1),
 		calc_number(style.max_size.height, parent_size.1),
 	);
+
 	log::debug!("abs_layout11, id: {} w:{:?}, h:{:?}", id, w, h);
     if w.0 == Number::Undefined || h.0 == Number::Undefined {
         // 根据子节点计算大小

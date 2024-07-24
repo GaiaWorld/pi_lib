@@ -7,12 +7,20 @@ use crate::world::World;
 pub trait Dispatcher {
     fn build(&mut self, names: String, world: &World);
     fn init(&mut self, names: Vec<Atom>, world: &World);
-    fn run(&self);
+    fn run(&self, world: &World);
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct SeqDispatcher {
     vec: StdCell<FnListeners<()>>,
+    log_count: usize,
+}
+
+impl Default for SeqDispatcher {
+    fn default() -> Self {
+        pi_flex_layout::prelude::init_log();
+        Self { vec: Default::default(), log_count: Default::default() }
+    }
 }
 /// TODO 先实现一个简单的顺序执行的派发器
 impl Dispatcher for SeqDispatcher {
@@ -66,8 +74,26 @@ impl Dispatcher for SeqDispatcher {
         //     }
         // }
     }
-    fn run(&self) {
-        // println!("dispatch===========================");
+    fn run(&self, world: &World) {
+        // if world.debug.len() != world.debug_count && self.log_count < 2 {
+        //     let mut s = "".to_string();
+        //     for i in unsafe {  pi_flex_layout::prelude::LOG.get().unwrap()} {
+        //         s += "\n";
+        //         s += i.as_str();
+        //     }
+        //     log::error!("run system error, {}, {:?}, {:?}", world.debug_count, &*world.debug,  s);
+        //     let s = unsafe { &mut *(self as *const Self as *mut Self) };
+        //     s.log_count += 1;
+            
+        // } else if self.log_count >= 2 {
+        //     return;
+        // }
+        // pi_flex_layout::prelude::clear_log();
+
+        // let debug_ref = unsafe { &mut *(world.debug.as_ref() as *const Vec<&'static str> as *mut Vec<&'static str>) };
+        // debug_ref.clear();
+        // let world = unsafe { &mut *(world as *const World as *mut World) };
+        // world.debug_count = self.vec.borrow().len() * 2;
         self.vec.borrow().listen(&());
     }
 }

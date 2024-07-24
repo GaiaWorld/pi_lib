@@ -1,8 +1,10 @@
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
+use ecs::Component;
 
 use crate::geometry::{Rect, Size};
 use crate::number::Number;
+use crate::vecmap_default::VecMapWithDefault;
 
 // 
 pub use pi_flex_layout::prelude::{Dimension, FlexWrap, PositionType, Overflow, JustifyContent, FlexDirection, Display, Direction, AlignContent, AlignSelf, AlignItems};
@@ -90,7 +92,8 @@ impl Default1 for Size<Dimension> {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Component)]
+#[storage(VecMapWithDefault)]
 pub struct RectStyle {
     pub margin: Rect<Dimension>,
     pub size: Size<Dimension>,
@@ -105,7 +108,8 @@ impl Default for RectStyle {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Component)]
+#[storage(VecMapWithDefault)]
 pub struct OtherStyle {
     pub display: Display,
     pub position_type: PositionType,
@@ -143,9 +147,14 @@ impl Default for OtherStyle {
             // overflow: Default::default(),
             align_items: Default::default(), // dom默认为stretch， 性能考虑，这里默认flex_start
             align_self: Default::default(),
-            align_content: Default::default(),
+            align_content: AlignContent::FlexStart,
             justify_content: Default::default(),
-            position: Default1::default(),
+            position: Rect {
+                left: Dimension::Undefined,
+                right: Dimension::Undefined,
+                top: Dimension::Undefined,
+                bottom: Dimension::Undefined,
+            },
             padding: Default1::default(),
             border: Default1::default(),
             flex_grow: 0.0,

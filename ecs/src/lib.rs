@@ -1,6 +1,7 @@
 #![feature(core_intrinsics)]
 #![feature(proc_macro_hygiene)]
 #![allow(invalid_reference_casting)]
+#![feature(once_cell)]
 
 extern crate pi_atom;
 extern crate listener;

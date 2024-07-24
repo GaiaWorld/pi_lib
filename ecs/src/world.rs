@@ -25,6 +25,8 @@ pub struct World {
     runner: XHashMap<Atom, Arc<dyn Dispatcher>>,
     // #[cfg(feature = "runtime")]
 	pub runtime: Share<Vec<RunTime>>,
+    pub debug: Share<Vec<&'static str>>, // 
+    pub debug_count: usize, // system运行数量的两倍
 	pub capacity: usize,
 }
 
@@ -229,7 +231,7 @@ impl World {
             r.cost_time = std::time::Duration::from_millis(0);
         }
         match self.runner.get(name) {
-            Some(v) => v.run(),
+            Some(v) => v.run(self),
             _ => (),
         }
     }

@@ -20,11 +20,14 @@ paste = "0.1"
 log = "0.4"
 idtree = {path="../idtree"}
 dirty = {path="../dirty"}
+ecs = { path="../ecs" }
+ecs_derive = { path =  "../ecs_derive"}
 heap = {path="../../pi_lib/heap"}
 map = {path="../map"}
 serde = { version = "1.0", features = ["derive"] }
 slab = {path="../slab"}
 pi_flex_layout = "0.2"
+pi_print_any = "0.1"
 
 [features]
 default = ["std"]

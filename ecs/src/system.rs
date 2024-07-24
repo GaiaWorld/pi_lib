@@ -480,16 +480,21 @@ macro_rules! impl_system {
         let runtime_index = runtime_ref.len();
 		runtime_ref.push($crate::RunTime{sys_name: $sys_name.clone(), cost_time: std::time::Duration::from_millis(0)});
 
+        // let debug = $world.debug.clone();
+        
+
         $s.run_fn = Some($crate::monitor::FnListener(pi_share::Share::new( move |e: &()| {
             let time = cross_performance::now();
             let runtime_ref = unsafe { &mut *(runtime.as_ref() as *const Vec<$crate::RunTime> as *mut Vec<$crate::RunTime>) };
+            // let debug_ref = unsafe { &mut *(debug.as_ref() as *const Vec<&'static str> as *mut Vec<&'static str>) };
 
             let read_data = $crate::Lend::lend2(&read, &read_data);
             let write_data = $crate::LendMut::lend_mut2(&write, &write_data);
             // let read_data = $crate::Lend::lend(&read);
             // let write_data = $crate::LendMut::lend_mut(&write);
+            // debug_ref.push(std::any::type_name::<$system <$($sg),*>>());
             $me.borrow_mut1().run(read_data, write_data);
-
+            // debug_ref.push(std::any::type_name::<$system <$($sg),*>>());
             // unsafe { $crate::web_sys::console::log_2(&"time:".into(), &std::format!("{:?}", time).into()) };
             // unsafe { $crate::web_sys::console::log_2(&"now:".into(), &std::format!("{:?}", cross_performance::now()).into()) };
             // unsafe { $crate::web_sys::console::log_2(&"timediff:".into(), &std::format!("{:?}", cross_performance::now() - time).into()) };
