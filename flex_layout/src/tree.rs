@@ -61,6 +61,7 @@ pub fn compute<T>(dirty: &mut LayerDirty<usize>, tree: &IdTree, i_nodes: &mut im
 	if dirty.count() > 0 {
 		log::error!("compute: {:?}", dirty);
 	}
+	log::error!("compute: {:?}", dirty);
 	for (id, _layer) in dirty.iter() {
 		let (node, i_node) = match tree.get(*id) {
 			Some(n) => (n,  &mut i_nodes[*id]),
