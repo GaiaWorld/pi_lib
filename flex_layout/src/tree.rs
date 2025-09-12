@@ -59,7 +59,7 @@ pub fn set_display(id: usize, v: Display, dirty: &mut LayerDirty<usize>, tree: &
 
 pub fn compute<T>(dirty: &mut LayerDirty<usize>, tree: &IdTree, i_nodes: &mut impl IndexMut<usize, Output = INode>, rect_styles: &impl Index<usize, Output = RectStyle>, other_styles: &impl Index<usize, Output = OtherStyle>, layouts: &mut impl IndexMut<usize, Output = LayoutR>, notify: fn(&mut T, usize, &LayoutR), notify_arg: &mut T) {
 	if dirty.count() > 0 {
-		log::error!("compute: {:?}", dirty);
+		log::debug!("compute: {:?}", dirty);
 	}
 	for (id, _layer) in dirty.iter() {
 		let (node, i_node) = match tree.get(*id) {
