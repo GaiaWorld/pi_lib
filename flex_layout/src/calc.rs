@@ -727,6 +727,7 @@ impl Cache {
         while char_index < len {
             let r = &text[char_index];
 			// 如果是单词容器节点， 并且单个单词的长度大于总宽度， 则需要将单词的每字符进行布局， 单词容器的位置设置为0(容器不再继续参与布局)
+            log::error!("=============ch: {} r.size.0, {}, main_line: {}",r.ch, r.size.0, main_line);
 			if r.ch == char::from(0) && r.size.0 + EPSILON >= self.main_line {
 				char_index += 1;
 				continue;
