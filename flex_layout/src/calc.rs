@@ -775,6 +775,47 @@ impl Cache {
             }
 		}
     }
+    const CANNOT_START_CHARS: &str = "，,。.、；;：:！!？?）】」』》〉〕)〗〙〛]}…";
+    // 根据标点符号判断是否换行
+    fn compute_text_break_line(&self, text: &Vec<CharNode>, mut char_index: usize, line: &LineInfo) -> bool{
+        let mut main_d  = 0.0;
+        let mut cross_d = 0.0;
+        let mut margin  = 0.0;
+
+        let len = text.len();
+        let mut breakline = false;
+        let mut count = 0;
+        while char_index < len  {
+            let char_node = &text[char_index];
+            log::error!("=========ch: {}", char_node.ch);
+            if Self::CANNOT_START_CHARS.contains(char_node.ch) || count == 0 {
+                main_d += char_node.size.0;
+                cross_d += char_node.size.1;
+                margin += char_node.margin_start;
+            } else {
+                // 第二个字符不是标点符号，不换行
+                if count == 1 {
+                    return false;
+                }
+                break;
+            }
+            char_index += 1;
+            count +=1;
+        }
+        let (main_d, cross_d) = self.temp.main_cross(main_d, cross_d);
+        let margin = self.temp.main_cross(
+            (Dimension::Points(margin), Dimension::Points(0.0)),
+            (Dimension::Points(0.0), Dimension::Points(0.0)),
+        );
+        let start = calc_location_number(margin.0.0, self.main_value).or_else(0.0);
+        let end = calc_location_number(margin.0.1, self.main_value).or_else(0.0);
+        let margin_main = start + end;
+        log::error!("=========line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", line.item.count, line.item.main, main_d, margin_main, self.main_line);
+        if line.item.count > 0 && line.item.main + main_d + margin_main - self.main_line > EPSILON {
+            breakline = true;
+        }
+        breakline
+    }
     // 节点的flex布局
     fn node_layout<T>(
         &mut self,
