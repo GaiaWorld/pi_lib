@@ -788,6 +788,7 @@ impl Cache {
             }
 		}
     }
+    // 羲和，帝俊之妻，金乌之母。上，亦是制定时历的女神。
     const CANNOT_START_CHARS: &str = "，,。.、；;：:！!？?）】」』》〉〕)〗〙〛]}…";
     // 根据标点符号判断是否换行
     fn compute_text_break_line(&self, text: &Vec<CharNode>, mut char_index: usize, line: &LineInfo) -> bool{
@@ -800,8 +801,9 @@ impl Cache {
         let mut count = 0;
         while char_index < len  {
             let char_node = &text[char_index];
-            log::error!("=========ch: {}", char_node.ch);
+            // log::error!("=========ch: {}", char_node.ch);
             if Self::CANNOT_START_CHARS.contains(char_node.ch) || count == 0 {
+                log::error!("=========ch: {}", char_node.ch);
                 main_d += char_node.size.0;
                 cross_d += char_node.size.1;
                 margin += char_node.margin_start;
