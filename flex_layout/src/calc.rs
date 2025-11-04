@@ -1,3 +1,4 @@
+use alloc::string::ToString;
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 use ecs::Component;
@@ -788,7 +789,7 @@ impl Cache {
             }
 		}
     }
-    // 羲和，帝俊之妻，金乌之母。上，亦是制定时历的女神。
+    // 羲和，帝俊之妻，金乌之母。上，亦是制定时历的女神女神神。
     const CANNOT_START_CHARS: &str = "，,。.、；;：:！!？?）】」』》〉〕)〗〙〛]}…";
     // 根据标点符号判断是否换行
     fn compute_text_break_line(&self, text: &Vec<CharNode>, mut char_index: usize, line: &LineInfo) -> bool{
@@ -799,11 +800,12 @@ impl Cache {
         let len = text.len();
         let mut breakline = false;
         let mut count = 0;
+        let mut str ="".to_string();
         while char_index < len  {
             let char_node = &text[char_index];
-            // log::error!("=========ch: {}", char_node.ch);
+            str.push(char_node.ch);
             if Self::CANNOT_START_CHARS.contains(char_node.ch) || count == 0 {
-                log::error!("=========ch: {}", char_node.ch);
+                
                 main_d += char_node.size.0;
                 cross_d += char_node.size.1;
                 margin += char_node.margin_start;
@@ -825,7 +827,7 @@ impl Cache {
         let start = calc_location_number(margin.0.0, self.main_value).or_else(0.0);
         let end = calc_location_number(margin.0.1, self.main_value).or_else(0.0);
         let margin_main = start + end;
-        log::error!("=========line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", line.item.count, line.item.main, main_d, margin_main, self.main_line);
+        log::error!("=========str: {}, line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", str, line.item.count, line.item.main, main_d, margin_main, self.main_line);
         if line.item.count > 0 && line.item.main + main_d + margin_main - self.main_line > EPSILON {
             breakline = true;
         }
