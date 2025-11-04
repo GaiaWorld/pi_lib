@@ -722,7 +722,7 @@ impl Cache {
         line: &mut LineInfo,
         mut char_index: usize,
     ) {
-		log::debug!("text_layout, id: {}", id);
+		log::error!("text_layout, id: {}", id);
         let len = text.len();
         while char_index < len {
             let r = &text[char_index];
