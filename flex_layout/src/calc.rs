@@ -737,7 +737,7 @@ impl Cache {
                 (Dimension::Points(r.margin_start), Dimension::Points(0.0)),
                 (Dimension::Points(0.0), Dimension::Points(0.0)),
             );
-            if !compute_symbol && !Self::CANNOT_START_CHARS.contains(char_node.ch){
+            if !compute_symbol && !Self::CANNOT_START_CHARS.contains(r.ch){
                 compute_symbol = true;
             }
             //判断
