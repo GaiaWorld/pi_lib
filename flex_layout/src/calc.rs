@@ -724,6 +724,7 @@ impl Cache {
     ) {
 		log::error!("text_layout, id: {}", id);
         let len = text.len();
+        let mut compute_symbol = false;
         while char_index < len {
             let r = &text[char_index];
 			// 如果是单词容器节点， 并且单个单词的长度大于总宽度， 则需要将单词的每字符进行布局， 单词容器的位置设置为0(容器不再继续参与布局)
@@ -736,6 +737,18 @@ impl Cache {
                 (Dimension::Points(r.margin_start), Dimension::Points(0.0)),
                 (Dimension::Points(0.0), Dimension::Points(0.0)),
             );
+            if !compute_symbol && !Self::CANNOT_START_CHARS.contains(char_node.ch){
+                compute_symbol = true;
+            }
+            //判断
+            let mut breakline = false;
+            if compute_symbol {
+                breakline = self.compute_text_break_line(text, char_index, &line);
+                log::error!("========== 判断标点符号: breakline{}", breakline);
+                if breakline {
+                    compute_symbol = false;
+                }
+            } 
             let mut info = RelNodeInfo {
                 id,
                 grow: 0.0,
@@ -751,7 +764,7 @@ impl Cache {
                 main_d: Dimension::Points(main_d),
                 cross_d: Dimension::Points(cross_d),
 				line_start_margin_zero: true,
-				breakline: r.ch == char::from('\n'),
+				breakline: r.ch == char::from('\n') || breakline,
 				// min_main: Number::Undefined,
 				// max_main: Number::Undefined,
             };
