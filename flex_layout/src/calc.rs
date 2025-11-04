@@ -722,7 +722,7 @@ impl Cache {
         line: &mut LineInfo,
         mut char_index: usize,
     ) {
-		log::error!("text_layout, id: {}", id);
+		// log::error!("text_layout, id: {}", id);
         let len = text.len();
         let mut compute_symbol = false;
         while char_index < len {
@@ -744,7 +744,7 @@ impl Cache {
             let mut breakline = false;
             if compute_symbol {
                 breakline = self.compute_text_break_line(text, char_index, &line);
-                log::error!("========== 判断标点符号: breakline{}", breakline);
+                // log::error!("========== 判断标点符号: breakline{}", breakline);
                 if breakline {
                     compute_symbol = false;
                 }
