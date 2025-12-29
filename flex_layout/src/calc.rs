@@ -738,18 +738,18 @@ impl Cache {
                 (Dimension::Points(r.margin_start), Dimension::Points(0.0)),
                 (Dimension::Points(0.0), Dimension::Points(0.0)),
             );
-            if !compute_symbol && !Self::CANNOT_START_CHARS.contains(r.ch){
-                compute_symbol = true;
-            }
+            // if !compute_symbol && !Self::CANNOT_START_CHARS.contains(r.ch){
+            //     compute_symbol = true;
+            // }
             //判断
-            let mut breakline = false;
-            if compute_symbol {
-                breakline = self.compute_text_break_line(text, char_index, &line);
-                // log::error!("========== 判断标点符号: breakline{}", breakline);
-                if breakline {
-                    compute_symbol = false;
-                }
-            } 
+            // let mut breakline = false;
+            // if compute_symbol {
+            //     breakline = self.compute_text_break_line(text, char_index, &line);
+            //     // log::error!("========== 判断标点符号: breakline{}", breakline);
+            //     if breakline {
+            //         compute_symbol = false;
+            //     }
+            // } 
             let mut info = RelNodeInfo {
                 id,
                 grow: 0.0,
@@ -765,10 +765,11 @@ impl Cache {
                 main_d: Dimension::Points(main_d),
                 cross_d: Dimension::Points(cross_d),
 				line_start_margin_zero: true,
-				breakline: r.ch == char::from('\n') || breakline,
+				breakline: r.ch == char::from('\n'),
 				// min_main: Number::Undefined,
 				// max_main: Number::Undefined,
             };
+            
             let start = info.margin_main_start.or_else(0.0);
             let end = info.margin_main_end.or_else(0.0);
             // 主轴auto时记录子节点实际大
@@ -827,7 +828,7 @@ impl Cache {
         let start = calc_location_number(margin.0.0, self.main_value).or_else(0.0);
         let end = calc_location_number(margin.0.1, self.main_value).or_else(0.0);
         let margin_main = start + end;
-        log::error!("=========str: {}, line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", str, line.item.count, line.item.main, main_d, margin_main, self.main_line);
+        // log::error!("=========str: {}, line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", str, line.item.count, line.item.main, main_d, margin_main, self.main_line);
         if line.item.count > 0 && line.item.main + main_d + margin_main - self.main_line > EPSILON {
             breakline = true;
         }
