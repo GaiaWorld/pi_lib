@@ -1,4 +1,4 @@
-use alloc::string::ToString;
+
 #[cfg(not(feature = "std"))]
 use alloc::{vec, vec::Vec};
 use ecs::Component;
