@@ -725,11 +725,14 @@ impl Cache {
     ) {
 		// log::error!("text_layout, id: {}", id);
         let len = text.len();
-        let mut compute_symbol = false;
+        let mut overflow_width = false;
         while char_index < len {
             let r = &text[char_index];
+            if r.size.0 + EPSILON >= self.main_line{
+                overflow_width = true;
+            }
 			// 如果是单词容器节点， 并且单个单词的长度大于总宽度， 则需要将单词的每字符进行布局， 单词容器的位置设置为0(容器不再继续参与布局)
-			if r.ch == char::from(0) && r.size.0 + EPSILON >= self.main_line {
+			if r.ch == char::from(0) && overflow_width {
 				char_index += 1;
 				continue;
 			}
@@ -738,18 +741,7 @@ impl Cache {
                 (Dimension::Points(r.margin_start), Dimension::Points(0.0)),
                 (Dimension::Points(0.0), Dimension::Points(0.0)),
             );
-            // if !compute_symbol && !Self::CANNOT_START_CHARS.contains(r.ch){
-            //     compute_symbol = true;
-            // }
-            //判断
-            // let mut breakline = false;
-            // if compute_symbol {
-            //     breakline = self.compute_text_break_line(text, char_index, &line);
-            //     // log::error!("========== 判断标点符号: breakline{}", breakline);
-            //     if breakline {
-            //         compute_symbol = false;
-            //     }
-            // } 
+
             let mut info = RelNodeInfo {
                 id,
                 grow: 0.0,
@@ -765,11 +757,13 @@ impl Cache {
                 main_d: Dimension::Points(main_d),
                 cross_d: Dimension::Points(cross_d),
 				line_start_margin_zero: true,
-				breakline: r.ch == char::from('\n'),
+				breakline: r.ch == char::from('\n')|| (line.item.count != 0 && overflow_width),
 				// min_main: Number::Undefined,
 				// max_main: Number::Undefined,
             };
-            
+            if overflow_width {
+                overflow_width = false;
+            }
             let start = info.margin_main_start.or_else(0.0);
             let end = info.margin_main_end.or_else(0.0);
             // 主轴auto时记录子节点实际大
@@ -790,50 +784,7 @@ impl Cache {
             }
 		}
     }
-    // 羲和，帝俊之妻，金乌之母。上，亦是制定时历的女神女神神。
-    const CANNOT_START_CHARS: &str = "，,。.、；;：:！!？?）】」』》〉〕)〗〙〛]}…";
-    // 根据标点符号判断是否换行
-    fn compute_text_break_line(&self, text: &Vec<CharNode>, mut char_index: usize, line: &LineInfo) -> bool{
-        let mut main_d  = 0.0;
-        let mut cross_d = 0.0;
-        let mut margin  = 0.0;
-
-        let len = text.len();
-        let mut breakline = false;
-        let mut count = 0;
-        let mut str ="".to_string();
-        while char_index < len  {
-            let char_node = &text[char_index];
-            str.push(char_node.ch);
-            if Self::CANNOT_START_CHARS.contains(char_node.ch) || count == 0 {
-                
-                main_d += char_node.size.0;
-                cross_d += char_node.size.1;
-                margin += char_node.margin_start;
-            } else {
-                // 第二个字符不是标点符号，不换行
-                if count == 1 {
-                    return false;
-                }
-                break;
-            }
-            char_index += 1;
-            count +=1;
-        }
-        let (main_d, cross_d) = self.temp.main_cross(main_d, cross_d);
-        let margin = self.temp.main_cross(
-            (Dimension::Points(margin), Dimension::Points(0.0)),
-            (Dimension::Points(0.0), Dimension::Points(0.0)),
-        );
-        let start = calc_location_number(margin.0.0, self.main_value).or_else(0.0);
-        let end = calc_location_number(margin.0.1, self.main_value).or_else(0.0);
-        let margin_main = start + end;
-        // log::error!("=========str: {}, line.item.count: {}, line.item.main: {}, main_d: {}, margin_main: {}, self.main_line: {}", str, line.item.count, line.item.main, main_d, margin_main, self.main_line);
-        if line.item.count > 0 && line.item.main + main_d + margin_main - self.main_line > EPSILON {
-            breakline = true;
-        }
-        breakline
-    }
+    
     // 节点的flex布局
     fn node_layout<T>(
         &mut self,
